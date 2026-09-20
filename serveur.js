@@ -27,6 +27,17 @@ const DELAI_BOT       = 900;    // temps de reflexion d'un bot
 const ABSENCE_MAX     = 15000;  // sans nouvelles, un joueur perd sa place
 const SOLDE_DEPART    = 22;
 
+/* ---------- le penalty ----------
+   L'echelle des gains : un but = on monte d'un cran.
+   Le joueur peut encaisser quand il veut ; s'il rate, il perd sa mise.
+   Le tirage se fait ICI, sur le serveur : impossible de tricher
+   en bidouillant la page.                                          */
+const ECHELLE_PENALTY  = [2, 4, 8, 16, 32, 64, 100];
+const CHANCE_BUT       = 4700;   // sur 10000, soit 47 % de buts (53 % d'arrets)
+const MISE_MINI_PENALTY = 0.10;
+const ZONES_PENALTY    = 15;     // la cage est decoupee en 5 x 3
+const DEFAITES_SECRET  = 2;      // apres deux echecs, la tete du gardien compte
+
 /* ===================================================================
    CARTES
    =================================================================== */
@@ -157,6 +168,9 @@ const Carnet = {
       gagnees:   compte.gagnees,
       perdues:   compte.perdues,
       poissons:  compte.poissons,
+      penaltys:  compte.penaltys,
+      buts:      compte.buts,
+      defaitesPenalty: compte.defaitesPenalty | 0,
       perso:     compte.perso || ancienne.perso || null,
       vuLe:      new Date().toISOString()
     });
@@ -735,7 +749,8 @@ const serveur = http.createServer(async (req, res) => {
         pseudoBas, pseudo,
         motDePasse: await chiffrer(mdp),
         solde: SOLDE_DEPART,
-        mains: 0, gagnees: 0, perdues: 0, poissons: 0, perso: null
+        mains: 0, gagnees: 0, perdues: 0, poissons: 0,
+        penaltys: 0, buts: 0, defaitesPenalty: 0, perso: null
       };
       if (!await Carnet.creer(fiche)) {
         return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
@@ -894,6 +909,129 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true });
     }
 
+    /* ===============================================================
+       LE PENALTY
+       ---------------------------------------------------------------
+       Tout se decide ici : la reussite du tir, le cote choisi par le
+       gardien, le montant gagne. La page ne fait que montrer le
+       resultat. Un joueur qui bidouillerait sa page ne gagnerait rien.
+       =============================================================== */
+
+    // --- on pose sa mise et la serie commence ---
+    if (route === '/api/penalty-demarrer' && req.method === 'POST') {
+      if (compte.penalty) {
+        return repondre(res, 409, { erreur: 'Une série est déjà en cours.' });
+      }
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= MISE_MINI_PENALTY)) {
+        return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      }
+      if (mise > compte.solde) {
+        return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      }
+
+      compte.solde = sous(compte.solde - mise);        // la mise part tout de suite
+      compte.penalty = { mise: mise, palier: 0 };
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, {
+        ok: true, mise: mise, palier: 0, solde: compte.solde,
+        echelle: ECHELLE_PENALTY
+      });
+    }
+
+    // --- on tire ---
+    if (route === '/api/penalty-tirer' && req.method === 'POST') {
+      const serie = compte.penalty;
+      if (!serie) return repondre(res, 409, { erreur: 'Aucune série en cours.' });
+
+      const zone = Math.max(0, Math.min(ZONES_PENALTY - 1, Number(body.zone) | 0));
+
+      /* Le petit secret : apres deux echecs d'affilee, viser la tete du
+         gardien donne un but a coup sur. C'est le serveur qui verifie la
+         condition, pas la page : impossible de s'en servir a volonte. */
+      const viseLaTete = body.tete === true;
+      const secret = viseLaTete && (compte.defaitesPenalty | 0) >= DEFAITES_SECRET;
+
+      // le sort en est jete
+      const but = secret || crypto.randomInt(10000) < CHANCE_BUT;
+
+      // le gardien plonge la ou il faut pour que l'image colle au resultat
+      let zoneGardien;
+      if (secret)   zoneGardien = -1;          // il ne bouge pas, il encaisse
+      else if (but) { do { zoneGardien = crypto.randomInt(ZONES_PENALTY); } while (zoneGardien === zone); }
+      else          zoneGardien = zone;
+
+      compte.penaltys = compte.penaltys + 1;
+
+      if (!but) {
+        // rate : la mise est perdue, la serie s'arrete
+        const perdu = serie.mise;
+        compte.penalty = null;
+        compte.defaitesPenalty = (compte.defaitesPenalty | 0) + 1;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, {
+          but: false, zone: zone, zoneGardien: zoneGardien,
+          fini: true, perdu: perdu, palier: 0,
+          multiplicateur: 0, gainPotentiel: 0, solde: compte.solde
+        });
+      }
+
+      // but : on monte d'un cran
+      compte.buts = compte.buts + 1;
+      compte.defaitesPenalty = 0;
+      serie.palier = serie.palier + 1;
+      const multiplicateur = ECHELLE_PENALTY[serie.palier - 1];
+      const gainPotentiel  = sous(serie.mise * multiplicateur);
+      const auSommet       = serie.palier >= ECHELLE_PENALTY.length;
+
+      if (auSommet) {
+        // au sommet de l'echelle, on encaisse d'office
+        compte.solde   = sous(compte.solde + gainPotentiel);
+        compte.penalty = null;
+        const info = siegeDe(compte);
+        if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, {
+          but: true, zone: zone, zoneGardien: zoneGardien, secret: secret,
+          fini: true, sommet: true, encaisse: gainPotentiel,
+          palier: ECHELLE_PENALTY.length, multiplicateur: multiplicateur,
+          gainPotentiel: gainPotentiel, solde: compte.solde
+        });
+      }
+
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, {
+        but: true, zone: zone, zoneGardien: zoneGardien, secret: secret,
+        fini: false, palier: serie.palier,
+        multiplicateur: multiplicateur, gainPotentiel: gainPotentiel,
+        suivant: ECHELLE_PENALTY[serie.palier],
+        solde: compte.solde
+      });
+    }
+
+    // --- on encaisse et on s'arrete la ---
+    if (route === '/api/penalty-encaisser' && req.method === 'POST') {
+      const serie = compte.penalty;
+      if (!serie) return repondre(res, 409, { erreur: 'Aucune série en cours.' });
+      if (serie.palier < 1) {
+        return repondre(res, 400, { erreur: 'Marquez au moins un but avant d’encaisser.' });
+      }
+
+      const gain = sous(serie.mise * ECHELLE_PENALTY[serie.palier - 1]);
+      compte.solde   = sous(compte.solde + gain);
+      compte.penalty = null;
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
+    }
+
     // --- ma fiche (écran profil) ---
     if (route === '/api/moi') {
       return repondre(res, 200, {
@@ -902,7 +1040,13 @@ const serveur = http.createServer(async (req, res) => {
         mains:    compte.mains,
         gagnees:  compte.gagnees,
         perdues:  compte.perdues,
-        poissons: compte.poissons
+        poissons: compte.poissons,
+        penaltys: compte.penaltys,
+        buts:     compte.buts,
+        defaites: compte.defaitesPenalty | 0,
+        penalty:  compte.penalty
+          ? { mise: compte.penalty.mise, palier: compte.penalty.palier }
+          : null
       });
     }
 
@@ -943,7 +1087,11 @@ function ouvrirSession(fiche) {
     gagnees:   fiche.gagnees  | 0,
     perdues:   fiche.perdues  | 0,
     poissons:  fiche.poissons | 0,
+    penaltys:  fiche.penaltys | 0,
+    buts:      fiche.buts     | 0,
+    defaitesPenalty: fiche.defaitesPenalty | 0,
     perso:     fiche.perso || null,
+    penalty: null,                       // aucune serie de penaltys en cours
     table: null, siege: -1, vu: Date.now()
   };
   comptes.set(jeton, compte);
@@ -956,6 +1104,8 @@ function ouvrirSession(fiche) {
     gagnees:  compte.gagnees,
     perdues:  compte.perdues,
     poissons: compte.poissons,
+    penaltys: compte.penaltys,
+    buts:     compte.buts,
     perso:    compte.perso,
     creeLe:   fiche.creeLe || null
   };
