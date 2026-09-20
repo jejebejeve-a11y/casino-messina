@@ -38,6 +38,30 @@ const MISE_MINI_PENALTY = 0.10;
 const ZONES_PENALTY    = 15;     // la cage est decoupee en 5 x 3
 const DEFAITES_SECRET  = 2;      // apres deux echecs, la tete du gardien compte
 
+/* ---------- le jeu du periph ----------
+   Douze portes de la Porte Dauphine a Saint-Denis. A chaque porte
+   franchie la somme monte ; au bout du parcours elle vaut cinquante
+   fois la mise. Le joueur peut encaisser a chaque porte.
+   La course se joue dans la page, mais l'argent se compte ICI :
+   la mise part au depart, le gain n'est verse que par ce fichier, et
+   le serveur refuse une porte annoncee trop tot pour la distance.   */
+const ECHELLE_PERIPH   = [1.4, 2, 2.7, 3.8, 5.3, 7.5, 10.4, 14.6, 20.4, 28.5, 39.8, 50];
+const LONGUEURS_PERIPH = [900, 300, 300, 550, 650, 650, 800, 800, 850, 800, 650, 550];
+const NOMS_PERIPH      = ['Porte Maillot','Porte des Ternes','Porte de Villiers',
+                          'Porte de Champerret','Porte d\u2019Asni\u00e8res','Porte de Clichy',
+                          'Porte de Saint-Ouen','Porte de Clignancourt','Porte de la Chapelle',
+                          'Porte d\u2019Aubervilliers','Porte de la Villette','Saint-Denis'];
+const MISE_MINI_PERIPH = 0.10;
+const MISE_MAXI_PERIPH = 100;
+const VITESSE_MAX_PERIPH = 150 / 3.6;   // metres par seconde
+const MARGE_TEMPS      = 0.80;          // on tolere un peu de retard d'horloge
+
+function distancePeriph(palier) {
+  let s = 0;
+  for (let i = 0; i < palier && i < LONGUEURS_PERIPH.length; i++) s += LONGUEURS_PERIPH[i];
+  return s;
+}
+
 /* ===================================================================
    CARTES
    =================================================================== */
@@ -750,7 +774,7 @@ const serveur = http.createServer(async (req, res) => {
         motDePasse: await chiffrer(mdp),
         solde: SOLDE_DEPART,
         mains: 0, gagnees: 0, perdues: 0, poissons: 0,
-        penaltys: 0, buts: 0, defaitesPenalty: 0, perso: null
+        penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null
       };
       if (!await Carnet.creer(fiche)) {
         return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
@@ -1032,6 +1056,102 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
     }
 
+    /* ===============================================================
+       LE JEU DU PERIPH
+       =============================================================== */
+
+    // --- on pose sa mise et la course commence ---
+    if (route === '/api/periph-demarrer' && req.method === 'POST') {
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= MISE_MINI_PERIPH)) {
+        return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      }
+      if (mise > MISE_MAXI_PERIPH) {
+        return repondre(res, 400, { erreur: 'Mise maximum : 100,00 €.' });
+      }
+      if (mise > compte.solde) {
+        return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      }
+      // une course abandonnee en route est simplement perdue : on repart proprement
+      compte.solde  = sous(compte.solde - mise);
+      compte.periph = { mise: mise, palier: 0, depart: Date.now() };
+      compte.periphs = (compte.periphs | 0) + 1;
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, {
+        ok: true, mise: mise, palier: 0, solde: compte.solde,
+        echelle: ECHELLE_PERIPH, longueurs: LONGUEURS_PERIPH
+      });
+    }
+
+    // --- on franchit une porte ---
+    if (route === '/api/periph-porte' && req.method === 'POST') {
+      const course = compte.periph;
+      if (!course) return repondre(res, 409, { erreur: 'Aucune course en cours.' });
+      if (course.palier >= ECHELLE_PERIPH.length) {
+        return repondre(res, 409, { erreur: 'Course déjà terminée.' });
+      }
+      // la porte annoncee doit etre la suivante, et pas trop tot :
+      // meme a fond, il faut le temps de parcourir la distance
+      const suivant  = course.palier + 1;
+      const attendu  = distancePeriph(suivant) / VITESSE_MAX_PERIPH * MARGE_TEMPS;
+      const ecoule   = (Date.now() - course.depart) / 1000;
+      if (ecoule < attendu) {
+        compte.periph = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 400, { erreur: 'Course invalide.' });
+      }
+
+      course.palier  = suivant;
+      compte.portes  = (compte.portes | 0) + 1;
+      const gain     = sous(course.mise * ECHELLE_PERIPH[suivant - 1]);
+      const fini     = suivant >= ECHELLE_PERIPH.length;
+
+      if (fini) {                                   // Saint-Denis : on encaisse d'office
+        compte.solde  = sous(compte.solde + gain);
+        compte.periph = null;
+        const info2 = siegeDe(compte);
+        if (info2 && info2.p) { info2.p.solde = compte.solde; touche(info2.table); }
+      }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, {
+        ok: true, palier: suivant, porte: NOMS_PERIPH[suivant - 1],
+        gainPotentiel: gain, fini: fini,
+        suivante: fini ? null : NOMS_PERIPH[suivant],
+        gainSuivant: fini ? null : sous(course.mise * ECHELLE_PERIPH[suivant]),
+        solde: compte.solde
+      });
+    }
+
+    // --- on encaisse ---
+    if (route === '/api/periph-encaisser' && req.method === 'POST') {
+      const course = compte.periph;
+      if (!course) return repondre(res, 409, { erreur: 'Aucune course en cours.' });
+      if (course.palier < 1) {
+        return repondre(res, 400, { erreur: 'Franchissez au moins une porte.' });
+      }
+      const gain = sous(course.mise * ECHELLE_PERIPH[course.palier - 1]);
+      compte.solde  = sous(compte.solde + gain);
+      compte.periph = null;
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
+    }
+
+    // --- la voiture est detruite, ou on s'est fait doubler ---
+    if (route === '/api/periph-perdu' && req.method === 'POST') {
+      compte.periph = null;
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, solde: compte.solde });
+    }
+
     // --- ma fiche (écran profil) ---
     if (route === '/api/moi') {
       return repondre(res, 200, {
@@ -1044,8 +1164,13 @@ const serveur = http.createServer(async (req, res) => {
         penaltys: compte.penaltys,
         buts:     compte.buts,
         defaites: compte.defaitesPenalty | 0,
+        periphs:  compte.periphs | 0,
+        portes:   compte.portes  | 0,
         penalty:  compte.penalty
           ? { mise: compte.penalty.mise, palier: compte.penalty.palier }
+          : null,
+        periph:   compte.periph
+          ? { mise: compte.periph.mise, palier: compte.periph.palier }
           : null
       });
     }
@@ -1088,10 +1213,13 @@ function ouvrirSession(fiche) {
     perdues:   fiche.perdues  | 0,
     poissons:  fiche.poissons | 0,
     penaltys:  fiche.penaltys | 0,
+    periphs:   fiche.periphs  | 0,
+    portes:    fiche.portes   | 0,
     buts:      fiche.buts     | 0,
     defaitesPenalty: fiche.defaitesPenalty | 0,
     perso:     fiche.perso || null,
     penalty: null,                       // aucune serie de penaltys en cours
+    periph:  null,                       // aucune course de periph en cours
     table: null, siege: -1, vu: Date.now()
   };
   comptes.set(jeton, compte);
@@ -1105,6 +1233,8 @@ function ouvrirSession(fiche) {
     perdues:  compte.perdues,
     poissons: compte.poissons,
     penaltys: compte.penaltys,
+    periphs:  compte.periphs | 0,
+    portes:   compte.portes  | 0,
     buts:     compte.buts,
     perso:    compte.perso,
     creeLe:   fiche.creeLe || null
