@@ -63,9 +63,135 @@ function estBlackjack(main) { return main.length === 2 && compter(main) === 21; 
 function sous(n) { return Math.round(n * 100) / 100; }
 
 /* ===================================================================
-   COMPTES
+   LE CARNET DES JOUEURS
+   -------------------------------------------------------------------
+   Les comptes sont rangés dans une base Upstash, jointe par simple
+   requête web, pour qu'ils survivent quand l'hébergeur éteint et
+   rallume le site. Aucune bibliothèque à installer.
+   Si aucune base n'est configurée, le site fonctionne quand même :
+   les comptes sont simplement gardés en mémoire jusqu'au prochain
+   redémarrage. Le jeu n'est jamais bloqué par la base.
    =================================================================== */
-const comptes = new Map();   // jeton -> { pseudo, solde, table, siege, vu }
+const Carnet = {
+  url: null,
+  token: null,
+  pret: false,
+  memoire: new Map(),        // repli, et copie de travail
+
+  async demarrer() {
+    const url   = String(process.env.UPSTASH_REDIS_REST_URL   || '').replace(/\/+$/, '');
+    const token = String(process.env.UPSTASH_REDIS_REST_TOKEN || '');
+
+    if (!url || !token) {
+      console.log('Carnet : aucune base configurée.');
+      console.log('Le jeu tourne, mais les comptes seront perdus au redémarrage.');
+      return;
+    }
+    this.url = url;
+    this.token = token;
+    try {
+      const r = await this.commande(['PING']);
+      if (r && r.result) {
+        this.pret = true;
+        console.log('Carnet : base connectée, les comptes sont conservés.');
+      } else {
+        console.log('Carnet : la base a répondu quelque chose d’inattendu.');
+      }
+    } catch (e) {
+      console.log('Carnet : connexion à la base impossible (' + e.message + ').');
+      console.log('Le jeu tourne quand même, mais les comptes ne seront pas conservés.');
+    }
+  },
+
+  async commande(args) {
+    const reponse = await fetch(this.url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + this.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!reponse.ok) throw new Error('HTTP ' + reponse.status);
+    return await reponse.json();
+  },
+
+  async lire(pseudoBas) {
+    if (!this.pret) return this.memoire.get(pseudoBas) || null;
+    try {
+      const r = await this.commande(['GET', 'joueur:' + pseudoBas]);
+      if (!r || r.result === null || r.result === undefined) return null;
+      const fiche = JSON.parse(r.result);
+      this.memoire.set(pseudoBas, fiche);        // on garde une copie sous la main
+      return fiche;
+    } catch (e) {
+      console.log('Carnet : lecture impossible (' + e.message + ')');
+      return this.memoire.get(pseudoBas) || null;
+    }
+  },
+
+  async creer(fiche) {
+    fiche.creeLe = new Date().toISOString();
+    this.memoire.set(fiche.pseudoBas, fiche);
+    if (!this.pret) return true;
+    try {
+      // SETNX n'écrit que si le pseudo est encore libre
+      const r = await this.commande(['SETNX', 'joueur:' + fiche.pseudoBas, JSON.stringify(fiche)]);
+      return !!(r && Number(r.result) === 1);
+    } catch (e) {
+      console.log('Carnet : création impossible (' + e.message + ')');
+      return true;                                // on laisse quand même jouer
+    }
+  },
+
+  // Enregistre l'avancement. N'interrompt jamais la partie : si la base
+  // ne répond pas, on note l'échec et le jeu continue.
+  enregistrer(compte) {
+    const ancienne = this.memoire.get(compte.pseudoBas) || {};
+    const fiche = Object.assign({}, ancienne, {
+      pseudoBas: compte.pseudoBas,
+      pseudo:    compte.pseudo,
+      solde:     compte.solde,
+      mains:     compte.mains,
+      gagnees:   compte.gagnees,
+      perdues:   compte.perdues,
+      poissons:  compte.poissons,
+      perso:     compte.perso || ancienne.perso || null,
+      vuLe:      new Date().toISOString()
+    });
+    this.memoire.set(compte.pseudoBas, fiche);
+
+    if (!this.pret) return;
+    this.commande(['SET', 'joueur:' + compte.pseudoBas, JSON.stringify(fiche)])
+      .catch(e => console.log('Carnet : enregistrement impossible (' + e.message + ')'));
+  }
+};
+
+/* ---------- mots de passe : jamais stockés en clair ---------- */
+function empreinte(motDePasse, sel) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(motDePasse, sel, 32, (err, cle) => err ? reject(err) : resolve(cle.toString('hex')));
+  });
+}
+async function chiffrer(motDePasse) {
+  const sel = crypto.randomBytes(16).toString('hex');
+  return sel + ':' + await empreinte(motDePasse, sel);
+}
+async function motDePasseJuste(motDePasse, stocke) {
+  const bouts = String(stocke || '').split(':');
+  if (bouts.length !== 2) return false;
+  try {
+    const calcule = Buffer.from(await empreinte(motDePasse, bouts[0]), 'hex');
+    const attendu = Buffer.from(bouts[1], 'hex');
+    return calcule.length === attendu.length && crypto.timingSafeEqual(calcule, attendu);
+  } catch (e) { return false; }
+}
+
+/* ===================================================================
+   SESSIONS EN COURS
+   =================================================================== */
+const comptes = new Map();   // jeton -> { pseudo, solde, table, siege, vu, ... }
 
 function nouveauJeton() { return crypto.randomBytes(16).toString('hex'); }
 
@@ -347,6 +473,17 @@ function conclure(table) {
     p.resultat = { texte, classe };
     majSoldeCompte(p);
 
+    // on inscrit la manche au carnet du joueur
+    if (p.type === 'humain' && p.jeton) {
+      const c = comptes.get(p.jeton);
+      if (c) {
+        c.mains++;
+        if (classe === 'gagne')      c.gagnees++;
+        else if (classe === 'perdu') c.perdues++;
+        Carnet.enregistrer(c);
+      }
+    }
+
     // Don Koala se moque, uniquement chez le joueur qui a perdu deux fois
     if (classe === 'perdu') {
       p.pertesDeSuite = (p.pertesDeSuite || 0) + 1;
@@ -573,18 +710,53 @@ const serveur = http.createServer(async (req, res) => {
   /* ---------------- API ---------------- */
   if (route.startsWith('/api/')) {
 
-    // --- ouverture de session ---
-    if (route === '/api/session' && req.method === 'POST') {
-      const body = await corpsJSON(req);
-      const pseudo = String(body.pseudo || '').trim().slice(0, 18) || 'Joueur';
-      let solde = Number(body.solde);
-      if (!isFinite(solde) || solde < 0 || solde > 100000) solde = SOLDE_DEPART;
-      const jeton = nouveauJeton();
-      comptes.set(jeton, {
-        jetonRef: jeton, pseudo, solde: sous(solde),
-        table: null, siege: -1, vu: Date.now()
-      });
-      return repondre(res, 200, { jeton, pseudo, solde: sous(solde) });
+    // --- créer un compte ---
+    if (route === '/api/inscription' && req.method === 'POST') {
+      const body   = await corpsJSON(req);
+      const pseudo = String(body.pseudo || '').trim().slice(0, 16);
+      const mdp    = String(body.motDePasse || '');
+
+      if (pseudo.length < 3) {
+        return repondre(res, 400, { erreur: 'Choisissez un pseudo d’au moins 3 caractères.' });
+      }
+      if (!/^[\p{L}\p{N} _.'-]+$/u.test(pseudo)) {
+        return repondre(res, 400, { erreur: 'Pseudo : lettres, chiffres et espaces uniquement.' });
+      }
+      if (mdp.length < 4) {
+        return repondre(res, 400, { erreur: 'Mot de passe trop court (4 caractères minimum).' });
+      }
+
+      const pseudoBas = pseudo.toLowerCase();
+      if (await Carnet.lire(pseudoBas)) {
+        return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
+      }
+
+      const fiche = {
+        pseudoBas, pseudo,
+        motDePasse: await chiffrer(mdp),
+        solde: SOLDE_DEPART,
+        mains: 0, gagnees: 0, perdues: 0, poissons: 0, perso: null
+      };
+      if (!await Carnet.creer(fiche)) {
+        return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
+      }
+      return repondre(res, 200, ouvrirSession(fiche));
+    }
+
+    // --- se connecter ---
+    if (route === '/api/connexion' && req.method === 'POST') {
+      const body   = await corpsJSON(req);
+      const pseudo = String(body.pseudo || '').trim();
+      const mdp    = String(body.motDePasse || '');
+
+      if (!pseudo || !mdp) {
+        return repondre(res, 400, { erreur: 'Renseignez votre pseudo et votre mot de passe.' });
+      }
+      const fiche = await Carnet.lire(pseudo.toLowerCase());
+      if (!fiche || !await motDePasseJuste(mdp, fiche.motDePasse)) {
+        return repondre(res, 401, { erreur: 'Pseudo ou mot de passe incorrect.' });
+      }
+      return repondre(res, 200, ouvrirSession(fiche));
     }
 
     const jeton  = url.searchParams.get('jeton') || (req.headers['x-jeton'] || '');
@@ -705,14 +877,33 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, etatPour(table, compte.jetonRef));
     }
 
-    // --- mise a jour du solde (retour de peche) ---
-    if (route === '/api/solde' && req.method === 'POST') {
-      let v = Number(body.solde);
-      if (!isFinite(v) || v < 0 || v > 100000) return repondre(res, 400, { erreur: 'solde invalide' });
-      compte.solde = sous(v);
+    // --- une prise à la pêche : c'est le serveur qui crédite ---
+    if (route === '/api/peche' && req.method === 'POST') {
+      compte.solde    = sous(compte.solde + 1);
+      compte.poissons = compte.poissons + 1;
       const info = siegeDe(compte);
       if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
-      return repondre(res, 200, { solde: compte.solde });
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { solde: compte.solde, poissons: compte.poissons });
+    }
+
+    // --- l'apparence du personnage ---
+    if (route === '/api/perso' && req.method === 'POST') {
+      try { compte.perso = JSON.stringify(body.perso || {}).slice(0, 400); } catch (e) {}
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true });
+    }
+
+    // --- ma fiche (écran profil) ---
+    if (route === '/api/moi') {
+      return repondre(res, 200, {
+        pseudo:   compte.pseudo,
+        solde:    compte.solde,
+        mains:    compte.mains,
+        gagnees:  compte.gagnees,
+        perdues:  compte.perdues,
+        poissons: compte.poissons
+      });
     }
 
     return repondre(res, 404, { erreur: 'route inconnue' });
@@ -734,6 +925,42 @@ const serveur = http.createServer(async (req, res) => {
   servirFichier(res, chemin);
 });
 
+/* Ouvre une session pour un joueur reconnu. Un joueur ne peut être
+   connecté qu'une fois : ouvrir une session ferme la précédente, sinon
+   deux appareils feraient diverger le même solde. */
+function ouvrirSession(fiche) {
+  for (const [j, c] of comptes) {
+    if (c.pseudoBas === fiche.pseudoBas) { quitterTable(c); comptes.delete(j); }
+  }
+
+  const jeton = nouveauJeton();
+  const compte = {
+    jetonRef: jeton,
+    pseudo:    fiche.pseudo,
+    pseudoBas: fiche.pseudoBas,
+    solde:     sous(Number(fiche.solde)),
+    mains:     fiche.mains    | 0,
+    gagnees:   fiche.gagnees  | 0,
+    perdues:   fiche.perdues  | 0,
+    poissons:  fiche.poissons | 0,
+    perso:     fiche.perso || null,
+    table: null, siege: -1, vu: Date.now()
+  };
+  comptes.set(jeton, compte);
+
+  return {
+    jeton,
+    pseudo:   compte.pseudo,
+    solde:    compte.solde,
+    mains:    compte.mains,
+    gagnees:  compte.gagnees,
+    perdues:  compte.perdues,
+    poissons: compte.poissons,
+    perso:    compte.perso,
+    creeLe:   fiche.creeLe || null
+  };
+}
+
 function quitterTable(compte) {
   if (!compte.table) return;
   const table = trouverTable(compte.table);
@@ -752,6 +979,8 @@ function quitterTable(compte) {
   }
 }
 
-serveur.listen(PORT, () => {
-  console.log('Casino Messina — le salon est ouvert sur le port ' + PORT);
+Carnet.demarrer().then(() => {
+  serveur.listen(PORT, () => {
+    console.log('Casino Messina — le salon est ouvert sur le port ' + PORT);
+  });
 });

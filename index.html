@@ -604,8 +604,8 @@ body{
 
     <div id="formConnexion">
       <div class="champ">
-        <label>Adresse e-mail</label>
-        <input type="email" id="cxEmail" placeholder="vous@exemple.com" autocomplete="email">
+        <label>Pseudo</label>
+        <input type="text" id="cxPseudo" placeholder="Votre nom de joueur" maxlength="16" autocomplete="username">
       </div>
       <div class="champ">
         <label>Mot de passe</label>
@@ -619,15 +619,11 @@ body{
     <div id="formInscription" style="display:none">
       <div class="champ">
         <label>Pseudo</label>
-        <input type="text" id="inPseudo" placeholder="Votre nom de joueur" maxlength="16">
-      </div>
-      <div class="champ">
-        <label>Adresse e-mail</label>
-        <input type="email" id="inEmail" placeholder="vous@exemple.com">
+        <input type="text" id="inPseudo" placeholder="Votre nom de joueur" maxlength="16" autocomplete="username">
       </div>
       <div class="champ">
         <label>Mot de passe</label>
-        <input type="password" id="inMdp" placeholder="••••••••">
+        <input type="password" id="inMdp" placeholder="••••••••" autocomplete="new-password">
       </div>
       <button class="bouton-or" id="btnInscription">Créer mon compte</button>
       <div class="bascule">Déjà membre ? <span id="versConnexion">Se connecter</span></div>
@@ -721,9 +717,10 @@ body{
       <p class="intro-page">Votre carte de membre du Casino Messina.</p>
       <div class="bloc-profil">
         <div class="ligne-profil"><span class="l">Pseudo</span><span class="v" id="pfPseudo">—</span></div>
-        <div class="ligne-profil"><span class="l">E-mail</span><span class="v" style="font-size:15px" id="pfEmail">—</span></div>
+        <div class="ligne-profil"><span class="l">Membre depuis</span><span class="v" style="font-size:15px" id="pfDepuis">—</span></div>
         <div class="ligne-profil"><span class="l">Solde</span><span class="v" id="pfSolde">22,00 €</span></div>
         <div class="ligne-profil"><span class="l">Mains jouées</span><span class="v" id="pfMains">0</span></div>
+        <div class="ligne-profil"><span class="l">Mains gagnées</span><span class="v" id="pfGagnees">0</span></div>
         <div class="ligne-profil"><span class="l">Poissons pêchés</span><span class="v" id="pfPoissons">0</span></div>
         <button class="bouton-or" id="btnDeconnexion" style="margin-top:22px">Se déconnecter</button>
       </div>
@@ -1126,6 +1123,7 @@ const E = {
   gains:    0,
   pertesDeSuite: 0,
   mains:    0,
+  gagnees:  0,
   minuteur: null
 };
 
@@ -1149,37 +1147,65 @@ $('versConnexion').onclick = () => {
   $('formConnexion').style.display = 'block';
 };
 
-$('btnConnexion').onclick = () => {
-  const email = $('cxEmail').value.trim();
-  const mdp   = $('cxMdp').value;
-  if (!email || !mdp) { $('erreurCx').textContent = 'Renseignez votre e-mail et votre mot de passe.'; return; }
-  if (!email.includes('@')) { $('erreurCx').textContent = "Cette adresse e-mail n'est pas valable."; return; }
-  ouvrirSession({ pseudo: email.split('@')[0], email, solde: 22 });
-};
+$('btnConnexion').onclick = () => entrerAuSalon('connexion', {
+  pseudo:     $('cxPseudo').value.trim(),
+  motDePasse: $('cxMdp').value
+}, 'erreurCx');
 
-$('btnInscription').onclick = () => {
-  const pseudo = $('inPseudo').value.trim();
-  const email  = $('inEmail').value.trim();
-  const mdp    = $('inMdp').value;
-  if (!pseudo || !email || !mdp) { $('erreurIn').textContent = 'Remplissez les trois champs.'; return; }
-  if (!email.includes('@')) { $('erreurIn').textContent = "Cette adresse e-mail n'est pas valable."; return; }
-  if (mdp.length < 4) { $('erreurIn').textContent = 'Mot de passe trop court (4 caractères minimum).'; return; }
-  ouvrirSession({ pseudo, email, solde: 22 });
-};
+$('btnInscription').onclick = () => entrerAuSalon('inscription', {
+  pseudo:     $('inPseudo').value.trim(),
+  motDePasse: $('inMdp').value
+}, 'erreurIn');
 
-async function ouvrirSession(j) {
-  initSon();
-  const r = await envoyer('session', { pseudo: j.pseudo, solde: chargerSolde() });
-  if (!r || r.erreur || !r.jeton) {
-    const m = 'Le salon ne répond pas. Réessayez dans un instant.';
-    $('erreurCx').textContent = m;
-    $('erreurIn').textContent = m;
+// on valide aussi avec la touche Entrée
+['cxPseudo','cxMdp'].forEach(id => {
+  $(id).onkeydown = e => { if (e.key === 'Enter') $('btnConnexion').onclick(); };
+});
+['inPseudo','inMdp'].forEach(id => {
+  $(id).onkeydown = e => { if (e.key === 'Enter') $('btnInscription').onclick(); };
+});
+
+let connexionEnCours = false;
+
+async function entrerAuSalon(route, donnees, champErreur) {
+  if (connexionEnCours) return;
+  const err = $(champErreur);
+  err.textContent = '';
+
+  if (!donnees.pseudo || !donnees.motDePasse) {
+    err.textContent = 'Renseignez votre pseudo et votre mot de passe.';
     return;
   }
+
+  connexionEnCours = true;
+  err.textContent = 'Un instant…';
+  initSon();
+  const r = await envoyer(route, donnees);
+  connexionEnCours = false;
+
+  if (!r || !r.jeton) {
+    err.textContent = (r && r.erreur)
+      ? r.erreur
+      : 'Le salon ne répond pas. Réessayez dans un instant.';
+    return;
+  }
+
+  err.textContent = '';
   JETON = r.jeton;
-  E.joueur = { pseudo: r.pseudo, email: j.email, solde: r.solde };
+  E.joueur  = { pseudo: r.pseudo, solde: r.solde, depuis: r.creeLe || null };
+  E.mains   = r.mains    || 0;
+  E.gagnees = r.gagnees  || 0;
+  E.prises  = r.poissons || 0;
+
+  // on retrouve l'apparence choisie la dernière fois
+  if (r.perso) {
+    try {
+      const p = JSON.parse(r.perso);
+      if (p && p.teint) { E.perso = p; majApercu(); }
+    } catch (e) {}
+  }
+
   majSolde();
-  sauverSolde();
   montrerEcran('ecranPersonnage');
 }
 
@@ -1242,6 +1268,7 @@ $('btnEntrer').onclick = () => {
   $('avatarMini').textContent = E.perso.emoji;
   construireSalon();
   majSolde();
+  envoyer('perso', { perso: E.perso });   // on retient l'apparence choisie
 };
 
 /* --- boutons de son --- */
@@ -1289,9 +1316,18 @@ Array.prototype.forEach.call(document.querySelectorAll('.nav button'), b => {
 $('btnDeconnexion').onclick = () => {
   if (!confirm('Se déconnecter du salon ?')) return;
   arreterPeche();
+  arreterSondage();
+  envoyer('quitter', {});
+  JETON = null;
   E.joueur = null;
-  $('cxEmail').value = ''; $('cxMdp').value = '';
-  $('erreurCx').textContent = '';
+  E.table  = null;
+  $('cxPseudo').value = ''; $('cxMdp').value = '';
+  $('inPseudo').value = ''; $('inMdp').value = '';
+  $('erreurCx').textContent = ''; $('erreurIn').textContent = '';
+  // on revient toujours sur le formulaire de connexion, jamais sur
+  // celui d'inscription : sinon on se recrée un compte sans le vouloir
+  $('formInscription').style.display = 'none';
+  $('formConnexion').style.display   = 'block';
   montrerEcran('ecranConnexion');
 };
 
@@ -1300,13 +1336,37 @@ function majSolde() {
   $('affSolde').textContent  = eur(E.joueur.solde);
   $('affSolde2').textContent = eur(E.joueur.solde);
 }
-function majProfil() {
+function dateCourte(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR',
+      { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch (e) { return '—'; }
+}
+
+function afficherProfil() {
   if (!E.joueur) return;
   $('pfPseudo').textContent   = E.joueur.pseudo;
-  $('pfEmail').textContent    = E.joueur.email;
+  $('pfDepuis').textContent   = dateCourte(E.joueur.depuis);
   $('pfSolde').textContent    = eur(E.joueur.solde);
   $('pfMains').textContent    = E.mains;
+  $('pfGagnees').textContent  = E.gagnees || 0;
   $('pfPoissons').textContent = E.prises;
+}
+
+async function majProfil() {
+  if (!E.joueur) return;
+  afficherProfil();
+
+  // on demande les chiffres à jour au serveur
+  const r = await demander('moi');
+  if (!r || r.erreur || typeof r.solde !== 'number') return;
+  E.joueur.solde = r.solde;
+  E.mains   = r.mains    || 0;
+  E.gagnees = r.gagnees  || 0;
+  E.prises  = r.poissons || 0;
+  afficherProfil();
+  majSolde();
 }
 
 /* ===================================================================
@@ -1384,19 +1444,6 @@ async function demander(route) {
     const r = await fetch('/api/' + route + '?jeton=' + encodeURIComponent(JETON || ''));
     return await r.json();
   } catch (e) { return { erreur: 'reseau' }; }
-}
-
-/* --- le solde suit le joueur dans son navigateur --- */
-function chargerSolde() {
-  try {
-    const v = parseFloat(localStorage.getItem('messina_solde'));
-    return (isFinite(v) && v >= 0) ? v : 22;
-  } catch (e) { return 22; }
-}
-function sauverSolde() {
-  try {
-    if (E.joueur) localStorage.setItem('messina_solde', String(E.joueur.solde));
-  } catch (e) {}
 }
 
 /* --- comptage, uniquement pour l'affichage --- */
@@ -1518,7 +1565,6 @@ async function appliquer(e) {
   if (E.joueur && typeof e.monSolde === 'number') {
     E.joueur.solde = e.monSolde;
     majSolde();
-    sauverSolde();
   }
 
   /* --- nouvelle manche : la table se vide d'un coup --- */
@@ -1618,8 +1664,8 @@ async function appliquer(e) {
     dernierResultat = e.monResultat.texte;
     $('zoneResultat').textContent = e.monResultat.texte;
     $('zoneResultat').className   = 'resultat serif ' + (e.monResultat.classe || '');
-    if (e.monResultat.classe === 'gagne')      sonGain();
-    else if (e.monResultat.classe === 'perdu') sonPerte();
+    if (e.monResultat.classe === 'gagne')      { sonGain();  E.gagnees++; }
+    else if (e.monResultat.classe === 'perdu') { sonPerte(); }
     E.mains++;
   }
 
@@ -1972,8 +2018,17 @@ function ferrer(reussi) {
     E.gains = Math.round((E.gains + 1) * 100) / 100;
     if (E.joueur) {
       E.joueur.solde = Math.round((E.joueur.solde + 1) * 100) / 100;
-      majSolde(); sauverSolde();
-      envoyer('solde', { solde: E.joueur.solde });
+      majSolde();
+      // c'est le serveur qui crédite pour de bon et qui compte les prises
+      envoyer('peche', {}).then(r => {
+        if (!r || typeof r.solde !== 'number') return;
+        E.joueur.solde = r.solde;
+        if (typeof r.poissons === 'number') {
+          E.prises = r.poissons;
+          $('affPrises').textContent = E.prises;
+        }
+        majSolde();
+      });
     }
     $('affPrises').textContent = E.prises;
     $('affGains').textContent  = eur(E.gains);
