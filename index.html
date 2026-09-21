@@ -984,8 +984,11 @@ body.periph-actif{overflow:hidden;
 #periphPlein #pxBObjet{right:108px;bottom:10px;width:64px;height:58px;font-size:11px;letter-spacing:.06em}
 #periphPlein #pxBGaz{right:9px;bottom:10px;width:94px;height:58px;font-size:11px;letter-spacing:.06em}
 #periphPlein .ecran{position:fixed;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);justify-content:flex-start;gap:8px;
-    padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 14px)}
-#periphPlein .ecran .pied{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4px);margin-top:2px}
+    padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 84px)}
+#periphPlein .ecran .pied{
+    position:fixed;left:0;right:0;bottom:0;margin:0;z-index:35;
+    padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 10px);
+    background:linear-gradient(180deg,#08090b00,#08090bf2 35%,#08090b)}
 #periphPlein #pxEcAccueil h2,
 #periphPlein #pxEcAccueil > p{display:none}
 #periphPlein .ecran h2{font-size:22px}
