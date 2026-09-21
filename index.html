@@ -892,6 +892,8 @@ body.periph-actif{overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:15px;padding:22px;text-align:center;
   overflow-y:auto;overscroll-behavior:contain;
+  touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;
 }
 #periphPlein .ecran h2{margin:0;font-size:34px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--or)}
 #periphPlein .ecran p{margin:0;max-width:56ch;color:#c0c6cd;font-size:14.5px;line-height:1.5}
@@ -982,20 +984,31 @@ body.periph-actif{overflow:hidden;
 #periphPlein #pxBDroite{left:76px;bottom:10px;width:62px;height:58px}
 #periphPlein #pxBObjet{right:108px;bottom:10px;width:64px;height:58px;font-size:11px;letter-spacing:.06em}
 #periphPlein #pxBGaz{right:9px;bottom:10px;width:94px;height:58px;font-size:11px;letter-spacing:.06em}
-#periphPlein .ecran{position:fixed;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);justify-content:flex-start;gap:12px;
-    padding:calc(env(safe-area-inset-top,0px) + 18px) 18px calc(env(safe-area-inset-bottom,0px) + 22px)}
-#periphPlein .ecran .pied{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4px)}
-#periphPlein .ecran h2{font-size:25px}
-#periphPlein .ecran p{font-size:13.5px}
-#periphPlein .miseligne .mt{font-size:29px;min-width:120px}
-#periphPlein .jeton{font-size:12.5px;padding:6px 10px}
-#periphPlein .gain .g2{font-size:18px}
-#periphPlein .choixv{width:50px;height:66px}
-#periphPlein .boutique{padding:8px 10px;gap:10px}
-#periphPlein .choixv.boutiquev{width:56px;height:74px}
-#periphPlein .boutique-nom{font-size:14.5px}
-#periphPlein .boutique-carac{font-size:10.5px}
-#periphPlein .btn.petit{padding:7px 12px;font-size:12px}
+#periphPlein .ecran{position:fixed;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);justify-content:flex-start;gap:8px;
+    padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 14px)}
+#periphPlein .ecran .pied{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4px);margin-top:2px}
+#periphPlein #pxEcAccueil h2,
+#periphPlein #pxEcAccueil > p{display:none}
+#periphPlein .ecran h2{font-size:22px}
+#periphPlein .ecran p{font-size:12.5px;line-height:1.35}
+#periphPlein .reglage{gap:4px}
+#periphPlein .miseligne{gap:7px}
+#periphPlein .miseligne .mt{font-size:24px;min-width:96px}
+#periphPlein .rond{width:32px;height:32px;font-size:18px}
+#periphPlein .jeton{font-size:11px;padding:4px 8px}
+#periphPlein .grille-gains{gap:5px}
+#periphPlein .gain{padding:5px 4px}
+#periphPlein .gain .g1{font-size:8.5px;letter-spacing:.06em}
+#periphPlein .gain .g2{font-size:14px}
+#periphPlein .gain .g3{font-size:9px}
+#periphPlein .choixv{width:40px;height:52px;padding:2px}
+#periphPlein .boutique{padding:6px 8px;gap:8px}
+#periphPlein .choixv.boutiquev{width:44px;height:58px}
+#periphPlein .boutique-info{gap:2px}
+#periphPlein .boutique-nom{font-size:13px}
+#periphPlein .boutique-carac{font-size:9.5px}
+#periphPlein .btn.petit{padding:6px 10px;font-size:11px}
+#periphPlein .touches-aide{gap:8px 14px;font-size:10.5px}
 }
 </style>
 </head>
