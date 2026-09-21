@@ -206,6 +206,7 @@ const Carnet = {
       defaitesPenalty: compte.defaitesPenalty | 0,
       periphs:   compte.periphs | 0,
       portes:    compte.portes  | 0,
+      roulettes: compte.roulettes | 0,
       voiturePremium: !!compte.voiturePremium,
       perso:     compte.perso || ancienne.perso || null,
       vuLe:      new Date().toISOString()
@@ -696,6 +697,181 @@ function resumeSalon() {
 }
 
 /* ===================================================================
+   ROULETTE — une seule table partagée, le serveur tient l'économie
+   -------------------------------------------------------------------
+   Ajout autonome : aucune fonction du blackjack ci-dessus n'est
+   modifiée. La table de roulette vit dans son propre objet, avec son
+   propre battement (setInterval séparé) et ses propres routes
+   /api/roulette-*, pour ne prendre aucun risque avec le blackjack.
+   =================================================================== */
+const ZONES_ROULETTE = [{"id":"n0","type":"plein","nums":[0]},{"id":"n1","type":"plein","nums":[1]},{"id":"n2","type":"plein","nums":[2]},{"id":"n3","type":"plein","nums":[3]},{"id":"n4","type":"plein","nums":[4]},{"id":"n5","type":"plein","nums":[5]},{"id":"n6","type":"plein","nums":[6]},{"id":"n7","type":"plein","nums":[7]},{"id":"n8","type":"plein","nums":[8]},{"id":"n9","type":"plein","nums":[9]},{"id":"n10","type":"plein","nums":[10]},{"id":"n11","type":"plein","nums":[11]},{"id":"n12","type":"plein","nums":[12]},{"id":"n13","type":"plein","nums":[13]},{"id":"n14","type":"plein","nums":[14]},{"id":"n15","type":"plein","nums":[15]},{"id":"n16","type":"plein","nums":[16]},{"id":"n17","type":"plein","nums":[17]},{"id":"n18","type":"plein","nums":[18]},{"id":"n19","type":"plein","nums":[19]},{"id":"n20","type":"plein","nums":[20]},{"id":"n21","type":"plein","nums":[21]},{"id":"n22","type":"plein","nums":[22]},{"id":"n23","type":"plein","nums":[23]},{"id":"n24","type":"plein","nums":[24]},{"id":"n25","type":"plein","nums":[25]},{"id":"n26","type":"plein","nums":[26]},{"id":"n27","type":"plein","nums":[27]},{"id":"n28","type":"plein","nums":[28]},{"id":"n29","type":"plein","nums":[29]},{"id":"n30","type":"plein","nums":[30]},{"id":"n31","type":"plein","nums":[31]},{"id":"n32","type":"plein","nums":[32]},{"id":"n33","type":"plein","nums":[33]},{"id":"n34","type":"plein","nums":[34]},{"id":"n35","type":"plein","nums":[35]},{"id":"n36","type":"plein","nums":[36]},{"id":"col0","type":"colonne","nums":[3,6,9,12,15,18,21,24,27,30,33,36]},{"id":"col1","type":"colonne","nums":[2,5,8,11,14,17,20,23,26,29,32,35]},{"id":"col2","type":"colonne","nums":[1,4,7,10,13,16,19,22,25,28,31,34]},{"id":"douz0","type":"douzaine","nums":[1,2,3,4,5,6,7,8,9,10,11,12]},{"id":"douz1","type":"douzaine","nums":[13,14,15,16,17,18,19,20,21,22,23,24]},{"id":"douz2","type":"douzaine","nums":[25,26,27,28,29,30,31,32,33,34,35,36]},{"id":"manque","type":"manque","nums":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]},{"id":"pair","type":"pair","nums":[2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36]},{"id":"rouge","type":"rouge","nums":[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]},{"id":"noir","type":"noir","nums":[2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]},{"id":"impair","type":"impair","nums":[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35]},{"id":"passe","type":"passe","nums":[19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36]}];
+
+const SEQUENCE_ROULETTE = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const ROUGES_ROULETTE   = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+function couleurRoulette(n) { if (n === 0) return 'vert'; return ROUGES_ROULETTE.indexOf(n) >= 0 ? 'rouge' : 'noir'; }
+function trouverZoneRoulette(id) { return ZONES_ROULETTE.find(z => z.id === id) || null; }
+function multiplicateurZoneRoulette(type) {
+  if (type === 'plein') return 36;
+  if (type === 'colonne' || type === 'douzaine') return 3;
+  return 2; // rouge, noir, pair, impair, manque, passe
+}
+
+const DUREE_MISE_ROULETTE       = 15000;  // temps pour miser
+const DUREE_LANCEMENT_ROULETTE  = 6600;   // 2000ms tapis + 4600ms cinema, comme le prototype
+const DUREE_RESULTAT_ROULETTE   = 5000;   // affichage du resultat avant la manche suivante
+const NB_PLACES_ROULETTE        = 7;
+
+const tableRoulette = {
+  id: 'roulette',
+  nom: 'Roulette Messina',
+  places: new Array(NB_PLACES_ROULETTE).fill(null),
+  phase: 'mise',           // 'mise' | 'lancement' | 'resultat'
+  echeance: Date.now() + DUREE_MISE_ROULETTE,
+  numeroGagnant: null,
+  historique: [],
+  version: 1
+};
+
+function toucheRoulette() { tableRoulette.version++; }
+
+function rembourserMisesRoulette(p) {
+  if (!p) return;
+  const c = comptes.get(p.jeton);
+  if (!c) return;
+  let total = 0;
+  Object.keys(p.mises).forEach(id => { total += p.mises[id]; });
+  if (total > 0) { c.solde = sous(c.solde + total); }
+  p.mises = {};
+}
+
+function nouvelleMancheRoulette() {
+  tableRoulette.phase = 'mise';
+  tableRoulette.echeance = Date.now() + DUREE_MISE_ROULETTE;
+  tableRoulette.numeroGagnant = null;
+  tableRoulette.places.forEach(p => { if (p) { p.mises = {}; p.dernierGain = 0; p.derniereMiseTotale = 0; } });
+  toucheRoulette();
+}
+
+function demarrerLancementRoulette() {
+  const numero = SEQUENCE_ROULETTE[crypto.randomInt(SEQUENCE_ROULETTE.length)];
+  const couleur = couleurRoulette(numero);
+  tableRoulette.numeroGagnant = numero;
+
+  tableRoulette.places.forEach(p => {
+    if (!p) return;
+    const c = comptes.get(p.jeton);
+    let miseTotale = 0, gains = 0;
+    Object.keys(p.mises).forEach(id => {
+      const zone = trouverZoneRoulette(id);
+      if (!zone) return;
+      miseTotale += p.mises[id];
+      if (zone.nums.indexOf(numero) >= 0) {
+        gains = sous(gains + sous(p.mises[id] * multiplicateurZoneRoulette(zone.type)));
+      }
+    });
+    if (c) {
+      if (gains > 0) c.solde = sous(c.solde + gains);
+      c.roulettes = (c.roulettes | 0) + 1;
+      Carnet.enregistrer(c);
+    }
+    p.dernierGain = gains;
+    p.derniereMiseTotale = miseTotale;
+    p.mises = {};
+  });
+
+  tableRoulette.historique.unshift({ n: numero, c: couleur });
+  tableRoulette.historique = tableRoulette.historique.slice(0, 5);
+
+  tableRoulette.phase = 'lancement';
+  tableRoulette.echeance = Date.now() + DUREE_LANCEMENT_ROULETTE;
+  toucheRoulette();
+}
+
+function battementRoulette() {
+  const now = Date.now();
+  const t = tableRoulette;
+
+  let depart = false;
+  t.places.forEach((p, i) => {
+    if (!p) return;
+    const c = comptes.get(p.jeton);
+    if (!c || now - c.vu > ABSENCE_MAX) {
+      rembourserMisesRoulette(p);
+      if (c) c.tableRoulette = false;
+      t.places[i] = null;
+      depart = true;
+    }
+  });
+  if (depart) toucheRoulette();
+
+  switch (t.phase) {
+    case 'mise':
+      if (now >= t.echeance) demarrerLancementRoulette();
+      break;
+    case 'lancement':
+      if (now >= t.echeance) {
+        t.phase = 'resultat';
+        t.echeance = now + DUREE_RESULTAT_ROULETTE;
+        toucheRoulette();
+      }
+      break;
+    case 'resultat':
+      if (now >= t.echeance) nouvelleMancheRoulette();
+      break;
+  }
+}
+setInterval(battementRoulette, 200);
+
+function etatRoulette(jeton) {
+  const t = tableRoulette;
+  const moiIndex = t.places.findIndex(p => p && p.jeton === jeton);
+  const moi = moiIndex >= 0 ? t.places[moiIndex] : null;
+  const now = Date.now();
+  const c = comptes.get(jeton);
+
+  let secondes = 0;
+  if (t.phase === 'mise') secondes = Math.max(0, Math.ceil((t.echeance - now) / 1000));
+
+  return {
+    assis: moiIndex >= 0,
+    version: t.version,
+    phase: t.phase,
+    secondes,
+    echeance: t.echeance,
+    dureeLancement: DUREE_LANCEMENT_ROULETTE,
+    dureeResultat: DUREE_RESULTAT_ROULETTE,
+    numeroGagnant: (t.phase === 'lancement' || t.phase === 'resultat') ? t.numeroGagnant : null,
+    historique: t.historique,
+    places: t.places.map((p, i) => p ? { nom: p.nom, moi: i === moiIndex } : null),
+    mesMises: moi ? moi.mises : {},
+    dernierGain: moi ? (moi.dernierGain || 0) : 0,
+    derniereMiseTotale: moi ? (moi.derniereMiseTotale || 0) : 0,
+    solde: c ? c.solde : 0
+  };
+}
+
+function resumeRoulette() {
+  return {
+    id: tableRoulette.id,
+    nom: tableRoulette.nom,
+    phase: tableRoulette.phase,
+    joueurs: tableRoulette.places.filter(p => p).length,
+    places: NB_PLACES_ROULETTE,
+    dernier: tableRoulette.historique.length ? tableRoulette.historique[0] : null
+  };
+}
+
+function quitterTableRoulette(compte) {
+  const i = tableRoulette.places.findIndex(p => p && p.jeton === compte.jetonRef);
+  if (i >= 0) {
+    rembourserMisesRoulette(tableRoulette.places[i]);
+    tableRoulette.places[i] = null;
+    toucheRoulette();
+  }
+  compte.tableRoulette = false;
+}
+
+/* ===================================================================
    SERVEUR HTTP
    =================================================================== */
 function corpsJSON(req) {
@@ -822,7 +998,7 @@ const serveur = http.createServer(async (req, res) => {
 
     // --- liste des tables ---
     if (route === '/api/salon') {
-      return repondre(res, 200, { tables: resumeSalon(), solde: compte.solde });
+      return repondre(res, 200, { tables: resumeSalon(), roulette: resumeRoulette(), solde: compte.solde });
     }
 
     // --- s'asseoir ---
@@ -856,6 +1032,63 @@ const serveur = http.createServer(async (req, res) => {
     if (route === '/api/quitter' && req.method === 'POST') {
       quitterTable(compte);
       return repondre(res, 200, { ok: true, solde: compte.solde });
+    }
+
+    /* ================= ROULETTE ================= */
+
+    // --- s'asseoir a la table de roulette ---
+    if (route === '/api/roulette-asseoir' && req.method === 'POST') {
+      // deja assis : on renvoie simplement l'etat
+      let i = tableRoulette.places.findIndex(p => p && p.jeton === compte.jetonRef);
+      if (i < 0) {
+        i = tableRoulette.places.findIndex(p => !p);
+        if (i < 0) return repondre(res, 409, { erreur: 'table complete' });
+        tableRoulette.places[i] = { jeton: compte.jetonRef, nom: compte.pseudo, mises: {}, dernierGain: 0, derniereMiseTotale: 0 };
+        compte.tableRoulette = true;
+        toucheRoulette();
+      }
+      return repondre(res, 200, etatRoulette(compte.jetonRef));
+    }
+
+    // --- quitter la table de roulette ---
+    if (route === '/api/roulette-quitter' && req.method === 'POST') {
+      quitterTableRoulette(compte);
+      return repondre(res, 200, { ok: true, solde: compte.solde });
+    }
+
+    // --- etat de la table de roulette (appele en boucle) ---
+    if (route === '/api/roulette-etat') {
+      return repondre(res, 200, etatRoulette(compte.jetonRef));
+    }
+
+    // --- placer une mise sur une zone ---
+    if (route === '/api/roulette-miser' && req.method === 'POST') {
+      const p = tableRoulette.places.find(x => x && x.jeton === compte.jetonRef);
+      if (!p) return repondre(res, 409, { erreur: 'pas a table' });
+      if (tableRoulette.phase !== 'mise') return repondre(res, 409, { erreur: 'trop tard' });
+
+      const zone = trouverZoneRoulette(String(body.zone || ''));
+      if (!zone) return repondre(res, 400, { erreur: 'zone inconnue' });
+
+      let v = Number(body.montant);
+      if (!isFinite(v) || v < 0.01) return repondre(res, 400, { erreur: 'mise trop faible' });
+      v = sous(v);
+      if (v > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'solde insuffisant' });
+
+      compte.solde = sous(compte.solde - v);
+      p.mises[zone.id] = sous((p.mises[zone.id] || 0) + v);
+      toucheRoulette();
+      return repondre(res, 200, etatRoulette(compte.jetonRef));
+    }
+
+    // --- effacer mes mises de la manche en cours (remboursement) ---
+    if (route === '/api/roulette-effacer' && req.method === 'POST') {
+      const p = tableRoulette.places.find(x => x && x.jeton === compte.jetonRef);
+      if (!p) return repondre(res, 409, { erreur: 'pas a table' });
+      if (tableRoulette.phase !== 'mise') return repondre(res, 409, { erreur: 'trop tard' });
+      rembourserMisesRoulette(p);
+      toucheRoulette();
+      return repondre(res, 200, etatRoulette(compte.jetonRef));
     }
 
     // --- etat de la table (appele en boucle par le jeu) ---
@@ -1206,6 +1439,7 @@ const serveur = http.createServer(async (req, res) => {
         defaites: compte.defaitesPenalty | 0,
         periphs:  compte.periphs | 0,
         portes:   compte.portes  | 0,
+        roulettes: compte.roulettes | 0,
         voiturePremium: !!compte.voiturePremium,
         penalty:  compte.penalty
           ? { mise: compte.penalty.mise, palier: compte.penalty.palier }
@@ -1240,7 +1474,7 @@ const serveur = http.createServer(async (req, res) => {
    deux appareils feraient diverger le même solde. */
 function ouvrirSession(fiche) {
   for (const [j, c] of comptes) {
-    if (c.pseudoBas === fiche.pseudoBas) { quitterTable(c); comptes.delete(j); }
+    if (c.pseudoBas === fiche.pseudoBas) { quitterTable(c); quitterTableRoulette(c); comptes.delete(j); }
   }
 
   const jeton = nouveauJeton();
@@ -1256,13 +1490,14 @@ function ouvrirSession(fiche) {
     penaltys:  fiche.penaltys | 0,
     periphs:   fiche.periphs  | 0,
     portes:    fiche.portes   | 0,
+    roulettes: fiche.roulettes | 0,
     buts:      fiche.buts     | 0,
     defaitesPenalty: fiche.defaitesPenalty | 0,
     perso:     fiche.perso || null,
     voiturePremium: !!fiche.voiturePremium,
     penalty: null,                       // aucune serie de penaltys en cours
     periph:  null,                       // aucune course de periph en cours
-    table: null, siege: -1, vu: Date.now()
+    table: null, siege: -1, tableRoulette: false, vu: Date.now()
   };
   comptes.set(jeton, compte);
 
