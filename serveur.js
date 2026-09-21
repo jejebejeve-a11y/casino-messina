@@ -56,10 +56,19 @@ const MISE_MAXI_PERIPH = 100;
 const VITESSE_MAX_PERIPH = 150 / 3.6;   // metres par seconde
 const MARGE_TEMPS      = 0.80;          // on tolere un peu de retard d'horloge
 
+/* la voiture de la boutique : plus rapide, avec des vrais freins */
+const PRIX_VOITURE_PREMIUM     = 1200;
+const VOITURE_PREMIUM_INDICE   = 4;
+const VITESSE_MAX_PERIPH_PREMIUM = 300 / 3.6;   // metres par seconde
+
 function distancePeriph(palier) {
   let s = 0;
   for (let i = 0; i < palier && i < LONGUEURS_PERIPH.length; i++) s += LONGUEURS_PERIPH[i];
   return s;
+}
+function bornerVoitureNormale(v) {
+  v = Number(v) | 0;
+  return (v >= 0 && v < VOITURE_PREMIUM_INDICE) ? v : 0;
 }
 
 /* ===================================================================
@@ -195,6 +204,9 @@ const Carnet = {
       penaltys:  compte.penaltys,
       buts:      compte.buts,
       defaitesPenalty: compte.defaitesPenalty | 0,
+      periphs:   compte.periphs | 0,
+      portes:    compte.portes  | 0,
+      voiturePremium: !!compte.voiturePremium,
       perso:     compte.perso || ancienne.perso || null,
       vuLe:      new Date().toISOString()
     });
@@ -774,7 +786,8 @@ const serveur = http.createServer(async (req, res) => {
         motDePasse: await chiffrer(mdp),
         solde: SOLDE_DEPART,
         mains: 0, gagnees: 0, perdues: 0, poissons: 0,
-        penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null
+        penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null,
+        voiturePremium: false
       };
       if (!await Carnet.creer(fiche)) {
         return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
@@ -1072,9 +1085,13 @@ const serveur = http.createServer(async (req, res) => {
       if (mise > compte.solde) {
         return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       }
+      // la voiture premium n'est utilisable que si elle a ete achetee
+      const voiture = (Number(body.voiture) | 0) === VOITURE_PREMIUM_INDICE && compte.voiturePremium
+        ? VOITURE_PREMIUM_INDICE : bornerVoitureNormale(body.voiture);
+
       // une course abandonnee en route est simplement perdue : on repart proprement
       compte.solde  = sous(compte.solde - mise);
-      compte.periph = { mise: mise, palier: 0, depart: Date.now() };
+      compte.periph = { mise: mise, palier: 0, depart: Date.now(), voiture: voiture };
       compte.periphs = (compte.periphs | 0) + 1;
 
       const info = siegeDe(compte);
@@ -1082,9 +1099,30 @@ const serveur = http.createServer(async (req, res) => {
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, {
-        ok: true, mise: mise, palier: 0, solde: compte.solde,
+        ok: true, mise: mise, palier: 0, solde: compte.solde, voiture: voiture,
         echelle: ECHELLE_PERIPH, longueurs: LONGUEURS_PERIPH
       });
+    }
+
+    // --- la boutique : on achete la voiture premium ---
+    if (route === '/api/periph-acheter-voiture' && req.method === 'POST') {
+      if (compte.voiturePremium) {
+        return repondre(res, 409, { erreur: 'Vous avez déjà cette voiture.' });
+      }
+      if (compte.periph) {
+        return repondre(res, 409, { erreur: 'Terminez votre course avant d’aller à la boutique.' });
+      }
+      if (compte.solde < PRIX_VOITURE_PREMIUM) {
+        return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      }
+      compte.solde = sous(compte.solde - PRIX_VOITURE_PREMIUM);
+      compte.voiturePremium = true;
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, { ok: true, solde: compte.solde, voiturePremium: true });
     }
 
     // --- on franchit une porte ---
@@ -1096,8 +1134,10 @@ const serveur = http.createServer(async (req, res) => {
       }
       // la porte annoncee doit etre la suivante, et pas trop tot :
       // meme a fond, il faut le temps de parcourir la distance
-      const suivant  = course.palier + 1;
-      const attendu  = distancePeriph(suivant) / VITESSE_MAX_PERIPH * MARGE_TEMPS;
+      const suivant   = course.palier + 1;
+      const vitesseMax = course.voiture === VOITURE_PREMIUM_INDICE
+        ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+      const attendu  = distancePeriph(suivant) / vitesseMax * MARGE_TEMPS;
       const ecoule   = (Date.now() - course.depart) / 1000;
       if (ecoule < attendu) {
         compte.periph = null;
@@ -1166,6 +1206,7 @@ const serveur = http.createServer(async (req, res) => {
         defaites: compte.defaitesPenalty | 0,
         periphs:  compte.periphs | 0,
         portes:   compte.portes  | 0,
+        voiturePremium: !!compte.voiturePremium,
         penalty:  compte.penalty
           ? { mise: compte.penalty.mise, palier: compte.penalty.palier }
           : null,
@@ -1218,6 +1259,7 @@ function ouvrirSession(fiche) {
     buts:      fiche.buts     | 0,
     defaitesPenalty: fiche.defaitesPenalty | 0,
     perso:     fiche.perso || null,
+    voiturePremium: !!fiche.voiturePremium,
     penalty: null,                       // aucune serie de penaltys en cours
     periph:  null,                       // aucune course de periph en cours
     table: null, siege: -1, vu: Date.now()
@@ -1237,6 +1279,7 @@ function ouvrirSession(fiche) {
     portes:   compte.portes  | 0,
     buts:     compte.buts,
     perso:    compte.perso,
+    voiturePremium: compte.voiturePremium,
     creeLe:   fiche.creeLe || null
   };
 }
