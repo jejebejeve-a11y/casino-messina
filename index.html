@@ -734,7 +734,7 @@ body{
 .retour-jeux:hover{color:var(--or)}
 
 /* ===== le calque plein ecran du periph ===== */
-.periph-plein{position:fixed;inset:0;height:100vh;height:100dvh;z-index:900;background:#08090b;overflow:hidden;
+.periph-plein{position:fixed;inset:0;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);z-index:900;background:#08090b;overflow:hidden;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   -webkit-tap-highlight-color:transparent}
 .periph-plein *::selection{background:transparent}
@@ -982,7 +982,7 @@ body.periph-actif{overflow:hidden;
 #periphPlein #pxBDroite{left:76px;bottom:10px;width:62px;height:58px}
 #periphPlein #pxBObjet{right:108px;bottom:10px;width:64px;height:58px;font-size:11px;letter-spacing:.06em}
 #periphPlein #pxBGaz{right:9px;bottom:10px;width:94px;height:58px;font-size:11px;letter-spacing:.06em}
-#periphPlein .ecran{position:fixed;height:100vh;height:100dvh;justify-content:flex-start;gap:12px;
+#periphPlein .ecran{position:fixed;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);justify-content:flex-start;gap:12px;
     padding:calc(env(safe-area-inset-top,0px) + 18px) 18px calc(env(safe-area-inset-bottom,0px) + 22px)}
 #periphPlein .ecran .pied{bottom:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4px)}
 #periphPlein .ecran h2{font-size:25px}
@@ -4372,6 +4372,22 @@ window.PERIPH={ouvert:false,ouvrir:null,fermer:null};
    LE JEU DU PÉRIPH — prototype, trois quartiers
    Porte Dauphine → Porte Maillot → Porte des Ternes → Porte de Villiers
    ===================================================================== */
+
+/* Sur mobile, Safari garde sa barre d'adresse et sa barre d'onglets
+   affichées tant que la page ne défile pas (ce qui est le cas ici,
+   le jeu bloque le défilement) : "100vh" ou même "100dvh" ne suffisent
+   pas toujours à s'ajuster à l'espace réellement visible. On mesure
+   donc la vraie hauteur visible avec visualViewport, à chaque
+   changement, et on la pose dans une variable CSS que les écrans du
+   jeu utilisent pour leur hauteur. */
+function majHauteurReelle(){
+  const h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  document.documentElement.style.setProperty('--vh-jeu', h+'px');
+}
+majHauteurReelle();
+window.addEventListener('resize', majHauteurReelle);
+window.addEventListener('orientationchange', majHauteurReelle);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', majHauteurReelle);
 
 /* ---------- 1. RÉGLAGES ---------- */
 let L = 1500, H = 1150;                 // la toile épouse la taille du cadre
