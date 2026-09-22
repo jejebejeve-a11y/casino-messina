@@ -1924,30 +1924,32 @@ $('btnInscription').onclick = () => entrerAuSalon('inscription', {
 
 let connexionEnCours = false;
 
-async function entrerAuSalon(route, donnees, champErreur) {
+async function entrerAuSalon(route, donnees, champErreur, auto) {
   if (connexionEnCours) return;
-  const err = $(champErreur);
-  err.textContent = '';
+  const err = champErreur ? $(champErreur) : null;
+  if (err) err.textContent = '';
 
   if (!donnees.pseudo || !donnees.motDePasse) {
-    err.textContent = 'Renseignez votre pseudo et votre mot de passe.';
+    if (err) err.textContent = 'Renseignez votre pseudo et votre mot de passe.';
     return;
   }
 
   connexionEnCours = true;
-  err.textContent = 'Un instant…';
+  if (err) err.textContent = 'Un instant…';
   initSon();
   const r = await envoyer(route, donnees);
   connexionEnCours = false;
 
   if (!r || !r.jeton) {
-    err.textContent = (r && r.erreur)
-      ? r.erreur
-      : 'Le salon ne répond pas. Réessayez dans un instant.';
+    if (err) {
+      err.textContent = (r && r.erreur)
+        ? r.erreur
+        : 'Le salon ne répond pas. Réessayez dans un instant.';
+    }
     return;
   }
 
-  err.textContent = '';
+  if (err) err.textContent = '';
   JETON = r.jeton;
   E.joueur  = { pseudo: r.pseudo, solde: r.solde, depuis: r.creeLe || null, voiturePremium: !!r.voiturePremium };
   E.mains   = r.mains    || 0;
@@ -1962,8 +1964,25 @@ async function entrerAuSalon(route, donnees, champErreur) {
     } catch (e) {}
   }
 
+  // on retient le pseudo et le mot de passe pour revenir connecté
+  // automatiquement la prochaine fois, sans avoir à les retaper
+  try {
+    localStorage.setItem('messinaAuto', JSON.stringify({
+      pseudo: donnees.pseudo, motDePasse: donnees.motDePasse
+    }));
+  } catch (e) {}
+
   majSolde();
-  montrerEcran('ecranPersonnage');
+
+  if (auto) {
+    // reconnexion automatique : on va direct dans le casino, sans repasser
+    // par l'écran du personnage
+    montrerEcran('ecranApp');
+    $('avatarMini').textContent = E.perso.emoji;
+    construireSalon();
+  } else {
+    montrerEcran('ecranPersonnage');
+  }
 }
 
 /* ===================================================================
@@ -2102,6 +2121,7 @@ $('btnDeconnexion').onclick = () => {
   JETON = null;
   E.joueur = null;
   E.table  = null;
+  try { localStorage.removeItem('messinaAuto'); } catch (e) {}
   $('cxPseudo').value = ''; $('cxMdp').value = '';
   $('inPseudo').value = ''; $('inMdp').value = '';
   $('erreurCx').textContent = ''; $('erreurIn').textContent = '';
@@ -2123,6 +2143,22 @@ function dateCourte(iso) {
     return new Date(iso).toLocaleDateString('fr-FR',
       { day: 'numeric', month: 'long', year: 'numeric' });
   } catch (e) { return '—'; }
+}
+
+// "il y a 3 min" / "il y a 7h 54min" / "il y a 2 j" — pour savoir d'un
+// coup d'oeil si quelqu'un a joue recemment, sans avoir a calculer.
+function tempsEcoule(iso) {
+  if (!iso) return 'jamais';
+  let diff;
+  try { diff = Date.now() - new Date(iso).getTime(); } catch (e) { return '—'; }
+  if (!isFinite(diff) || diff < 0) diff = 0;
+  const min = Math.floor(diff / 60000);
+  if (min < 1)  return 'à l’instant';
+  if (min < 60) return 'il y a ' + min + ' min';
+  const h = Math.floor(min / 60), reste = min % 60;
+  if (h < 24) return 'il y a ' + h + 'h' + (reste ? ' ' + reste + 'min' : '');
+  const j = Math.floor(h / 24);
+  return 'il y a ' + j + ' j';
 }
 
 function afficherProfil() {
@@ -2164,7 +2200,7 @@ function afficherListeJoueurs(joueurs) {
   bloc.innerHTML = joueurs.map(j => `
     <div class="ligne-joueur">
       <span class="nm"><span class="pastille-ligne ${j.enLigne ? 'en-ligne' : ''}"></span>${j.pseudo}</span>
-      <span class="pt">Créé le ${dateCourte(j.creeLe)}<br>Vu ${j.enLigne ? 'à l’instant' : (j.vuLe ? 'le ' + dateCourte(j.vuLe) : 'jamais')}</span>
+      <span class="pt">Créé le ${dateCourte(j.creeLe)}<br>Vu ${tempsEcoule(j.vuLe)}</span>
     </div>`).join('');
 }
 $('pfCodeValider').onclick = async () => {
@@ -5045,6 +5081,20 @@ if (typeof CanvasRenderingContext2D !== 'undefined' &&
 window.addEventListener('error', function (ev) {
   console.error('Erreur Casino Messina :', ev.message);
 });
+
+/* on était déjà connecté la dernière fois : on revient direct dans le
+   casino, sans repasser par le formulaire de connexion */
+(async function reconnexionAuto() {
+  let sauve = null;
+  try { sauve = JSON.parse(localStorage.getItem('messinaAuto') || 'null'); } catch (e) { sauve = null; }
+  if (!sauve || !sauve.pseudo || !sauve.motDePasse) return;
+  await entrerAuSalon('connexion', sauve, null, true);
+  if (!JETON) {
+    // le mot de passe a changé ou le compte n'existe plus : on oublie ce
+    // pseudo et on laisse l'écran de connexion normal s'afficher
+    try { localStorage.removeItem('messinaAuto'); } catch (e) {}
+  }
+})();
 </script>
 <div id="periphPlein" class="periph-plein" hidden>
 <div class="barre-periph"><button class="quitter-periph" id="pxQuitter">✕ Quitter</button><div class="entete" style="flex:1">
