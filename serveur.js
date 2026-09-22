@@ -74,6 +74,35 @@ const VITESSE_MAX_PERIPH_PREMIUM = 300 / 3.6;   // metres par seconde
 const DUREE_ATTENTE_PERIPH_MULTI = 10000;
 const EXPIRATION_COURSE_MULTI    = 5 * 60000;   // filet de securite
 
+/* ---------- Tower Rush ----------
+   Un etage se balance sous la grue ; le joueur appuie pour le lacher.
+   Comme pour le periph, la balancoire s'anime dans la page pour que ce
+   soit fluide, mais le moment exact du lacher n'est jamais cru sur
+   parole : ce fichier garde l'heure a laquelle CHAQUE balancement a
+   commence (compte.tower.swingStart) et recalcule lui-meme, a la
+   milliseconde pres, ou en etait le balancement quand la demande est
+   arrivee. La precision, le multiplicateur et le risque d'effondrement
+   sont donc entierement decides ici, jamais par la page. */
+const MISE_MINI_TOWER = 0.10;
+const MISE_MAXI_TOWER = 500;
+
+function towerAmpFor(n)    { return Math.max(17, 48 - n * 2.1); }
+function towerPeriodFor(n) { return Math.max(0.68, 1.5 - n * 0.04); }
+function towerRand(a, b) { return a + Math.random() * (b - a); }
+function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function towerRollFactor(n, errRatio) {
+  if (n === 0) {
+    let f0 = (Math.random() < 0.63) ? towerRand(0.45, 0.99) : towerRand(1.0, 1.9);
+    if (errRatio < 0.1 && Math.random() < 0.35) f0 = Math.max(f0, towerRand(1.8, 2.6));
+    return Math.min(f0, 7);
+  }
+  const subChance = towerClamp(0.55 - n * 0.045, 0.12, 0.55);
+  let f = (Math.random() < subChance) ? towerRand(0.5, 1.0) : towerRand(1.0, 1 + 0.4 * n);
+  if (errRatio < 0.1 && Math.random() < 0.4) f = Math.max(f, towerRand(1.8, 2.6 + 0.3 * n));
+  return Math.min(f, 7);
+}
+
 function distancePeriph(palier) {
   let s = 0;
   for (let i = 0; i < palier && i < LONGUEURS_PERIPH.length; i++) s += LONGUEURS_PERIPH[i];
@@ -1189,7 +1218,7 @@ const serveur = http.createServer(async (req, res) => {
         solde: SOLDE_DEPART,
         mains: 0, gagnees: 0, perdues: 0, poissons: 0,
         penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null,
-        voiturePremium: false, codesUtilises: []
+        voiturePremium: false, codesUtilises: [], tower: null, tours: 0
       };
       if (!await Carnet.creer(fiche)) {
         return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
@@ -1726,6 +1755,7 @@ const serveur = http.createServer(async (req, res) => {
       const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
       if (g && g.membres[compte.jetonRef] && g.membres[compte.jetonRef].statut === 'course') {
         g.membres[compte.jetonRef].fraction = Math.max(0, Math.min(1, Number(body.fraction) || 0));
+        g.membres[compte.jetonRef].x = Math.max(-7, Math.min(7, Number(body.x) || 0));
         g.membres[compte.jetonRef].maj = Date.now();
       }
       return repondre(res, 200, { ok: true });
@@ -1740,9 +1770,130 @@ const serveur = http.createServer(async (req, res) => {
         .filter(j => j !== compte.jetonRef)
         .map(j => {
           const m = g.membres[j];
-          return { pseudo: m.pseudo, couleur: m.couleur, voiture: m.voiture, palier: m.palier, fraction: m.fraction, statut: m.statut };
+          return { pseudo: m.pseudo, couleur: m.couleur, voiture: m.voiture, palier: m.palier, fraction: m.fraction, x: m.x || 0, maj: m.maj || 0, statut: m.statut };
         });
       return repondre(res, 200, { membres: membres });
+    }
+
+    /* ===============================================================
+       TOWER RUSH
+       ---------------------------------------------------------------
+       Le seul chiffre que la page choisit vraiment, c'est le moment ou
+       elle demande le lacher. Tout le reste (l'instant exact ou ca en
+       etait dans le balancement, la precision qui en decoule, le
+       multiplicateur tire, le risque d'effondrement) est recalcule ici
+       a partir de l'heure d'arrivee de la requete. Personne ne peut
+       forcer un bon multiplicateur en trafiquant la page.
+       =============================================================== */
+
+    // --- on pose sa mise, le premier etage commence a se balancer ---
+    if (route === '/api/tower-demarrer' && req.method === 'POST') {
+      if (compte.tower) return repondre(res, 409, { erreur: 'Une tour est déjà en cours.' });
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= MISE_MINI_TOWER)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > MISE_MAXI_TOWER)     return repondre(res, 400, { erreur: 'Mise maximum : 500 €.' });
+      if (mise > compte.solde)        return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+
+      compte.solde = sous(compte.solde - mise);
+      compte.tower = {
+        mise: mise, floors: [], leanSum: 0, visOffset: 0, frozenLeft: 0,
+        totalMult: 1, swingStart: Date.now()
+      };
+      compte.tours = (compte.tours | 0) + 1;
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, {
+        ok: true, mise: mise, solde: compte.solde,
+        swingStart: compte.tower.swingStart, amp: towerAmpFor(0), period: towerPeriodFor(0)
+      });
+    }
+
+    // --- on lache : le serveur recalcule seul ou en etait le balancement ---
+    if (route === '/api/tower-lacher' && req.method === 'POST') {
+      const tour = compte.tower;
+      if (!tour) return repondre(res, 409, { erreur: 'Aucune tour en cours.' });
+
+      const n = tour.floors.length;
+      const amp = towerAmpFor(n), period = towerPeriodFor(n);
+      const ecoule = Math.max(0, Date.now() - tour.swingStart) / 1000;
+      let angle = amp * Math.sin(2 * Math.PI * ecoule / period);
+      const etaitGele = tour.frozenLeft > 0;
+      if (etaitGele) angle *= 0.2;
+
+      const errRatio = Math.abs(angle) / amp;
+      const safeT = 0.44, missT = Math.max(0.6, 0.92 - n * 0.016);
+      const edgeT = towerClamp((errRatio - safeT) / Math.max(0.001, missT - safeT), 0, 1);
+      const missChance = etaitGele ? 0 : edgeT * edgeT;
+      const rate = Math.random() < missChance;
+
+      if (rate) {
+        const perdu = tour.mise;
+        compte.tower = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, {
+          ok: true, rate: true, angle: angle, perdu: perdu, solde: compte.solde
+        });
+      }
+
+      const facteur = etaitGele ? towerRand(1.4, 2.0) : towerRollFactor(n, errRatio);
+      if (etaitGele) tour.frozenLeft--;
+      const parfait = !etaitGele && errRatio < 0.1 && facteur >= 1.6;
+
+      tour.totalMult = tour.totalMult * facteur; // pas d'arrondi ici : seul le gain final (mise x totalMult) est arrondi
+      const nouveauLean = tour.leanSum + angle * 0.58;
+      const glisse = (tour.frozenLeft <= 0) && Math.abs(nouveauLean) > 58;
+      tour.leanSum = nouveauLean;
+      tour.visOffset = towerClamp(tour.visOffset + towerClamp(angle * 0.34, -22, 22), -74, 74);
+      tour.floors.push({ mult: facteur, lean: tour.visOffset });
+
+      if (glisse) {
+        const perdu = tour.mise;
+        const totalAvantChute = tour.totalMult;
+        compte.tower = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, {
+          ok: true, rate: false, glisse: true, facteur: facteur, lean: tour.visOffset,
+          totalMult: totalAvantChute, perdu: perdu, solde: compte.solde
+        });
+      }
+
+      // etage gele une fois toutes les ~14 etages en moyenne, pour souffler un peu
+      if (!etaitGele && Math.random() < 0.07) tour.frozenLeft = 2 + (Math.random() < 0.5 ? 0 : 1);
+
+      tour.swingStart = Date.now();
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, {
+        ok: true, rate: false, glisse: false, facteur: facteur, parfait: parfait,
+        lean: tour.visOffset, totalMult: tour.totalMult, solde: compte.solde,
+        gele: tour.frozenLeft > 0,
+        swingStart: tour.swingStart, amp: towerAmpFor(n + 1), period: towerPeriodFor(n + 1)
+      });
+    }
+
+    // --- on quitte en cours de tour : la mise reste perdue, comme pour le periph ---
+    if (route === '/api/tower-abandonner' && req.method === 'POST') {
+      compte.tower = null;
+      return repondre(res, 200, { ok: true });
+    }
+
+    // --- on encaisse ---
+    if (route === '/api/tower-encaisser' && req.method === 'POST') {
+      const tour = compte.tower;
+      if (!tour) return repondre(res, 409, { erreur: 'Aucune tour en cours.' });
+      if (tour.floors.length < 1) return repondre(res, 400, { erreur: 'Posez au moins un étage avant d’encaisser.' });
+
+      const gain = sous(tour.mise * tour.totalMult);
+      compte.solde = sous(compte.solde + gain);
+      compte.tower = null;
+
+      const info = siegeDe(compte);
+      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      Carnet.enregistrer(compte);
+
+      return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
     }
 
     /* ===============================================================

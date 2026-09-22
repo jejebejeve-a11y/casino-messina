@@ -1116,6 +1116,172 @@ body.periph-actif{overflow:hidden;
 #ecranRoulette .rl-mp-etat{text-align:center;font-size:12px;color:var(--or);min-height:16px;margin:6px 0 10px}
 #ecranRoulette .rl-mp-actions{display:flex;gap:8px}
 #ecranRoulette .rl-btn-secondaire{flex:1;padding:12px;border-radius:12px;border:1px solid #3a3a3a;background:#1a1a1d;color:#ccc;font-size:13px;font-weight:700;cursor:pointer}
+
+/* ===== le calque plein ecran de Tower Rush ===== */
+.tour-plein{position:fixed;inset:0;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);z-index:900;background:#05070a;overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent}
+#tourPlein[hidden]{display:none!important}
+body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+@property --tr-sky-a{ syntax:'<color>'; inherits:true; initial-value:#2f7fc4; }
+@property --tr-sky-b{ syntax:'<color>'; inherits:true; initial-value:#5aa4d9; }
+@property --tr-sky-c{ syntax:'<color>'; inherits:true; initial-value:#9cc9e6; }
+@property --tr-sky-d{ syntax:'<color>'; inherits:true; initial-value:#e1eef2; }
+@property --tr-sky-e{ syntax:'<color>'; inherits:true; initial-value:#d3e6ea; }
+#tourPlein{
+  --tr-sky-a:#2f7fc4; --tr-sky-b:#5aa4d9; --tr-sky-c:#9cc9e6; --tr-sky-d:#e1eef2; --tr-sky-e:#d3e6ea;
+  --tr-panel:#12161c; --tr-panel2:#1b222c; --tr-panel-line:#2b3644;
+  --tr-ink:#f2f6f9; --tr-ink-dim:#93a5b6;
+  --tr-gold:#ffc24b; --tr-gold-dk:#a86a06;
+  --tr-blue:#2f7fe0; --tr-blue-dk:#194b8f;
+  --tr-green:#2fd47c; --tr-green-dk:#12793f;
+  --tr-red:#ff5257;
+  color-scheme: dark;
+  margin:0; background:#05070a; color:var(--tr-ink); font-family:'Rubik',system-ui,sans-serif;
+  display:flex; justify-content:center; height:100%; overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+}
+#tourPlein *{box-sizing:border-box}
+#tourPlein [hidden]{display:none!important}
+#tourPlein *::selection{background:transparent}
+#tourPlein button{font-family:inherit}
+#tourPlein .app{ width:100%; max-width:480px; height:100%; display:flex; flex-direction:column; position:relative; background:#05070a; }
+#tourPlein .topbar{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:calc(env(safe-area-inset-top,0px) + 9px) 13px 9px;
+  background:linear-gradient(#171d26,#12161c); border-bottom:1px solid var(--tr-panel-line); position:relative; z-index:7; }
+#tourPlein .icon-btn{ width:34px; height:34px; border-radius:9px; border:1px solid var(--tr-panel-line); background:var(--tr-panel2); color:var(--tr-ink-dim);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; flex:0 0 auto; font-size:15px; }
+#tourPlein .icon-btn:active{ transform:scale(.93); }
+#tourPlein .logo{ display:flex; flex-direction:column; line-height:1; margin-right:auto; }
+#tourPlein .logo svg{ height:22px; display:block; }
+#tourPlein .logo span{ font-size:9px; color:var(--tr-ink-dim); margin-top:2px; letter-spacing:.02em; }
+#tourPlein .balance{ text-align:right; font-variant-numeric:tabular-nums; }
+#tourPlein .balance .amt{ font-family:'Baloo 2',sans-serif; font-size:14.5px; font-weight:700; }
+#tourPlein .balance .lab{ font-size:8.5px; color:var(--tr-ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+#tourPlein .stage{ position:relative; flex:1 1 auto; min-height:0; overflow:hidden; transition:background 1.1s ease;
+  background:
+    radial-gradient(60% 38% at 28% 8%, rgba(255,255,255,.16), transparent 68%),
+    radial-gradient(75% 46% at 50% 102%, rgba(255,255,255,.28), transparent 72%),
+    linear-gradient(to bottom, var(--tr-sky-a) 0%, var(--tr-sky-b) 34%, var(--tr-sky-c) 62%, var(--tr-sky-e) 85%, var(--tr-sky-d) 100%); }
+#tourPlein .grain{ position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.06; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size:140px 140px; }
+#tourPlein .star{ position:absolute; width:2.5px; height:2.5px; border-radius:50%; background:#fff; pointer-events:none; z-index:1; transition:opacity 1.1s ease; box-shadow:0 0 3px 1px rgba(255,255,255,.5); }
+#tourPlein .stage.shake{ animation:trShake .32s ease; }
+@keyframes trShake{ 0%,100%{ transform:translate(0,0);} 20%{ transform:translate(-4px,2px);} 40%{ transform:translate(3px,-2px);} 60%{ transform:translate(-2px,1px);} 80%{ transform:translate(2px,-1px);} }
+#tourPlein .cloud{ position:absolute; pointer-events:none; }
+#tourPlein .cloud .puff{ position:absolute; border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff 0%, #fff 42%, #dfe9ef 78%, #c9d8e2 100%); filter:blur(.4px); }
+#tourPlein .cloud .shad{ position:absolute; left:6%; right:10%; bottom:-14%; height:34%; border-radius:50%;
+  background:radial-gradient(closest-side, rgba(70,95,120,.22), transparent 75%); filter:blur(2px); }
+#tourPlein .sun-glow{ position:absolute; left:72%; top:9%; width:170px; height:170px; transform:translate(-50%,-50%); pointer-events:none; transition:opacity 1.1s ease; }
+#tourPlein .sun-glow .rays{ position:absolute; inset:-40px; border-radius:50%; opacity:.5;
+  background:repeating-conic-gradient(from 0deg, rgba(255,250,220,.35) 0deg 3deg, transparent 3deg 18deg);
+  filter:blur(2px); animation:trSpin 90s linear infinite; }
+@keyframes trSpin{ to{ transform:rotate(360deg); } }
+#tourPlein .sun-glow::before{ content:''; position:absolute; inset:0; border-radius:50%;
+  background:radial-gradient(circle, #fffef6 0%, #fff8d8 18%, rgba(255,243,190,.6) 42%, rgba(255,240,180,.18) 65%, transparent 78%); }
+#tourPlein .sun-glow::after{ content:''; position:absolute; left:50%; top:50%; width:40px; height:40px; margin:-20px;
+  border-radius:50%; background:radial-gradient(circle at 38% 34%, #fff, #fff8dd 55%, #ffedad 100%); box-shadow:0 0 28px 8px rgba(255,250,220,.9), 0 0 60px 18px rgba(255,240,190,.4); }
+#tourPlein .skyline{ position:absolute; left:0; right:0; bottom:10%; height:32%; pointer-events:none; }
+#tourPlein .skyline i{ position:absolute; bottom:0; background:linear-gradient(180deg, rgba(79,120,150,.55), rgba(58,92,118,.7)); border-radius:2px 2px 0 0; }
+#tourPlein .skyline i::after{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(255,255,255,.12), transparent 30%); }
+#tourPlein .world{ position:absolute; left:0; right:0; top:0; bottom:0; transition:transform .5s cubic-bezier(.25,.75,.3,1); transform-origin:50% 100%; }
+#tourPlein .world.punch{ animation:trCamPunch .28s ease; }
+@keyframes trCamPunch{ 0%{ transform:scale(1) translateY(var(--wy,0)); } 35%{ transform:scale(1.018) translateY(var(--wy,0)); } 100%{ transform:scale(1) translateY(var(--wy,0)); } }
+#tourPlein .landing-shadow{
+  position:absolute; top:200px; left:50%; z-index:5; pointer-events:none; transform:translateX(-50%);
+  width:100px; height:16px; border-radius:50%;
+  background:radial-gradient(closest-side, rgba(10,14,10,.4), transparent 75%);
+  transition:width .3s ease, opacity .3s ease; opacity:0;
+}
+#tourPlein .tower-viewport{ position:absolute; left:0; right:0; display:flex; justify-content:center; pointer-events:none; z-index:3; }
+#tourPlein .tower{ display:flex; flex-direction:column-reverse; align-items:center; }
+#tourPlein .floor{ width:160px; margin-top:-3px; filter:drop-shadow(0 4px 3px rgba(0,0,0,.3)); animation:trLand .3s cubic-bezier(.25,1.6,.4,1); transition:transform .25s cubic-bezier(.3,.7,.3,1); }
+#tourPlein .floor.impact{ animation:trLand .3s cubic-bezier(.25,1.6,.4,1), trSquash .22s ease .3s; }
+@keyframes trSquash{ 0%{ transform:scaleY(1) } 40%{ transform:scaleY(.9) translateY(3px) } 100%{ transform:scaleY(1) } }
+#tourPlein .floor svg{ display:block; width:100%; height:auto; overflow:visible; }
+@keyframes trLand{ 0%{ transform:translateY(-18px) scale(1.05); opacity:.3 } 100%{ transform:translateY(0) scale(1); opacity:1 } }
+#tourPlein .floor-mult{ position:absolute; left:50%; top:-11px; transform:translateX(-50%); background:var(--tr-gold); color:#231602;
+  font-family:'Baloo 2',sans-serif; font-weight:700; font-size:10.5px; padding:1px 6px; border-radius:8px; border:1.5px solid #231602; white-space:nowrap; z-index:2; }
+#tourPlein .floor-mult.down{ background:#ffb3b5; }
+#tourPlein .floor-wrap{ position:relative; }
+#tourPlein .sidewalk{ position:absolute; left:0; right:0; bottom:0; height:10%; z-index:4;
+  background:radial-gradient(65% 140% at 50% 0%, rgba(0,0,0,.22), transparent 68%),
+    repeating-linear-gradient(97deg, #8992a0 0 30px, #74808d 30px 33px);
+  border-top:3px solid #4c5561; }
+#tourPlein .lamp{ position:absolute; bottom:10%; width:6px; height:108px; background:linear-gradient(#9aa0a6,#5b6167); border-radius:3px; z-index:4;}
+#tourPlein .lamp.l{ left:6%; } #tourPlein .lamp.r{ right:6%; }
+#tourPlein .lamp::before{ content:''; position:absolute; top:-13px; left:-9px; width:23px; height:23px; border-radius:50%;
+  background:radial-gradient(#fff2c4,#f8c94c 68%,transparent 72%); box-shadow:0 0 18px 5px rgba(255,210,110,.5); }
+#tourPlein .shop{ position:absolute; bottom:10%; left:50%; transform:translateX(-50%); width:218px; z-index:4; filter:drop-shadow(0 6px 4px rgba(0,0,0,.3)); }
+#tourPlein .shop svg{ display:block; width:100%; height:auto; }
+#tourPlein .crane{ position:absolute; top:3%; left:50%; transform:translateX(-50%); z-index:5; pointer-events:none; }
+#tourPlein .crane svg{ display:block; width:104px; }
+#tourPlein .payload{ position:absolute; top:14%; left:50%; width:130px; z-index:5; filter:drop-shadow(0 4px 3px rgba(0,0,0,.32)); transform-origin:50% 0%; }
+#tourPlein .payload svg{ display:block; width:100%; height:auto; overflow:visible; }
+#tourPlein .rope{ position:absolute; top:calc(3% + 26px); left:50%; width:1.8px; height:40px; background:#20242b; z-index:5; transform-origin:top center; }
+#tourPlein .particle{ position:absolute; border-radius:50%; pointer-events:none; z-index:7; animation:trPt .6s ease-out forwards; }
+@keyframes trPt{ to{ transform:translate(var(--dx),var(--dy)) scale(.3); opacity:0; } }
+#tourPlein .confetto{ position:absolute; pointer-events:none; z-index:10; animation:trConf 1.1s ease-in forwards; }
+@keyframes trConf{ 0%{ transform:translate(0,0) rotate(0deg); opacity:1;} 100%{ transform:translate(var(--dx),var(--dy)) rotate(var(--rot)); opacity:0;} }
+#tourPlein .collapse-flash{ position:absolute; inset:0; background:rgba(255,82,87,.3); opacity:0; pointer-events:none; transition:opacity .12s; z-index:8;}
+#tourPlein .collapse-flash.on{ opacity:1; }
+#tourPlein .toast{ position:absolute; left:50%; top:11%; transform:translate(-50%,-8px); background:rgba(10,13,17,.92); border:1px solid var(--tr-panel-line); color:var(--tr-ink);
+  padding:9px 15px; border-radius:11px; font-weight:600; font-size:13.5px; text-align:center; opacity:0; pointer-events:none;
+  transition:opacity .25s, transform .25s; z-index:9; max-width:88%; }
+#tourPlein .toast.show{ opacity:1; transform:translate(-50%,0); }
+#tourPlein .toast.win{ border-color:var(--tr-green); color:#c3ffdd; }
+#tourPlein .toast.lose{ border-color:var(--tr-red); color:#ffd7d8; }
+#tourPlein .toast.bonus{ border-color:var(--tr-gold); color:#ffe9b0; }
+#tourPlein .toast.perfect{ border-color:var(--tr-gold); color:#fff2c9; }
+#tourPlein .results{ position:absolute; top:12px; right:10px; z-index:6; display:flex; flex-direction:column; gap:5px; align-items:flex-end; }
+#tourPlein .results .cap{ font-size:8.5px; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:.08em; margin-bottom:1px; text-shadow:0 1px 2px rgba(0,0,0,.4);}
+#tourPlein .pill{ background:rgba(10,13,17,.68); border:1.5px solid var(--tr-gold); color:#ffe9b0; border-radius:7px; padding:3px 8px; font-size:11px; font-weight:700;
+  font-variant-numeric:tabular-nums; backdrop-filter:blur(2px); }
+#tourPlein .pill.bad{ border-color:var(--tr-red); color:#ffd7d8; }
+#tourPlein .pill.down{ border-color:#ffb3b5; color:#ffd7d8; }
+#tourPlein .current-mult{ position:absolute; left:12px; top:12px; z-index:6; background:rgba(10,13,17,.68); border:1px solid rgba(255,255,255,.16); border-radius:11px; padding:7px 11px; backdrop-filter:blur(2px); }
+#tourPlein .current-mult .lab{ font-size:8.5px; color:var(--tr-ink-dim); text-transform:uppercase; letter-spacing:.06em; }
+#tourPlein .current-mult .val{ font-family:'Baloo 2',sans-serif; font-weight:800; font-size:19px; color:var(--tr-gold); font-variant-numeric:tabular-nums; transition:transform .15s; }
+#tourPlein .current-mult .val.bump{ transform:scale(1.25); }
+#tourPlein .current-mult .win{ font-size:10.5px; color:var(--tr-ink-dim); font-variant-numeric:tabular-nums; }
+#tourPlein .floorcount{ position:absolute; left:12px; bottom:calc(10% + 6px); z-index:6; background:rgba(10,13,17,.6); border:1px solid rgba(255,255,255,.14);
+  border-radius:8px; padding:3px 8px; font-size:10.5px; color:var(--tr-ink-dim); }
+#tourPlein .floorcount b{ color:var(--tr-ink); }
+#tourPlein .floorcount .alt{ margin-left:5px; padding-left:5px; border-left:1px solid rgba(255,255,255,.18); font-variant-numeric:tabular-nums; }
+#tourPlein .controls{ flex:0 0 auto; background:linear-gradient(#12161c,#0d1015); border-top:1px solid var(--tr-panel-line);
+  padding:11px 13px calc(env(safe-area-inset-bottom,0px) + 11px); display:flex; flex-direction:column; gap:9px; position:relative; z-index:6; }
+#tourPlein .bet-row{ display:flex; gap:7px; }
+#tourPlein .bet-row.hidden-row{ visibility:hidden; height:0; overflow:hidden; margin:-4.5px 0; }
+#tourPlein .btn{ border:none; border-radius:11px; cursor:pointer; font-weight:700; color:var(--tr-ink); display:flex; align-items:center; justify-content:center; user-select:none; }
+#tourPlein .btn:active{ transform:translateY(1px); }
+#tourPlein .btn:disabled{ opacity:.42; cursor:not-allowed; transform:none; }
+#tourPlein .btn-blue{ background:linear-gradient(180deg,#4a95f4,var(--tr-blue) 55%,var(--tr-blue-dk)); box-shadow:0 3px 0 #10233f, inset 0 1px 0 rgba(255,255,255,.35); }
+#tourPlein .allin{ flex:0 0 74px; height:42px; font-size:12.5px; }
+#tourPlein .x2{ flex:0 0 50px; height:42px; font-size:13.5px; }
+#tourPlein .stepper{ flex:1; height:42px; background:var(--tr-panel2); border:1px solid var(--tr-panel-line); border-radius:11px; display:flex; align-items:center; justify-content:space-between; padding:0 4px; }
+#tourPlein .stepper button{ width:32px; height:32px; border-radius:8px; border:none; background:#26303c; color:var(--tr-ink); font-size:17px; cursor:pointer; }
+#tourPlein .stepper button:active{ transform:scale(.92); }
+#tourPlein .stepper .val{ font-family:'Baloo 2',sans-serif; font-weight:700; font-size:15px; font-variant-numeric:tabular-nums; }
+#tourPlein .action-row{ display:flex; gap:8px; }
+#tourPlein .build-btn{ flex:1; height:56px; border-radius:12px; font-family:'Baloo 2',sans-serif; font-size:17px; letter-spacing:.02em; color:#231602;
+  background:repeating-linear-gradient(45deg,#ffc24b 0 14px,#171512 14px 16px,#ffc24b 16px 30px,#171512 30px 32px);
+  box-shadow:0 4px 0 #7a5306, inset 0 2px 0 rgba(255,255,255,.4); border:2px solid #171512; position:relative; }
+#tourPlein .build-btn .sub{ position:absolute; bottom:4px; left:0; right:0; font-family:'Rubik'; font-size:8.5px; font-weight:600; color:#3d2a04; letter-spacing:.02em; }
+#tourPlein .cashout-btn{ flex:1; height:56px; border-radius:12px; font-family:'Baloo 2',sans-serif; font-size:14.5px;
+  background:linear-gradient(180deg,#57e298,var(--tr-green) 55%,var(--tr-green-dk)); box-shadow:0 4px 0 #0d5b30, inset 0 1px 0 rgba(255,255,255,.35);
+  display:flex; flex-direction:column; gap:0; line-height:1.18; }
+#tourPlein .cashout-btn small{ font-family:'Rubik'; font-weight:600; font-size:9.5px; opacity:.9; font-variant-numeric:tabular-nums; }
+#tourPlein .hint{ text-align:center; font-size:10px; color:var(--tr-ink-dim); min-height:13px; }
+#tourPlein .hint b{ color:var(--tr-gold); }
+#tourPlein .modal-wrap{ position:absolute; inset:0; background:rgba(4,6,8,.76); display:flex; align-items:center; justify-content:center; z-index:20; opacity:0; pointer-events:none; transition:opacity .2s; }
+#tourPlein .modal-wrap.show{ opacity:1; pointer-events:auto; }
+#tourPlein .modal{ width:min(320px, 88%); background:var(--tr-panel); border:1px solid var(--tr-panel-line); border-radius:16px; padding:18px; text-align:center; }
+#tourPlein .modal h2{ font-family:'Baloo 2',sans-serif; margin:0 0 6px; color:var(--tr-gold); font-size:19px; }
+#tourPlein .modal p{ font-size:12.5px; color:var(--tr-ink-dim); margin:0 0 12px; line-height:1.5; }
+#tourPlein .rules{ text-align:left; }
+#tourPlein .rules ul{ font-size:12px; color:var(--tr-ink-dim); padding-left:18px; line-height:1.6; margin:0 0 12px;}
+#tourPlein .rules b{ color:var(--tr-ink); }
+@media (max-width:380px){ #tourPlein .floor{ width:148px; } #tourPlein .payload{ width:112px; } #tourPlein .shop{ width:196px; } }
 </style>
 </head>
 <body>
@@ -1251,6 +1417,11 @@ body.periph-actif{overflow:hidden;
           <button class="carte-jeu" data-jeu="periph">
             <div class="cj-titre serif">Le jeu du périph</div>
             <div class="cj-texte">Porte Dauphine → Saint-Denis en voiture sans permis, et pas de frein. Douze portes à franchir, cinquante fois la mise au bout.</div>
+            <div class="cj-pied">Jouer</div>
+          </button>
+          <button class="carte-jeu" data-jeu="tower">
+            <div class="cj-titre serif">Tower Rush</div>
+            <div class="cj-texte">Une grue, un étage qui se balance, et une tour qui monte dans le ciel. Lâchez au bon moment pour empiler, encaissez avant qu'elle ne penche trop.</div>
             <div class="cj-pied">Jouer</div>
           </button>
         </div>
@@ -2097,10 +2268,15 @@ function fermerJeu() {
   $('jxPenalty').style.display = 'none';
   arreterPenalty();
   if (window.PERIPH && PERIPH.ouvert) PERIPH.fermer();
+  if (window.TOUR && TOUR.ouvert) TOUR.fermer();
 }
 function ouvrirJeu(nom) {
   if (nom === 'periph') {                 // le periph prend tout l'ecran
     if (window.PERIPH && PERIPH.ouvrir) PERIPH.ouvrir();
+    return;
+  }
+  if (nom === 'tower') {                  // Tower Rush prend tout l'ecran aussi
+    if (window.TOUR && TOUR.ouvrir) TOUR.ouvrir();
     return;
   }
   $('jxMenu').style.display    = 'none';
@@ -5205,6 +5381,89 @@ window.addEventListener('error', function (ev) {
 
 </div>
 
+<div id="tourPlein" class="tour-plein" hidden>
+<div class="app">
+  <div class="topbar">
+    <button class="icon-btn" id="trQuitter">✕</button>
+    <div class="logo">
+      <svg viewBox="0 0 150 26" xmlns="http://www.w3.org/2000/svg">
+        <text x="1" y="20" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="21" fill="#ffc24b" stroke="#231602" stroke-width="3.2" paint-order="stroke" letter-spacing="-0.5">TOWER</text>
+        <text x="1" y="20" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="21" fill="url(#trlg)" letter-spacing="-0.5">TOWER</text>
+        <text x="76" y="20" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="21" fill="#39c1ff" stroke="#0a2333" stroke-width="3.2" paint-order="stroke" letter-spacing="-0.5">RUSH</text>
+        <text x="76" y="20" font-family="'Baloo 2',sans-serif" font-weight="800" font-size="21" fill="url(#trlb)" letter-spacing="-0.5">RUSH</text>
+        <defs>
+          <linearGradient id="trlg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".55" stop-color="#ffc24b"/><stop offset="1" stop-color="#e69a1a"/></linearGradient>
+          <linearGradient id="trlb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b6f0ff"/><stop offset=".55" stop-color="#39c1ff"/><stop offset="1" stop-color="#1a8dd6"/></linearGradient>
+        </defs>
+      </svg>
+      <span>casino Messina</span>
+    </div>
+    <button class="icon-btn" id="trBtnSound">🔊</button>
+    <div class="balance"><div class="amt" id="trBalAmt">0,00 €</div><div class="lab">Solde</div></div>
+    <button class="icon-btn" id="trBtnInfo">?</button>
+  </div>
+
+  <div class="stage" id="trStage">
+    <div class="grain"></div>
+    <div id="trCloudsLayer"></div>
+    <div class="sun-glow"><div class="rays"></div></div>
+    <div class="skyline">
+      <i style="left:2%;width:15%;height:58%;"></i><i style="left:19%;width:12%;height:42%;"></i>
+      <i style="right:24%;width:13%;height:52%;"></i><i style="right:6%;width:16%;height:66%;"></i>
+    </div>
+
+    <div class="current-mult" id="trCurMultBox" hidden>
+      <div class="lab">Multiplicateur</div><div class="val" id="trCurMultVal">x1.00</div><div class="win" id="trCurWinVal">Gain : 0,00 €</div>
+    </div>
+    <div class="floorcount" id="trFloorCount" hidden>Étage <b id="trFloorCountVal">0</b><span class="alt" id="trAltVal">0 m</span></div>
+    <div class="results" id="trResults"><div class="cap">Résultats</div></div>
+
+    <div class="crane" id="trCrane"></div>
+    <div class="rope" id="trRope"></div>
+    <div class="payload" id="trPayload" hidden></div>
+    <div class="landing-shadow" id="trLandingShadow"></div>
+
+    <div class="world" id="trWorld">
+      <div class="tower-viewport" id="trTowerViewport"><div class="tower" id="trTower"></div></div>
+      <div class="lamp l"></div><div class="lamp r"></div>
+      <div class="shop" id="trShop"></div>
+      <div class="sidewalk"></div>
+    </div>
+    <div class="collapse-flash" id="trFlash"></div>
+    <div class="toast" id="trToast"></div>
+  </div>
+
+  <div class="controls">
+    <div class="bet-row" id="trBetRow">
+      <button class="btn btn-blue allin" id="trBtnAllIn">ALL IN</button>
+      <div class="stepper"><button id="trBetMinus">−</button><div class="val" id="trBetVal">0,10 €</div><button id="trBetPlus">+</button></div>
+      <button class="btn btn-blue x2" id="trBtnX2">x2</button>
+    </div>
+    <div class="action-row">
+      <button class="btn cashout-btn" id="trBtnCashout" hidden><span>CASHOUT</span><small id="trCashoutAmt">0,00 €</small></button>
+      <button class="btn build-btn" id="trBtnBuild"><span id="trBuildLabel">BUILD</span><span class="sub" id="trBuildSub"></span></button>
+    </div>
+    <div class="hint" id="trHint">Misez, puis appuyez sur <b>BUILD</b> pour lancer le premier étage.</div>
+  </div>
+
+  <div class="modal-wrap" id="trRulesWrap">
+    <div class="modal rules">
+      <h2>Règles — Tower Rush</h2>
+      <ul>
+        <li>L'étage se balance sous la grue. Appuyez sur <b>BUILD</b> quand il passe au-dessus de son ombre, au sommet de la tour.</li>
+        <li>Une cote est tirée à chaque étage posé et se <b>multiplie</b> avec les précédentes. Elle peut aussi être <b>inférieure à x1</b> : vous pouvez perdre une partie de vos gains même en jouant bien.</li>
+        <li>Un lâcher trop imprécis fait tomber l'étage à côté : la tour entière s'effondre (x0).</li>
+        <li>Même bien posée, la tour peut <b>glisser</b> si elle penche trop du même côté plusieurs fois de suite.</li>
+        <li><b>CASHOUT</b> encaisse à tout moment mise × multiplicateur cumulé.</li>
+        <li><b>❄ Étage Gelé</b> : de temps en temps, aucun risque d'effondrement pendant deux ou trois étages.</li>
+      </ul>
+      <p>Mise min 0,10 € — max 500 €. C'est le serveur qui calcule chaque lâcher, jamais la page.</p>
+      <button class="btn btn-blue" id="trCloseRules" style="width:100%;height:42px;">Compris</button>
+    </div>
+  </div>
+</div>
+</div>
+
 <script>
 
 /* ===== LE JEU DU PÉRIPH ===== */
@@ -5291,77 +5550,77 @@ const ZONES = [
    props:{haie:0.9, massif:0.5},
    mix:{haussmann:10}, haut:[19,23]},
 
-  {nom:'Porte Maillot', quartier:'17ᵉ — Palais des Congrès', longueur:300, densite:0.85,
+  {nom:'Porte Maillot', quartier:'17ᵉ — Palais des Congrès', longueur:300, densite:0.90,
    sol:'#aeaba1', arbres:0.15,
    mur:'propre', tags:0.05, grade:'rgba(228,236,246,.07)',
    garees:{t:0.35, mix:{luxe:3, ordinaire:4, utilitaire:3}},
    props:{palissade:0.2},
    mix:{moderne:7, verre:5}, haut:[20,34]},
 
-  {nom:'Porte des Ternes', quartier:'17ᵉ — Général-Kœnig', longueur:300, densite:1.00,
+  {nom:'Porte des Ternes', quartier:'17ᵉ — Général-Kœnig', longueur:300, densite:1.15,
    sol:'#b1aba0', arbres:0.35,
    mur:'propre', tags:0.12, grade:'rgba(240,238,228,.05)',
    garees:{t:0.72, mix:{luxe:2, ordinaire:6, utilitaire:2}},
    props:{},
    mix:{haussmann:6, barre:5}, haut:[19,28]},
 
-  {nom:'Porte de Villiers', quartier:'17ᵉ — Villiers', longueur:550, densite:1.10,
+  {nom:'Porte de Villiers', quartier:'17ᵉ — Villiers', longueur:550, densite:1.35,
    sol:'#aaa69c', arbres:0.5,
    mur:'use', tags:0.20, grade:'rgba(238,232,216,.05)',
    garees:{t:0.80, mix:{ordinaire:7, utilitaire:3}},
    props:{poubelle:0.3},
    mix:{haussmann:5, brique:6, barre:2}, haut:[18,26]},
 
-  {nom:'Porte de Champerret', quartier:'17ᵉ — Espace Champerret', longueur:650, densite:1.20,
+  {nom:'Porte de Champerret', quartier:'17ᵉ — Espace Champerret', longueur:650, densite:1.55,
    sol:'#a8a49a', arbres:0.35,
    mur:'use', tags:0.28, grade:'rgba(236,226,206,.05)',
    garees:{t:0.75, mix:{ordinaire:7, utilitaire:3}},
    props:{poubelle:0.35},
    mix:{brique:9, barre:5, moderne:2}, haut:[20,28]},
 
-  {nom:"Porte d'Asnières", quartier:'17ᵉ — Clichy-Batignolles', longueur:650, densite:1.30,
+  {nom:"Porte d'Asnières", quartier:'17ᵉ — Clichy-Batignolles', longueur:650, densite:1.80,
    sol:'#93a97a', arbres:0.75,
    mur:'propre', tags:0.10, grade:'rgba(232,240,246,.06)',
    garees:{t:0.45, mix:{ordinaire:5, utilitaire:4, luxe:1}},
    props:{palissade:0.6},
    mix:{brique:11, verre:5, moderne:3}, haut:[24,34], brique:true},
 
-  {nom:'Porte de Clichy', quartier:'17ᵉ — Tribunal de Paris', longueur:800, densite:1.40,
+  {nom:'Porte de Clichy', quartier:'17ᵉ — Tribunal de Paris', longueur:800, densite:2.05,
    sol:'#9fa79b', arbres:0.45,
    mur:'use', tags:0.30, grade:'rgba(226,234,242,.05)',
    garees:{t:0.55, mix:{ordinaire:6, utilitaire:4}},
    props:{palissade:0.4, poubelle:0.3},
    mix:{verre:6, brique:5, moderne:4}, haut:[20,32]},
 
-  {nom:'Porte de Saint-Ouen', quartier:'17ᵉ — Bichat', longueur:800, densite:1.55,
+  {nom:'Porte de Saint-Ouen', quartier:'17ᵉ — Bichat', longueur:800, densite:2.35,
    sol:'#a29c92', arbres:0.35,
    mur:'tague', tags:0.55, grade:'rgba(226,220,206,.05)',
    garees:{t:0.88, mix:{ordinaire:6, utilitaire:5, epave:1}},
    props:{poubelle:0.6, benne:0.25},
    mix:{brique:11, barre:5, moderne:2}, haut:[18,27]},
 
-  {nom:'Porte de Clignancourt', quartier:'18ᵉ — Les Puces', longueur:850, densite:1.70,
+  {nom:'Porte de Clignancourt', quartier:'18ᵉ — Les Puces', longueur:850, densite:2.65,
    sol:'#9d968c', arbres:0.25, puces:true,
    mur:'tague', tags:0.75, grade:'rgba(220,212,196,.05)',
    garees:{t:0.95, mix:{ordinaire:5, utilitaire:7, epave:1}},
    props:{poubelle:0.7, benne:0.4, depot:0.35},
    mix:{brique:10, barre:4, entrepot:3}, haut:[17,26]},
 
-  {nom:'Porte de la Chapelle', quartier:'18ᵉ — La Chapelle', longueur:800, densite:1.85,
+  {nom:'Porte de la Chapelle', quartier:'18ᵉ — La Chapelle', longueur:800, densite:3.00,
    sol:'#8c8880', arbres:0.10, rails:true, friche:true,
    mur:'tague', tags:1.0, grade:'rgba(206,204,198,.05)',
    garees:{t:0.55, mix:{ordinaire:4, utilitaire:6, epave:2}},
    props:{poubelle:0.9, benne:0.7, depot:0.9, palissade:0.9, pylone:0.5},
    mix:{brique:6, barre:7, entrepot:5}, haut:[19,34]},
 
-  {nom:"Porte d'Aubervilliers", quartier:'19ᵉ — Canal Saint-Denis', longueur:650, densite:2.00,
+  {nom:"Porte d'Aubervilliers", quartier:'19ᵉ — Canal Saint-Denis', longueur:650, densite:3.40,
    sol:'#8b877f', arbres:0.12, canal:true,
    mur:'tague', tags:1.0, grade:'rgba(210,206,196,.05)',
    garees:{t:0.5, mix:{utilitaire:8, ordinaire:3, epave:2}},
    props:{conteneur:0.8, benne:0.6, depot:0.7, palissade:0.5, pylone:0.6},
    mix:{entrepot:10, brique:5, barre:3}, haut:[13,24]},
 
-  {nom:'Porte de la Villette', quartier:'19ᵉ — Cité des Sciences', longueur:550, densite:2.15,
+  {nom:'Porte de la Villette', quartier:'19ᵉ — Cité des Sciences', longueur:550, densite:3.80,
    sol:'#8f9a84', arbres:0.6, villette:true,
    mur:'use', tags:0.45, grade:'rgba(224,232,238,.06)',
    garees:{t:0.4, mix:{ordinaire:5, utilitaire:4}},
@@ -6809,19 +7068,24 @@ function majVoiture(v,dt){
    n'est que decoratif : une petite vie sur la route. */
 function majVoitureReelle(v,dt){
   const cible=v.distCible||0;
+  /* on avance en continu a la vitesse reelle estimee du joueur (calculee dans
+     demarrerBoucleMulti a partir de ses deux dernieres positions annoncees),
+     et on corrige en douceur l'ecart residuel avec la derniere position
+     confirmee -- au lieu de n'avancer que par a-coups quand un sondage
+     arrive, ce qui donnait plusieurs secondes de retard visible */
+  const vEstimee=v.vReel||v.vmax*0.7;
   const ecart=cible-v.d;
-  const rythme=Math.max(v.vmax*0.55,Math.min(v.vmax*2.2,Math.abs(ecart)*1.4+v.vmax*0.4));
-  const pas=ecart>0?Math.min(ecart,rythme/3.6*dt):0;   // on n'avance jamais a reculons
-  v.d+=pas;
+  const correction=ecart*Math.min(1,dt*2.2);
+  const pas=(vEstimee/3.6)*dt + Math.max(0,correction);
+  v.d+=Math.max(0,pas);
   v.v=dt>0?Math.min(v.vmax,pas/dt*3.6):0;
 
-  if(v._xCibleT===undefined||v._xCibleT<=0){
-    v._xCible=(Math.random()-.5)*(LROUTE-2.6);
-    v._xCibleT=2+Math.random()*3;
-  }
-  v._xCibleT-=dt;
-  v.x=mel(v.x,v._xCible,1-Math.pow(0.02,dt));
-  v.rot=mel(v.rot,-(v._xCible-v.x)*.05,1-Math.pow(0.01,dt));
+  /* voie reelle du joueur, telle qu'annoncee par le serveur : on la suit de
+     pres (elle-meme deja lissee cote lecture) plutot que d'inventer une
+     trajectoire aleatoire qui ne correspond a rien de vrai */
+  const xCible=(v._xReel!==undefined)?v._xReel:v.x;
+  v.x=mel(v.x,xCible,1-Math.pow(0.06,dt));
+  v.rot=mel(v.rot,-(xCible-v.x)*.05,1-Math.pow(0.01,dt));
   v.fumee=0;
 }
 function frotterMur(v,dt){
@@ -8231,21 +8495,34 @@ function demarrerBoucleMulti(){
       const debut=J.moi.palier>0?distancePorte(J.moi.palier-1):0;
       const long=ZONES[J.moi.palier]?ZONES[J.moi.palier].longueur:1;
       const fraction=Math.max(0,Math.min(1,(J.moi.d-debut)/(long||1)));
-      envoyer('periph-multi-progres',{fraction});
+      envoyer('periph-multi-progres',{fraction,x:J.moi.x||0});
     }
     const rep=await envoyer('periph-multi-course',{});
     if(!rep||!Array.isArray(rep.membres)) return;
+    const maintenant=Date.now();
     rep.membres.forEach(m=>{
       if(typeof m.couleur!=='number') return;
       const v=J.voitures[m.couleur];
       if(!v||!v.estReel) return;
-      v.distCible=Math.max(v.distCible||0,distanceReelle(m.palier,m.fraction));
+      const nouvelleCible=distanceReelle(m.palier,m.fraction);
+      /* vitesse estimee entre les deux dernieres annonces du serveur, pour
+         continuer a avancer a bonne allure pendant les 300 ms entre deux
+         sondages, plutot que de rattraper par a-coups a chaque nouvelle
+         position recue (c'est ce qui donnait l'impression d'un decalage
+         de plusieurs secondes) */
+      if(v._majPrec && nouvelleCible>v._cibPrec){
+        const dtServ=Math.max(0.15,(m.maj||maintenant)-v._majPrec)/1000;
+        v.vReel=Math.max(0,Math.min(50,(nouvelleCible-v._cibPrec)/dtServ));
+      }
+      v._cibPrec=nouvelleCible; v._majPrec=m.maj||maintenant;
+      v.distCible=Math.max(v.distCible||0,nouvelleCible);
+      v._xReel=m.x||0;
       v.nom=m.pseudo;
       if(m.statut==='crash'&&!v.elimine) eliminer(v,'reel');
       else if(m.statut==='encaisse'&&!v.encaisse&&!v.elimine) v.encaisse=true;
       else if(m.statut==='arrive'&&!v.arrive&&!v.elimine) finirCourse(v);
     });
-  },700);
+  },300);
 }
 function arreterBoucleMulti(){ if(J.multiTimer){clearInterval(J.multiTimer); J.multiTimer=null;} }
 
@@ -8360,6 +8637,707 @@ PERIPH.fermer=function(){
 $('pxQuitter').onclick=()=>PERIPH.fermer();
 PERIPH.J=J;
 
+})();
+</script>
+
+<script>
+/* ===== TOWER RUSH =====
+   L'argent est entierement decide par serveur.js (routes /api/tower-*) :
+   la page ne fait qu'animer la balancoire et le resultat qu'on lui
+   annonce. Voir le commentaire en tete de ces routes dans serveur.js. */
+window.TOUR={ouvert:false,ouvrir:null,fermer:null};
+(function(){
+  'use strict';
+  var $ = function(id){ return document.getElementById(id); };
+  var svgNS = 'http://www.w3.org/2000/svg';
+
+  var S = {
+    bet:0.10, inRound:false, floors:[], totalMult:1, frozenLeft:0, gele:false,
+    animBusy:false, swinging:false, swingStart:0, amp:44, period:1.4, rafId:null
+  };
+
+  function fmt(n){ return (n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+  function fmtMult(n){ return 'x' + n.toFixed(2); }
+  function soldeActuel(){ return (typeof E!=='undefined' && E.joueur && typeof E.joueur.solde==='number') ? E.joueur.solde : 0; }
+  function renderBalance(){ $('trBalAmt').textContent = fmt(soldeActuel()); }
+  function renderBet(){ $('trBetVal').textContent = fmt(S.bet); }
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+  function shade(hex,f){
+    hex=hex.replace('#','');
+    var r=parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
+    r=Math.round(r*f); g=Math.round(g*f); b=Math.round(b*f);
+    return 'rgb('+r+','+g+','+b+')';
+  }
+
+  /* ---------- sound : le plus satisfaisant possible ----------
+     chaque pose a un impact grave (le poids de l'etage), un carillon
+     clair par-dessus (la reussite), et le tout monte legerement en
+     hauteur avec le nombre d'etages pour donner une sensation de
+     tension qui grimpe, comme dans un vrai jeu d'arcade. */
+  var Sound = (function(){
+    var ctx=null, muted=false;
+    function ac(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return ctx; }
+    function tone(freq,dur,type,gain,delay,pan){
+      if(muted) return; var c=ac(); if(!c) return; if(c.state==='suspended') c.resume();
+      var t0=c.currentTime+(delay||0); var osc=c.createOscillator(); var g=c.createGain();
+      osc.type=type||'sine'; osc.frequency.setValueAtTime(freq,t0);
+      g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(gain||0.14,t0+0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+      var last=osc;
+      if (typeof pan==='number' && c.createStereoPanner){ var p=c.createStereoPanner(); p.pan.value=pan; last.connect(g); g.connect(p); p.connect(c.destination); }
+      else { osc.connect(g); g.connect(c.destination); }
+      osc.start(t0); osc.stop(t0+dur+0.03);
+    }
+    function noiseBurst(dur, gain, delay, hp){
+      var c=ac(); if(!c||muted) return; if(c.state==='suspended') c.resume();
+      var t0=c.currentTime+(delay||0); var n=Math.floor(c.sampleRate*dur);
+      var buf=c.createBuffer(1,n,c.sampleRate); var d=buf.getChannelData(0);
+      for(var i=0;i<n;i++){ d[i]=(Math.random()*2-1)*(1-i/n); }
+      var src=c.createBufferSource(); src.buffer=buf;
+      var g=c.createGain(); g.gain.setValueAtTime(gain,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+      if (hp && c.createBiquadFilter){ var f=c.createBiquadFilter(); f.type='highpass'; f.frequency.value=hp; src.connect(f); f.connect(g); }
+      else src.connect(g);
+      g.connect(c.destination); src.start(t0);
+    }
+    function tick(){ tone(1500,0.035,'sine',0.035); }
+    function thud(pitch,n){
+      pitch=pitch||1; var lift=1+Math.min(0.22,(n||0)*0.01);
+      noiseBurst(0.045,0.22,0,900); noiseBurst(0.12,0.18,0);
+      tone(150*pitch*lift,0.19,'square',0.19); tone(58*pitch,0.34,'sine',0.26,0.005); tone(38*pitch,0.3,'sine',0.17,0.015);
+    }
+    function place(pitch,n){
+      pitch=pitch||1; var lift=1+Math.min(0.3,(n||0)*0.014);
+      tone(560*pitch*lift,0.1,'triangle',0.15); tone(760*pitch*lift,0.08,'triangle',0.11,0.045);
+      tone(980*pitch*lift,0.07,'sine',0.09,0.09); tone(1480*pitch*lift,0.09,'sine',0.06,0.12);
+    }
+    function drop(){ tone(1050,0.09,'sine',0.05); }
+    function perfect(){
+      tone(660,0.1,'sine',0.14); tone(880,0.1,'sine',0.14,0.06); tone(1100,0.11,'sine',0.15,0.12);
+      tone(1320,0.18,'sine',0.13,0.18); tone(1760,0.22,'sine',0.07,0.2); tone(2200,0.28,'sine',0.05,0.24);
+    }
+    function crash(){
+      noiseBurst(0.5,0.32,0); noiseBurst(0.22,0.22,0.05);
+      tone(160,0.4,'sawtooth',0.17,0.02); tone(90,0.5,'sine',0.16,0.05);
+    }
+    function down(){ tone(300,0.16,'sawtooth',0.1); tone(220,0.2,'sawtooth',0.09,0.06); }
+    function freeze(){ tone(1200,0.12,'sine',0.1); tone(1600,0.14,'sine',0.09,0.08); tone(2000,0.2,'sine',0.07,0.16); }
+    function cashout(){
+      tone(1046,0.05,'triangle',0.11);
+      tone(523,0.13,'sine',0.15,0.05); tone(659,0.13,'sine',0.15,0.14); tone(784,0.13,'sine',0.15,0.23);
+      tone(1046,0.28,'sine',0.17,0.32); tone(1318,0.34,'sine',0.13,0.4); tone(1568,0.4,'sine',0.09,0.46);
+    }
+    function toggle(){ muted=!muted; return muted; }
+    return { thud:thud, place:place, drop:drop, perfect:perfect, crash:crash, down:down, freeze:freeze, cashout:cashout, tick:tick, toggle:toggle };
+  })();
+  $('trBtnSound').onclick=function(){ var m=Sound.toggle(); $('trBtnSound').textContent=m?'🔇':'🔊'; };
+
+  /* ---------- particles ---------- */
+  function burst(x, y, n, colors, spread, size){
+    var stage = $('trStage');
+    for (var i=0;i<n;i++){
+      var p=document.createElement('div');
+      p.className='particle';
+      var ang = Math.random()*Math.PI*2;
+      var dist = rand(spread*0.4, spread);
+      var dx = Math.cos(ang)*dist, dy = Math.sin(ang)*dist - rand(4,14);
+      var sz = rand(size*0.5, size);
+      p.style.left=x+'px'; p.style.top=y+'px';
+      p.style.width=sz+'px'; p.style.height=sz+'px';
+      p.style.background = colors[Math.floor(Math.random()*colors.length)];
+      p.style.setProperty('--dx', dx+'px'); p.style.setProperty('--dy', dy+'px');
+      stage.appendChild(p);
+      (function(el){ setTimeout(function(){ el.remove(); }, 650); })(p);
+    }
+  }
+  function confettiBurst(){
+    var stage=$('trStage'); var w=stage.clientWidth, h=stage.clientHeight;
+    var colors=['#ffc24b','#39c1ff','#2fd47c','#ff5257','#fff'];
+    for (var i=0;i<36;i++){
+      var c=document.createElement('div'); c.className='confetto';
+      var sz = rand(5,9);
+      c.style.width=sz+'px'; c.style.height=sz*rand(0.5,1.2)+'px';
+      c.style.left=(w/2)+'px'; c.style.top=(h*0.32)+'px';
+      c.style.background=colors[Math.floor(Math.random()*colors.length)];
+      var ang=rand(-1.4,-1.7)+ (Math.random()<0.5?0:Math.PI);
+      var dist=rand(90,260);
+      c.style.setProperty('--dx', Math.cos(ang)*dist+'px');
+      c.style.setProperty('--dy', (Math.sin(ang)*dist+rand(60,160))+'px');
+      c.style.setProperty('--rot', rand(-540,540)+'deg');
+      c.style.animationDelay=(Math.random()*0.15)+'s';
+      stage.appendChild(c);
+      (function(el){ setTimeout(function(){ el.remove(); },1300); })(c);
+    }
+  }
+  function shakeStage(){ var st=$('trStage'); st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake'); }
+  function flashRed(){ var f=$('trFlash'); f.classList.add('on'); setTimeout(function(){ f.classList.remove('on'); },220); }
+
+  /* ---------- mise ---------- */
+  function clampBet(v){
+    v=Math.round(v*10)/10; if(v<0.10) v=0.10;
+    var solde=soldeActuel();
+    if(v>solde) v=Math.max(0.10,Math.round(solde*10)/10);
+    if(v>500) v=500;
+    return v;
+  }
+  $('trBetMinus').onclick=function(){ if(S.inRound) return; S.bet=clampBet(S.bet-0.10); renderBet(); };
+  $('trBetPlus').onclick =function(){ if(S.inRound) return; S.bet=clampBet(S.bet+0.10); renderBet(); };
+  $('trBtnAllIn').onclick=function(){ if(S.inRound) return; S.bet=clampBet(soldeActuel()); renderBet(); };
+  $('trBtnX2').onclick   =function(){ if(S.inRound) return; S.bet=clampBet(S.bet*2); renderBet(); };
+  $('trBtnInfo').onclick=function(){ $('trRulesWrap').classList.add('show'); };
+  $('trCloseRules').onclick=function(){ $('trRulesWrap').classList.remove('show'); };
+
+  var toastTimer=null;
+  function toast(msg,kind){
+    var t=$('trToast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:'');
+    clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove('show'); },1700);
+  }
+
+  /* ---------- crane + shop art ---------- */
+  $('trCrane').innerHTML =
+    '<svg viewBox="0 0 72 46" xmlns="'+svgNS+'">' +
+      '<defs><linearGradient id="trHookg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd873"/><stop offset="1" stop-color="#e69a1a"/></linearGradient></defs>' +
+      '<rect x="1" y="38" width="70" height="4" rx="2" fill="#20242b"/>' +
+      '<path d="M8 40 L36 4 L64 40" stroke="#2b3038" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M36 4 L8 40 M36 4 L64 40" stroke="#41474f" stroke-width="1" fill="none"/>' +
+      '<rect x="30" y="0" width="12" height="6" rx="1.5" fill="url(#trHookg)" stroke="#7a5306" stroke-width="1.4"/>' +
+      '<path d="M32 20 C30 28 42 28 40 20" stroke="url(#trHookg)" stroke-width="3.4" fill="none" stroke-linecap="round"/>' +
+    '</svg>';
+
+  $('trShop').innerHTML =
+    '<svg viewBox="0 0 186 148" xmlns="'+svgNS+'">' +
+      '<defs>' +
+        '<linearGradient id="trWallg0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f8a63"/><stop offset="1" stop-color="#245c3d"/></linearGradient>' +
+        '<linearGradient id="trRoofg0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8503a"/><stop offset="1" stop-color="#9a3826"/></linearGradient>' +
+      '</defs>' +
+      '<rect x="6" y="46" width="174" height="96" rx="6" fill="url(#trWallg0)" stroke="#173a26" stroke-width="2.4"/>' +
+      '<rect x="0" y="30" width="186" height="20" rx="4" fill="url(#trRoofg0)" stroke="#6e2416" stroke-width="2"/>' +
+      '<rect x="16" y="34" width="154" height="12" rx="3" fill="#b4432f" stroke="#7a2a1c" stroke-width="1.4"/>' +
+      '<text x="93" y="43" text-anchor="middle" font-family="Baloo 2, sans-serif" font-size="11" font-weight="700" fill="#ffe9c4">TOWER RUSH</text>' +
+      '<rect x="16" y="60" width="40" height="46" rx="2" fill="#12281c"/><rect x="20" y="64" width="32" height="38" fill="#dce9c8" opacity=".85"/>' +
+      '<rect x="73" y="60" width="40" height="46" rx="2" fill="#12281c"/><rect x="77" y="64" width="32" height="38" fill="#dce9c8" opacity=".85"/>' +
+      '<rect x="130" y="60" width="40" height="46" rx="2" fill="#12281c"/><rect x="134" y="64" width="32" height="38" fill="#dce9c8" opacity=".85"/>' +
+      '<rect x="6" y="112" width="174" height="30" fill="#123420"/>' +
+      '<rect x="82" y="108" width="22" height="34" fill="#7a5233"/>' +
+      '<circle cx="87" cy="125" r="1.6" fill="#f4d67a"/>' +
+      '<rect x="0" y="24" width="186" height="6" rx="3" fill="#e6c15b"/>' +
+    '</svg>';
+
+  /* ---------- floor art (purement decoratif : ne change jamais l'argent) ---------- */
+  var FLOOR_SKINS=['rondins','brique','planches','pierre'];
+  var lastSkin=-1;
+  function nextSkin(){ var i; do{ i=Math.floor(Math.random()*FLOOR_SKINS.length); }while(i===lastSkin); lastSkin=i; return FLOOR_SKINS[i]; }
+
+  var FLOOR_SIZES = {
+    mince:  { w:98,  h:132, px:96  },
+    moyen:  { w:132, h:112, px:126 },
+    grande: { w:172, h:100, px:160 }
+  };
+  var SIZE_KEYS = ['mince','mince','moyen','moyen','moyen','grande'];
+  var lastSize=-1;
+  function nextSize(){ var i; do{ i=Math.floor(Math.random()*SIZE_KEYS.length); }while(SIZE_KEYS[i]===lastSize); lastSize=SIZE_KEYS[i]; return SIZE_KEYS[i]; }
+
+  var CAP_STYLES=['plat','pointu','dome','crenele'];
+  function nextCap(){ return CAP_STYLES[Math.floor(Math.random()*CAP_STYLES.length)]; }
+
+  function capSVG(style, W, capH, dark, mid){
+    if (style==='pointu'){
+      return '<path d="M-2 0 L'+(W/2)+' '+(-capH)+' L'+(W+2)+' 0 Z" fill="'+dark+'"/>' +
+             '<path d="M4 0 L'+(W/2)+' '+(-capH*0.78)+' L'+(W-4)+' 0 Z" fill="'+mid+'"/>';
+    }
+    if (style==='dome'){
+      return '<path d="M-2 0 Q'+(W/2)+' '+(-capH*1.5)+' '+(W+2)+' 0 Z" fill="'+dark+'"/>' +
+             '<ellipse cx="'+(W/2)+'" cy="'+(-capH*0.15)+'" rx="'+(W*0.22)+'" ry="'+(capH*0.32)+'" fill="'+mid+'" opacity=".55"/>';
+    }
+    if (style==='crenele'){
+      var s='<rect x="-2" y="'+(-capH*0.42)+'" width="'+(W+4)+'" height="'+(capH*0.42)+'" fill="'+dark+'"/>';
+      var toothW = W/7;
+      for (var i=0;i<7;i+=2){ s+='<rect x="'+(i*toothW)+'" y="'+(-capH)+'" width="'+toothW+'" height="'+(capH*0.6)+'" fill="'+dark+'"/>'; }
+      return s;
+    }
+    return '<rect x="-2" y="'+(-capH*0.5)+'" width="'+(W+4)+'" height="'+(capH*0.5)+'" rx="2" fill="'+dark+'"/>';
+  }
+
+  function windowSVG(cx,cy,w,h,frameColor,curtain,glassId){
+    var gid = glassId||'glass';
+    var s='<g>';
+    s+='<rect x="'+(cx-w/2-2.4)+'" y="'+(cy-h/2-2.4)+'" width="'+(w+4.8)+'" height="'+(h+4.8)+'" rx="2" fill="rgba(0,0,0,.28)"/>';
+    s+='<rect x="'+(cx-w/2-2)+'" y="'+(cy-h/2-2)+'" width="'+(w+4)+'" height="'+(h+4)+'" rx="2" fill="'+frameColor+'"/>';
+    s+='<rect x="'+(cx-w/2)+'" y="'+(cy-h/2)+'" width="'+w+'" height="'+h+'" fill="url(#'+gid+')"/>';
+    s+='<path d="M'+(cx-w/2)+' '+(cy+h/2)+' L'+(cx-w*0.1)+' '+(cy-h/2)+' L'+(cx+w*0.18)+' '+(cy-h/2)+' L'+(cx-w/2)+' '+(cy+h*0.32)+' Z" fill="#fff" opacity=".22"/>';
+    s+='<line x1="'+cx+'" y1="'+(cy-h/2)+'" x2="'+cx+'" y2="'+(cy+h/2)+'" stroke="'+frameColor+'" stroke-width="1.6"/>';
+    s+='<line x1="'+(cx-w/2)+'" y1="'+cy+'" x2="'+(cx+w/2)+'" y2="'+cy+'" stroke="'+frameColor+'" stroke-width="1.6"/>';
+    s+='<rect x="'+(cx-w/2-2)+'" y="'+(cy+h/2-1.5)+'" width="'+(w+4)+'" height="3.4" rx="1" fill="'+frameColor+'"/>';
+    if (curtain){
+      s+='<path d="M'+(cx-w/2)+' '+(cy-h/2)+' q6 4 2 '+(h*0.4)+'" fill="#e7c9e6" opacity=".85"/>';
+      s+='<path d="M'+(cx+w/2)+' '+(cy-h/2)+' q-6 4 -2 '+(h*0.4)+'" fill="#e7c9e6" opacity=".85"/>';
+    }
+    s+='</g>'; return s;
+  }
+  /* geometrie du toit/biseau lateral que floorSVG() ajoute au-dessus du mur
+     (y=6 en coordonnees locales) -- sert a remonter chaque etage pose de
+     tout ce depassement pour que les murs se touchent, sans espace ; le
+     toit ne reste visible que sur l'etage qui n'a encore rien au-dessus */
+  function capGeom(sizeKey){
+    var sz = FLOOR_SIZES[sizeKey] || FLOOR_SIZES.moyen;
+    var W=sz.w, H=sz.h;
+    var capH = Math.round(H*0.24);
+    var sideW = Math.max(10, W*0.1), skew = sideW*0.55;
+    return { capH:capH, skew:skew, viewW:W+4+sideW, viewH:H+capH+skew };
+  }
+  function overlapPx(sizeKey, px){
+    var g = capGeom(sizeKey);
+    var scale = px / g.viewW;
+    return Math.round((g.capH + g.skew) * scale);
+  }
+  var floorUid=1;
+  function floorSVG(skin, sizeKey, hasCharm, capStyle){
+    var uid = floorUid++;
+    var sz = FLOOR_SIZES[sizeKey] || FLOOR_SIZES.moyen;
+    var W=sz.w, H=sz.h;
+    var capH = Math.round(H*0.24);
+    var wallGradId='trWallg'+uid, glassId='trGlass'+uid;
+    var glassDef='<linearGradient id="'+glassId+'" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#f4fbff"/><stop offset=".55" stop-color="#cfe9f7"/><stop offset="1" stop-color="#93bfd8"/></linearGradient>';
+    var body='', wallDark, wallMid, wallGrad='';
+    var winCount = H > 118 ? 2 : 1;
+    var winH = winCount===2 ? (H-40)/2 - 6 : Math.min(H-24, 34);
+    var winW = Math.min(W-40, 34);
+
+    function windowsCol(frame,curtain){
+      var s='';
+      if (winCount===2){
+        s+=windowSVG(W/2, H*0.33, winW, winH, frame, curtain, glassId);
+        s+=windowSVG(W/2, H*0.72, winW, winH, frame, curtain, glassId);
+      } else {
+        s+=windowSVG(W/2, H/2, winW, winH, frame, curtain, glassId);
+      }
+      return s;
+    }
+
+    if (skin==='rondins'){
+      var wallA='#d1a86c', wallB='#a97b3f', logLine='#7d5424';
+      wallDark=wallB; wallMid=wallA;
+      body+='<rect x="4" y="6" width="'+(W-8)+'" height="'+(H-10)+'" rx="6" fill="url(#'+wallGradId+')"/>';
+      for (var ly=12; ly<H-4; ly+=9){
+        body+='<rect x="4" y="'+ly+'" width="'+(W-8)+'" height="6" fill="'+wallB+'" opacity="0.5"/>';
+        body+='<rect x="4" y="'+ly+'" width="'+(W-8)+'" height="1.6" fill="#fff" opacity=".2"/>';
+        body+='<line x1="4" y1="'+(ly+6)+'" x2="'+(W-4)+'" y2="'+(ly+6)+'" stroke="'+logLine+'" stroke-width="1" opacity=".55"/>';
+      }
+      body+='<circle cx="10" cy="10" r="5" fill="'+wallB+'"/><circle cx="'+(W-10)+'" cy="10" r="5" fill="'+wallB+'"/>';
+      body+='<circle cx="10" cy="'+(H-8)+'" r="5" fill="'+wallB+'"/><circle cx="'+(W-10)+'" cy="'+(H-8)+'" r="5" fill="'+wallB+'"/>';
+      body+=windowsCol('#4a2f14',true);
+    } else if (skin==='brique'){
+      var brickA='#c1614a', brickB='#8f3e28';
+      wallDark=brickB; wallMid=brickA;
+      body+='<rect x="4" y="6" width="'+(W-8)+'" height="'+(H-10)+'" rx="6" fill="url(#'+wallGradId+')"/>';
+      for (var by=10,row=0; by<H-4; by+=8,row++){
+        var off=(row%2===0)?0:10;
+        for (var bx=4+off; bx<W-4; bx+=20){
+          body+='<rect x="'+bx+'" y="'+by+'" width="18" height="6.5" rx="1" fill="'+brickB+'" opacity=".32" stroke="'+brickB+'" stroke-width=".4"/>';
+        }
+      }
+      body+=windowsCol('#2e190f',false);
+    } else if (skin==='planches'){
+      var plA='#8ec188', plB='#5c8a57';
+      wallDark=plB; wallMid=plA;
+      body+='<rect x="4" y="6" width="'+(W-8)+'" height="'+(H-10)+'" rx="6" fill="url(#'+wallGradId+')"/>';
+      for (var px=8; px<W-4; px+=15){
+        body+='<line x1="'+px+'" y1="7" x2="'+px+'" y2="'+(H-5)+'" stroke="'+plB+'" stroke-width="1.4" opacity=".5"/>';
+        body+='<line x1="'+(px+2)+'" y1="7" x2="'+(px+2)+'" y2="'+(H-5)+'" stroke="#fff" stroke-width=".8" opacity=".15"/>';
+      }
+      body+=windowsCol('#28401f',true);
+    } else {
+      var stA='#aeb7c0', stB='#767f89';
+      wallDark=stB; wallMid=stA;
+      body+='<rect x="4" y="6" width="'+(W-8)+'" height="'+(H-10)+'" rx="6" fill="url(#'+wallGradId+')"/>';
+      var sy=10, row2=0;
+      while (sy<H-4){
+        var offx=(row2%2===0)?4:16;
+        for (var sx=offx; sx<W-4; sx+=24){ body+='<rect x="'+sx+'" y="'+sy+'" width="21" height="9" rx="2" fill="'+stB+'" opacity=".35" stroke="'+stB+'" stroke-width=".5"/>'; }
+        sy+=11; row2++;
+      }
+      if (winCount===2){
+        body+='<circle cx="'+(W/2)+'" cy="'+(H*0.3)+'" r="'+(winH*0.55)+'" fill="#3d4247"/><circle cx="'+(W/2)+'" cy="'+(H*0.3)+'" r="'+(winH*0.42)+'" fill="url(#'+glassId+')"/>';
+        body+='<circle cx="'+(W/2)+'" cy="'+(H*0.72)+'" r="'+(winH*0.55)+'" fill="#3d4247"/><circle cx="'+(W/2)+'" cy="'+(H*0.72)+'" r="'+(winH*0.42)+'" fill="url(#'+glassId+')"/>';
+      } else {
+        body+='<circle cx="'+(W/2)+'" cy="'+(H/2)+'" r="17" fill="#3d4247"/><circle cx="'+(W/2)+'" cy="'+(H/2)+'" r="14" fill="url(#'+glassId+')"/>';
+      }
+    }
+
+    wallGrad = '<linearGradient id="'+wallGradId+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+wallMid+'"/><stop offset=".62" stop-color="'+wallMid+'"/><stop offset="1" stop-color="'+wallDark+'"/></linearGradient>';
+    body += '<rect x="4" y="6" width="'+(W-8)+'" height="'+Math.min(22,H*0.22)+'" fill="url(#trAo'+uid+')"/>';
+    body += '<rect x="4" y="'+(H-13)+'" width="'+(W-8)+'" height="9" rx="2" fill="'+wallDark+'" opacity=".55"/>';
+    wallGrad += '<linearGradient id="trAo'+uid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".22"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>';
+
+    var sideW = Math.max(10, W*0.1), skew = sideW*0.55;
+    var rx = W-4;
+    var sideFace = shade(wallDark, 0.6), sideTop = shade(wallMid, 0.82);
+    var side = '<polygon points="'+rx+',6 '+(rx+sideW)+','+(6-skew)+' '+(rx+sideW)+','+(H-4-skew)+' '+rx+','+(H-4)+'" fill="'+sideFace+'"/>' +
+      '<polygon points="4,6 '+rx+',6 '+(rx+sideW)+','+(6-skew)+' '+(4+sideW*0.3)+','+(6-skew*0.3)+'" fill="'+sideTop+'"/>';
+
+    var cap = capSVG(capStyle, W, capH, wallDark, wallMid);
+    if (hasCharm){ body+='<path d="M10 6 l1.6 4.6 4.9.2-3.9 3 1.5 4.7-4.1-2.9-4.1 2.9 1.5-4.7-3.9-3 4.9-.2z" fill="#ffe08a" transform="scale(0.75)" opacity=".9"/>'; }
+    var defs='<defs>'+glassDef+wallGrad+'</defs>';
+    return '<svg viewBox="'+(-2)+' '+(-capH-skew)+' '+(W+4+sideW)+' '+(H+capH+skew)+'" xmlns="'+svgNS+'">'+defs+side+cap+body+'</svg>';
+  }
+
+  var lastSkinUsed='rondins', lastSizeUsed='moyen', lastCapUsed='plat';
+  function setPayloadArt(skin){
+    lastSkinUsed=skin; lastSizeUsed=nextSize(); lastCapUsed=nextCap();
+    var p=$('trPayload');
+    p.innerHTML=floorSVG(skin, lastSizeUsed, Math.random()<0.3, lastCapUsed);
+    p.style.width=FLOOR_SIZES[lastSizeUsed].px+'px';
+  }
+
+  var cloudsBuilt=false;
+  function buildClouds(){
+    if (cloudsBuilt) return; cloudsBuilt=true;
+    var layer=$('trCloudsLayer'); if(!layer) return;
+    var specs=[
+      {x:6,  y:7,  s:1.15, op:.92},
+      {x:60, y:14, s:0.7,  op:.68},
+      {x:14, y:23, s:0.55, op:.55},
+      {x:80, y:26, s:0.85, op:.8},
+      {x:38, y:5,  s:0.5,  op:.5}
+    ];
+    specs.forEach(function(c){
+      var el=document.createElement('div');
+      el.className='cloud';
+      var w=112*c.s, h=40*c.s;
+      el.style.left=c.x+'%'; el.style.top=c.y+'%'; el.style.width=w+'px'; el.style.height=h+'px'; el.style.opacity=c.op;
+      var puffs=[[6,58,44,44],[26,26,52,52],[48,42,48,48],[68,54,40,40],[84,60,30,30]];
+      var inner='';
+      puffs.forEach(function(p){
+        inner+='<div class="puff" style="left:'+(p[0]*w/100-p[2]/2)+'px;top:'+(p[1]*h/100-p[3]/2)+'px;width:'+p[2]+'px;height:'+p[3]+'px;"></div>';
+      });
+      inner+='<div class="shad"></div>';
+      el.innerHTML=inner;
+      layer.appendChild(el);
+    });
+  }
+
+  var SKY_LOW  = {a:[47,127,196],  b:[90,164,217],  c:[156,201,230], d:[225,238,242], e:[211,230,234]};
+  var SKY_HIGH = {a:[6,10,24],     b:[13,19,40],    c:[24,32,58],    d:[55,52,84],    e:[42,40,66]};
+  var starsBuilt=false;
+  function mixC(lo,hi,t){ return 'rgb('+Math.round(lo[0]+(hi[0]-lo[0])*t)+','+Math.round(lo[1]+(hi[1]-lo[1])*t)+','+Math.round(lo[2]+(hi[2]-lo[2])*t)+')'; }
+  function updateAltitude(n){
+    var t = clamp(n/26, 0, 1);
+    var stage=$('trStage');
+    stage.style.setProperty('--tr-sky-a', mixC(SKY_LOW.a,SKY_HIGH.a,t));
+    stage.style.setProperty('--tr-sky-b', mixC(SKY_LOW.b,SKY_HIGH.b,t));
+    stage.style.setProperty('--tr-sky-c', mixC(SKY_LOW.c,SKY_HIGH.c,t));
+    stage.style.setProperty('--tr-sky-d', mixC(SKY_LOW.d,SKY_HIGH.d,t));
+    stage.style.setProperty('--tr-sky-e', mixC(SKY_LOW.e,SKY_HIGH.e,t));
+    var sun=stage.querySelector('.sun-glow'); if(sun) sun.style.opacity = Math.max(0, 1 - t*1.6);
+    var clouds=$('trCloudsLayer'); if(clouds) clouds.style.opacity = Math.max(0.15, 1 - t*1.1);
+    if (!starsBuilt){
+      starsBuilt=true;
+      for (var i=0;i<26;i++){
+        var s=document.createElement('div'); s.className='star';
+        s.style.left=rand(4,96)+'%'; s.style.top=rand(2,55)+'%'; s.style.opacity=0;
+        s.dataset.tw = (0.5+Math.random()*0.5).toFixed(2);
+        stage.insertBefore(s, stage.firstChild);
+        stage._stars = stage._stars || []; stage._stars.push(s);
+      }
+    }
+    (stage._stars||[]).forEach(function(s){ s.style.opacity = (t>0.28) ? (t*parseFloat(s.dataset.tw)) : 0; });
+    $('trAltVal').textContent = Math.round(n*3.1)+' m';
+  }
+
+  function renderTower(justLanded){
+    var tower=$('trTower');
+    tower.style.transition=''; tower.style.transform=''; tower.style.opacity='';
+    tower.innerHTML='';
+    S.floors.forEach(function(f, idx){
+      var wrap=document.createElement('div'); wrap.className='floor-wrap';
+      var d=document.createElement('div');
+      d.className='floor' + ((justLanded && idx===S.floors.length-1) ? ' impact' : '');
+      d.style.width=f.px+'px';
+      d.style.marginTop = (idx===0 ? -3 : -(S.floors[idx-1].roofGap||3)) + 'px';
+      d.style.transform='translateX('+f.lean+'px)';
+      d.innerHTML=f.svg;
+      var badge=document.createElement('div');
+      badge.className='floor-mult'+(f.mult<1?' down':'');
+      badge.textContent=fmtMult(f.mult);
+      wrap.appendChild(d); wrap.appendChild(badge);
+      tower.appendChild(wrap);
+    });
+    var n=S.floors.length;
+    $('trFloorCountVal').textContent = n;
+    updateAltitude(n);
+    updateCamera();
+  }
+
+  function pushResult(val, bad){
+    var box=$('trResults');
+    var p=document.createElement('div');
+    p.className='pill'+(bad?' bad':(val<1?' down':''));
+    p.textContent = bad ? 'x0' : fmtMult(val);
+    box.insertBefore(p, box.children[1]||null);
+    while (box.children.length>7) box.removeChild(box.lastChild);
+  }
+
+  function renderCurrent(bump){
+    if(!S.inRound){ $('trCurMultBox').hidden=true; return; }
+    $('trCurMultBox').hidden=false;
+    var v=$('trCurMultVal');
+    v.textContent=fmtMult(S.totalMult);
+    $('trCurWinVal').textContent='Gain : '+fmt(S.bet*S.totalMult);
+    if (bump){ v.classList.remove('bump'); void v.offsetWidth; v.classList.add('bump'); }
+  }
+
+  function layoutHeights(){
+    var stage=$('trStage');
+    var sidewalkH = stage.clientHeight * 0.10;
+    var shopH = $('trShop').getBoundingClientRect().height;
+    var baseBottom = sidewalkH + shopH - 6;
+    $('trTowerViewport').style.bottom = baseBottom + 'px';
+    return baseBottom;
+  }
+  var dropZoneY=200, craneHookY=60, payloadRestY=140;
+  function updateCamera(){
+    var stage=$('trStage');
+    var stageH = stage.clientHeight;
+    var baseBottom = layoutHeights();
+    var towerH = $('trTower').getBoundingClientRect().height;
+    var naturalTopY = stageH - baseBottom - towerH;
+    var shift = Math.max(0, dropZoneY - naturalTopY);
+    var w=$('trWorld');
+    w.style.setProperty('--wy', shift.toFixed(1)+'px');
+    w.style.transform = 'translateY('+shift.toFixed(1)+'px)';
+  }
+  function punchCamera(){
+    var w=$('trWorld'); w.classList.remove('punch'); void w.offsetWidth; w.classList.add('punch');
+  }
+  function layoutCrane(){
+    var stage=$('trStage');
+    var stageH=stage.clientHeight;
+    craneHookY = stageH*0.03 + 34;
+    var payload=$('trPayload');
+    var payH = payload.getBoundingClientRect().height || 175;
+    var minDropZone = craneHookY + payH + 34;
+    dropZoneY = Math.min(Math.max(stageH*0.30, minDropZone), stageH*0.55);
+    $('trLandingShadow').style.top = dropZoneY+'px';
+    payloadRestY = dropZoneY - payH - 22;
+    payload.style.top = payloadRestY+'px';
+    $('trRope').style.top = craneHookY+'px';
+    $('trRope').style.height = Math.max(16, (payloadRestY - craneHookY + 10))+'px';
+  }
+
+  /* ---------- balancoire : l'angle est une fonction pure du temps serveur
+     (swingStart est un horodatage epoch envoye par serveur.js), donc
+     l'affichage colle exactement a ce que le serveur calculera au lacher,
+     sans jamais deriver ---------- */
+  function currentAngle(){
+    var t=(Date.now()-S.swingStart)/1000;
+    return S.amp*Math.sin(2*Math.PI*t/S.period);
+  }
+  var lastTickSign = 1;
+  function swingLoop(){
+    if (!S.swinging) return;
+    var x=currentAngle();
+    var tNorm = clamp(x/S.amp, -1, 1);
+    var bob = -16*(1-Math.cos(tNorm*1.15));
+    var rot = tNorm*9;
+    $('trPayload').style.transform='translate(calc(-50% + '+x.toFixed(1)+'px), '+bob.toFixed(1)+'px) rotate('+rot.toFixed(1)+'deg)';
+    $('trRope').style.transform='translateX(calc(-50% + '+(x*0.48).toFixed(1)+'px)) rotate('+(tNorm*11).toFixed(1)+'deg)';
+    $('trLandingShadow').style.transform='translateX(calc(-50% + '+x.toFixed(1)+'px))';
+    var sign = x>=0?1:-1;
+    if (sign!==lastTickSign && Math.abs(x) < S.amp*0.08){ Sound.tick(); }
+    lastTickSign = sign;
+    S.rafId=requestAnimationFrame(swingLoop);
+  }
+  function beginSwingFromServer(r){
+    S.amp=r.amp; S.period=r.period; S.swingStart=r.swingStart;
+    setPayloadArt(nextSkin());
+    var pl=$('trPayload');
+    pl.hidden=false; pl.style.opacity='1'; pl.style.transition='';
+    layoutCrane(); updateCamera();
+    var ls=$('trLandingShadow');
+    ls.style.opacity=1; ls.style.width=Math.max(60, FLOOR_SIZES[lastSizeUsed].px*0.72)+'px';
+    S.swinging=true; swingLoop();
+  }
+  function stopSwing(){ S.swinging=false; if (S.rafId) cancelAnimationFrame(S.rafId); }
+
+  function collapseSlide(dir){
+    var tower=$('trTower');
+    tower.style.transition='transform .6s cubic-bezier(.4,0,.7,1), opacity .5s ease .2s';
+    tower.style.transform='translateX('+(dir*150)+'px) rotate('+(dir*36)+'deg)';
+    tower.style.opacity='0';
+  }
+
+  /* ---------- lacher : la page anime, le serveur decide -----------
+     on fige l'angle affiche des l'appui, on envoie tower-lacher, et on
+     ne joue l'animation de chute/pose qu'a partir de ce que le serveur
+     renvoie (angle, rate, glisse, facteur, totalMult...) -- jamais a
+     partir d'un calcul local. */
+  function resolveDrop(){
+    if (!S.inRound || S.animBusy || !S.swinging) return;
+    S.animBusy=true;
+    stopSwing();
+    var n=S.floors.length;
+    var payload=$('trPayload');
+    Sound.drop();
+    $('trBtnBuild').disabled=true; $('trBtnCashout').disabled=true;
+
+    envoyer('tower-lacher',{}).then(function(r){
+      if (!r || r.erreur){
+        toast(r&&r.erreur?r.erreur:'Erreur réseau — réessayez.','lose');
+        S.animBusy=false; $('trBtnBuild').disabled=false; $('trBtnCashout').disabled=false;
+        return;
+      }
+      if (typeof r.solde==='number'){ E.joueur.solde=r.solde; if (typeof majSolde==='function') majSolde(); renderBalance(); }
+      var angle=r.angle||0;
+      var dir = angle>=0 ? 1 : -1;
+      var stageRect=$('trStage').getBoundingClientRect();
+      var retRect=$('trLandingShadow').getBoundingClientRect();
+      var payRect=payload.getBoundingClientRect();
+      var targetDY=(retRect.top-payRect.top)+(payRect.height*0.1);
+
+      if (r.rate){
+        var missDur=0.52;
+        payload.style.transition='transform '+missDur+'s cubic-bezier(.4,0,1,1)';
+        payload.style.transform='translate(calc(-50% + '+(angle+dir*130).toFixed(1)+'px), '+(targetDY+320).toFixed(0)+'px) rotate('+(dir*74)+'deg)';
+        setTimeout(function(){
+          Sound.crash(); payload.style.opacity='0';
+          flashRed(); shakeStage();
+          toast('Raté — l’étage tombe à côté. Tour perdue.','lose');
+          pushResult(0,true);
+          setTimeout(function(){ S.animBusy=false; endRound(); }, 460);
+        }, missDur*1000*0.68);
+        return;
+      }
+
+      var dropDur=clamp(0.34+Math.abs(targetDY)/1050, 0.34, 0.6);
+      payload.style.transition='transform '+dropDur.toFixed(2)+'s cubic-bezier(.45,0,.8,1)';
+      payload.style.transform='translate(calc(-50% + '+angle.toFixed(1)+'px), '+targetDY.toFixed(0)+'px)';
+
+      setTimeout(function(){
+        payload.hidden=true; payload.style.opacity='1'; payload.style.transition=''; payload.style.transform='translateX(-50%)';
+
+        var factor=r.facteur;
+        var perfectHit=!!r.parfait;
+        if (perfectHit) Sound.perfect();
+        else if (factor<1) { Sound.thud(0.9,n); Sound.down(); }
+        else { Sound.thud(1,n); Sound.place(factor>=1.6?1.15:1, n); }
+
+        shakeStage(); punchCamera();
+        var stR=$('trStage').getBoundingClientRect();
+        burst(stR.width/2+angle*0.3, retRect.top-stageRect.top+14, perfectHit?16:10,
+          factor<1 ? ['#ffb3b5','#ffd7d8','#fff'] : ['#fff','#ffe9c4','#ffc24b'], perfectHit?46:34, perfectHit?7:6);
+
+        S.totalMult=r.totalMult;
+        S.floors.push({ mult:factor, lean:r.lean, px:FLOOR_SIZES[lastSizeUsed].px,
+          roofGap: overlapPx(lastSizeUsed, FLOOR_SIZES[lastSizeUsed].px),
+          svg: floorSVG(lastSkinUsed, lastSizeUsed, Math.random()<0.25, lastCapUsed) });
+        renderTower(true); renderCurrent(true);
+        $('trCashoutAmt').textContent=fmt(S.bet*S.totalMult);
+
+        if (r.glisse){
+          pushResult(0,true);
+          setTimeout(function(){
+            Sound.crash(); flashRed(); shakeStage();
+            collapseSlide(dir);
+            toast('La tour penche trop et glisse — tour perdue.','lose');
+            setTimeout(function(){ S.animBusy=false; endRound(); }, 640);
+          }, 280);
+          return;
+        }
+
+        pushResult(factor,false);
+        var etaitGele=S.gele;
+        S.gele=!!r.gele;
+        if (perfectHit) toast('Parfait ! Étage centré.','perfect');
+        else if (factor<1) toast('Étage instable — la cote fait perdre une partie du gain (x'+factor.toFixed(2)+').','lose');
+        if (S.gele && !etaitGele) { Sound.freeze(); toast('❄ Étage Gelé — quelques étages sans risque !','bonus'); }
+
+        $('trBtnBuild').disabled=false; $('trBtnCashout').disabled=false;
+        buildLabelActive();
+        S.animBusy=false;
+        setTimeout(function(){ if (S.inRound) beginSwingFromServer(r); }, 480);
+      }, dropDur*1000+30);
+    });
+  }
+
+  /* ---------- deroule de la manche ---------- */
+  function buildLabelActive(){ $('trBuildLabel').textContent='BUILD'; $('trBuildSub').textContent = S.inRound ? 'tapez au bon moment' : ''; }
+  function setUiIdle(){
+    S.inRound=false;
+    $('trBetRow').classList.remove('hidden-row');
+    $('trBtnCashout').hidden=true;
+    $('trBuildLabel').textContent='BUILD'; $('trBuildSub').textContent='';
+    $('trBtnBuild').disabled=false;
+    $('trLandingShadow').style.opacity=0;
+    $('trFloorCount').hidden=true;
+    $('trHint').innerHTML='Misez, puis appuyez sur <b>BUILD</b> pour lancer le premier étage.';
+    renderCurrent();
+  }
+  function setUiActive(){
+    $('trBetRow').classList.add('hidden-row');
+    $('trBtnCashout').hidden=false;
+    $('trFloorCount').hidden=false;
+    buildLabelActive();
+    $('trHint').innerHTML='Tapez quand l’étage passe au-dessus de son ombre.';
+  }
+
+  function startRound(){
+    if (S.animBusy || S.inRound) return;
+    var solde=soldeActuel();
+    if (S.bet>solde || S.bet<0.10){ toast('Mise invalide.','lose'); return; }
+    $('trBtnBuild').disabled=true;
+    envoyer('tower-demarrer',{mise:S.bet}).then(function(r){
+      $('trBtnBuild').disabled=false;
+      if (!r || r.erreur){ toast(r&&r.erreur?r.erreur:'Erreur réseau.','lose'); return; }
+      if (typeof r.solde==='number'){ E.joueur.solde=r.solde; if (typeof majSolde==='function') majSolde(); renderBalance(); }
+      S.inRound=true; S.floors=[]; S.totalMult=1; S.frozenLeft=0; S.gele=false;
+      $('trResults').innerHTML='<div class="cap">Résultats</div>';
+      setUiActive(); renderTower(); renderCurrent();
+      beginSwingFromServer(r);
+    });
+  }
+  function endRound(){
+    S.inRound=false;
+    setTimeout(function(){
+      S.floors=[]; S.totalMult=1; renderTower();
+      $('trPayload').hidden=true; $('trLandingShadow').style.opacity=0;
+      setUiIdle();
+    }, 600);
+  }
+  function cashout(){
+    if (!S.inRound || S.animBusy) return;
+    stopSwing();
+    S.animBusy=true;
+    envoyer('tower-encaisser',{}).then(function(r){
+      S.animBusy=false;
+      if (!r || r.erreur){ toast(r&&r.erreur?r.erreur:'Erreur réseau.','lose'); return; }
+      if (typeof r.solde==='number'){ E.joueur.solde=r.solde; if (typeof majSolde==='function') majSolde(); renderBalance(); }
+      Sound.cashout(); confettiBurst();
+      toast('Encaissé : '+fmt(r.gain)+' ('+fmtMult(S.totalMult)+')','win');
+      endRound();
+    });
+  }
+
+  $('trBtnBuild').onclick=function(){ if (!S.inRound) startRound(); else resolveDrop(); };
+  $('trBtnCashout').onclick=cashout;
+  window.addEventListener('resize', function(){ if (TOUR.ouvert){ layoutCrane(); updateCamera(); } });
+
+  TOUR.ouvrir=function(){
+    TOUR.ouvert=true;
+    $('tourPlein').hidden=false;
+    document.body.classList.add('tour-actif');
+    renderBalance(); renderBet(); setUiIdle(); layoutHeights(); layoutCrane(); buildClouds();
+    // filet de securite : si une manche etait restee ouverte cote serveur
+    // (fermeture brutale de l'onglet la derniere fois), on repart propre
+    envoyer('tower-abandonner',{});
+  };
+  TOUR.fermer=function(){
+    if (S.inRound) envoyer('tower-abandonner',{});
+    stopSwing();
+    TOUR.ouvert=false;
+    $('tourPlein').hidden=true;
+    document.body.classList.remove('tour-actif');
+  };
+  $('trQuitter').onclick=function(){ TOUR.fermer(); };
 })();
 </script>
 </body>
