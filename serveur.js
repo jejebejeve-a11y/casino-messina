@@ -258,11 +258,44 @@ const Carnet = {
     }
   },
 
+  // Certains comptes ont ete crees avant que cet index existe (ou n'ont
+  // jamais reserve pour se reconnecter depuis) : on les retrouve tous en
+  // listant les fiches "joueur:*" directement, et on reconstruit l'index
+  // en entier a partir d'elles pour que la date "vu" reste juste (la
+  // fiche, elle, est mise a jour a chaque partie jouee).
+  async reconcilierIndex() {
+    if (!this.pret) return;
+    try {
+      const r = await this.commande(['KEYS', 'joueur:*']);
+      const cles = (r && Array.isArray(r.result)) ? r.result : [];
+      if (!cles.length) return;
+      const index = {};
+      for (const cle of cles) {
+        const pseudoBas = cle.slice('joueur:'.length);
+        if (!pseudoBas) continue;
+        try {
+          const rf = await this.commande(['GET', cle]);
+          if (!rf || !rf.result) continue;
+          const fiche = JSON.parse(rf.result);
+          index[pseudoBas] = {
+            pseudo: fiche.pseudo || pseudoBas,
+            creeLe: fiche.creeLe || null,
+            vuLe:   fiche.vuLe   || fiche.creeLe || null
+          };
+        } catch (e) { /* une fiche illisible ne doit pas bloquer les autres */ }
+      }
+      await this.commande(['SET', 'index:joueurs', JSON.stringify(index)]);
+    } catch (e) {
+      console.log('Carnet : reconciliation de l’index impossible (' + e.message + ')');
+    }
+  },
+
   async listerJoueurs() {
     if (!this.pret) {
       return Array.from(this.indexMemoire.entries()).map(([pseudoBas, v]) => Object.assign({ pseudoBas }, v));
     }
     try {
+      await this.reconcilierIndex();
       const r = await this.commande(['GET', 'index:joueurs']);
       let index = {};
       if (r && r.result) { try { index = JSON.parse(r.result); } catch (e) { index = {}; } }
