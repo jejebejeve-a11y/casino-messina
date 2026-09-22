@@ -665,6 +665,37 @@ body{
 .ligne-profil .l{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(243,232,213,.45)}
 .ligne-profil .v{font-family:'Cormorant Garamond',serif;font-size:21px;color:var(--or-clair)}
 
+/* ---------- CODE (profil) ---------- */
+.bloc-code{padding:18px 0;border-bottom:1px solid rgba(212,175,55,.14)}
+.bloc-code .l{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(243,232,213,.45);display:block;margin-bottom:9px}
+.ligne-code{display:flex;gap:8px}
+.ligne-code input{
+  flex:1;min-width:0;padding:11px 12px;background:rgba(255,253,248,.04);
+  border:1px solid rgba(212,175,55,.28);border-radius:2px;
+  color:var(--beige);font-family:'Jost',sans-serif;font-size:14px;text-transform:uppercase;
+}
+.ligne-code input::placeholder{color:rgba(243,232,213,.3);text-transform:none}
+.ligne-code input:focus{outline:none;border-color:var(--or);background:rgba(255,253,248,.07)}
+.ligne-code button{
+  padding:0 18px;cursor:pointer;white-space:nowrap;
+  background:linear-gradient(180deg,var(--or-clair),var(--or) 50%,#B8941F);
+  border:none;border-radius:2px;color:#1A1405;
+  font-family:'Jost',sans-serif;font-weight:600;font-size:11.5px;
+  letter-spacing:.16em;text-transform:uppercase;
+}
+.msg-code{font-size:12.5px;margin-top:9px;min-height:15px;color:rgba(243,232,213,.55)}
+.msg-code.ok{color:var(--vert,#6fbf73)}
+.msg-code.ko{color:#E07A7A}
+.liste-joueurs{margin-top:12px;max-height:340px;overflow-y:auto}
+.ligne-joueur{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:9px 0;border-bottom:1px solid rgba(212,175,55,.1);font-size:12.5px;
+}
+.ligne-joueur .nm{color:var(--craie,#e9e4da);font-weight:600;display:flex;align-items:center;gap:7px}
+.ligne-joueur .pt{color:rgba(243,232,213,.45);text-align:right;font-size:11px;line-height:1.4}
+.pastille-ligne{width:8px;height:8px;border-radius:50%;background:#5b5f66;flex-shrink:0}
+.pastille-ligne.en-ligne{background:#57c26a;box-shadow:0 0 6px #57c26a}
+
 /* ---------- PERSONNAGE ---------- */
 #ecranPersonnage{align-items:center;justify-content:center;padding:24px;
   background:radial-gradient(ellipse at 50% 0%, rgba(212,175,55,.14), transparent 60%),linear-gradient(160deg,#151109,#0B0906)}
@@ -1156,7 +1187,7 @@ body.periph-actif{overflow:hidden;
     <div class="entete-logo serif">&#9827; MESSINA</div>
     <div class="entete-droite">
       <div class="solde">
-        <div class="solde-lib">Solde fictif</div>
+        <div class="solde-lib">Solde</div>
         <div class="solde-val" id="affSolde">22,00 €</div>
       </div>
       <div class="avatar-mini" id="btnSon" title="Son">&#128266;</div>
@@ -1267,6 +1298,15 @@ body.periph-actif{overflow:hidden;
         <div class="ligne-profil"><span class="l">Poissons pêchés</span><span class="v" id="pfPoissons">0</span></div>
         <div class="ligne-profil"><span class="l">Penaltys tirés</span><span class="v" id="pfPenaltys">0</span></div>
         <div class="ligne-profil"><span class="l">Buts marqués</span><span class="v" id="pfButs">0</span></div>
+        <div class="bloc-code">
+          <span class="l">Code</span>
+          <div class="ligne-code">
+            <input type="text" id="pfCodeChamp" placeholder="Entrez un code" maxlength="24" autocomplete="off">
+            <button id="pfCodeValider">Valider</button>
+          </div>
+          <div class="msg-code" id="pfCodeMsg"></div>
+          <div class="liste-joueurs" id="pfListeJoueurs" hidden></div>
+        </div>
         <button class="bouton-or" id="btnDeconnexion" style="margin-top:22px">Se déconnecter</button>
       </div>
     </div>
@@ -1281,7 +1321,7 @@ body.periph-actif{overflow:hidden;
     <div class="entete-logo serif" id="titreSalle">&#9827; MESSINA</div>
     <div class="entete-droite">
       <div class="solde">
-        <div class="solde-lib">Solde fictif</div>
+        <div class="solde-lib">Solde</div>
         <div class="solde-val" id="affSolde2">22,00 €</div>
       </div>
       <div class="avatar-mini" id="btnSon2" title="Son">&#128266;</div>
@@ -1344,7 +1384,7 @@ body.periph-actif{overflow:hidden;
     <div class="entete-logo serif">&#9827; ROULETTE</div>
     <div class="entete-droite">
       <div class="solde">
-        <div class="solde-lib">Solde fictif</div>
+        <div class="solde-lib">Solde</div>
         <div class="solde-val" id="rlAffSolde">22,00 €</div>
       </div>
       <div class="avatar-mini" id="rlBtnQuitter" title="Quitter la table">&#10005;</div>
@@ -2113,6 +2153,47 @@ async function majProfil() {
   afficherProfil();
   majSolde();
 }
+
+/* ---------- le code du profil (bonus, ou liste "RS6") ---------- */
+function afficherListeJoueurs(joueurs) {
+  const bloc = $('pfListeJoueurs');
+  if (!joueurs || !joueurs.length) {
+    bloc.hidden = true; bloc.innerHTML = ''; return;
+  }
+  bloc.hidden = false;
+  bloc.innerHTML = joueurs.map(j => `
+    <div class="ligne-joueur">
+      <span class="nm"><span class="pastille-ligne ${j.enLigne ? 'en-ligne' : ''}"></span>${j.pseudo}</span>
+      <span class="pt">Créé le ${dateCourte(j.creeLe)}<br>Vu ${j.enLigne ? 'à l’instant' : (j.vuLe ? 'le ' + dateCourte(j.vuLe) : 'jamais')}</span>
+    </div>`).join('');
+}
+$('pfCodeValider').onclick = async () => {
+  const champ = $('pfCodeChamp'), msg = $('pfCodeMsg');
+  const code = champ.value.trim();
+  if (!code) return;
+  msg.className = 'msg-code'; msg.textContent = '…';
+  const rep = await envoyer('code', { code });
+  if (!rep || rep.erreur) {
+    msg.className = 'msg-code ko';
+    msg.textContent = (rep && rep.erreur) || 'Le casino ne répond pas.';
+    return;
+  }
+  if (rep.genre === 'credit') {
+    E.joueur.solde = rep.solde;
+    majSolde(); afficherProfil();
+    msg.className = 'msg-code ok';
+    msg.textContent = 'Code accepté : +50,00 € crédités.';
+    champ.value = '';
+    afficherListeJoueurs(null);
+  } else if (rep.genre === 'liste') {
+    msg.className = 'msg-code ok';
+    msg.textContent = rep.joueurs.length + ' compte(s) au total.';
+    afficherListeJoueurs(rep.joueurs);
+  }
+};
+$('pfCodeChamp').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); $('pfCodeValider').click(); }
+});
 
 /* ===================================================================
    4. SALON — LISTE DES TABLES
@@ -5050,12 +5131,15 @@ window.addEventListener('error', function (ev) {
       <span><b>E</b> encaisser</span>
     </div>
     <div class="erreur-periph" id="pxMErreur"></div>
-    <div class="pied"><button class="btn" id="pxMLancer">Prendre le départ</button></div>
+    <div class="pied" style="gap:10px">
+      <button class="btn" id="pxMLancer">Solo — Prendre le départ</button>
+      <button class="btn sobre" id="pxMLancerMulti">Multijoueur</button>
+    </div>
   </div>
 
   <div class="ecran" id="pxEcLobby" hidden>
     <h2>Salle d'attente</h2>
-    <p>Départ dans <b id="pxLSecondes">10</b> secondes. Les places libres seront prises par des conducteurs du périph.</p>
+    <p id="pxLTexte">Départ dans <b id="pxLSecondes">10</b> secondes. Les places libres seront prises par des conducteurs du périph.</p>
     <div class="lobby" id="pxLPlaces"></div>
     <div class="pied"><button class="btn sobre" id="pxLPartir">Partir tout de suite</button></div>
   </div>
@@ -6525,7 +6609,8 @@ const J={
   camera:0,temps:0,dernier:0,zoom:20,
   palier:0,enJeu:0,decisionJusqua:0,lobbyJusqua:0,departJusqua:0,
   finEcrite:false,gagnant:null,secouement:0,
-  touches:{g:false,d:false,gaz:false}
+  touches:{g:false,d:false,gaz:false},
+  modeMulti:false, reels:null, multiTimer:null
 };
 
 function nouvelleVoiture(i,estBot,nom,premium){
@@ -6539,6 +6624,14 @@ function nouvelleVoiture(i,estBot,nom,premium){
 }
 const distancePorte=k=>{let s=0;for(let i=0;i<=k;i++)s+=ZONES[i].longueur;return s;};
 const zoneDe=d=>{let s=0;for(let i=0;i<ZONES.length;i++){s+=ZONES[i].longueur;if(d<s)return i;}return ZONES.length-1;};
+/* distance (dans les unités client, identiques au serveur) d'un adversaire reel,
+   a partir du palier confirme par le serveur et de sa fraction dans le tronçon suivant */
+function distanceReelle(palier,fraction){
+  let s=0;
+  for(let i=0;i<palier&&i<ZONES.length;i++) s+=ZONES[i].longueur;
+  if(ZONES[palier]) s+=Math.max(0,Math.min(1,fraction||0))*ZONES[palier].longueur;
+  return s;
+}
 
 function genererObstacles(){
   const r=graine(555); let base=0;
@@ -6571,9 +6664,18 @@ function demarrerPartie(){
   genererDecor();
   const noms=NOMS_BOTS.slice().sort(()=>Math.random()-.5);
   J.voitures=[];
+  let ni=0;
   for(let i=0;i<4;i++){
+    if(J.modeMulti&&J.reels&&J.reels[i]){
+      // un vrai joueur : sa voiture est pilotee par ce qu'annonce le serveur, pas par une IA
+      const r=J.reels[i];
+      const v=nouvelleVoiture(i,false,r.pseudo,!!r.premium);
+      v.estReel=true; v.distCible=r.distCible||0; v.d=r.distCible||0;
+      J.voitures.push(v);
+      continue;
+    }
     const bot=i!==J.monVoiture;
-    J.voitures.push(nouvelleVoiture(i,bot,bot?noms[i%noms.length]:'Vous',
+    J.voitures.push(nouvelleVoiture(i,bot,bot?noms[ni++%noms.length]:'Vous',
       !bot&&J.voiturePremium&&J.premiumChoisie));
   }
   J.moi=J.voitures[J.monVoiture];
@@ -6582,6 +6684,7 @@ function demarrerPartie(){
   genererObstacles();
   J.phase='depart'; J.departJusqua=performance.now()+3200;
   Son.ouvrir();
+  if(J.modeMulti) demarrerBoucleMulti(); else arreterBoucleMulti();
 }
 
 /* ---------- 9. ENTRÉES ---------- */
@@ -6619,6 +6722,8 @@ function majVoiture(v,dt){
   }
   if(v.encaisse||v.arrive){v.opacite=Math.max(0,v.opacite-dt*1.2);return;}
 
+  if(v.estReel){ majVoitureReelle(v,dt); return; }
+
   let gaz,dir;
   if(v.estBot){const c=cerveauBot(v);gaz=c.gaz;dir=c.dir;}
   else{gaz=J.touches.gaz;dir=(J.touches.d?1:0)-(J.touches.g?1:0);}
@@ -6645,6 +6750,29 @@ function majVoiture(v,dt){
   if(v.vie<=0) eliminer(v,'carrosserie');
   const seuilFumee=v.vieMax*.45;
   v.fumee=v.vie<seuilFumee?1-v.vie/seuilFumee:0;
+}
+
+/* ---------- la voiture d'un vrai adversaire, en multijoueur ----------
+   On ne la pilote pas : on la fait avancer vers la derniere position
+   annoncee par le serveur (voir demarrerBoucleMulti), en douceur, pour
+   qu'elle ne saute jamais d'un point a l'autre. Le reste (x, rotation)
+   n'est que decoratif : une petite vie sur la route. */
+function majVoitureReelle(v,dt){
+  const cible=v.distCible||0;
+  const ecart=cible-v.d;
+  const rythme=Math.max(v.vmax*0.55,Math.min(v.vmax*2.2,Math.abs(ecart)*1.4+v.vmax*0.4));
+  const pas=ecart>0?Math.min(ecart,rythme/3.6*dt):0;   // on n'avance jamais a reculons
+  v.d+=pas;
+  v.v=dt>0?Math.min(v.vmax,pas/dt*3.6):0;
+
+  if(v._xCibleT===undefined||v._xCibleT<=0){
+    v._xCible=(Math.random()-.5)*(LROUTE-2.6);
+    v._xCibleT=2+Math.random()*3;
+  }
+  v._xCibleT-=dt;
+  v.x=mel(v.x,v._xCible,1-Math.pow(0.02,dt));
+  v.rot=mel(v.rot,-(v._xCible-v.x)*.05,1-Math.pow(0.01,dt));
+  v.fumee=0;
 }
 function frotterMur(v,dt){
   v.vie-=16*dt;
@@ -6693,7 +6821,7 @@ function utiliserObjet(v){
     Son.boum();
     J.effets.push({genre:'boum',d:v.d,x:v.x,t:0,duree:.75});
     J.voitures.forEach(a=>{
-      if(a===v||a.elimine||a.encaisse||a.arrive)return;
+      if(a===v||a.elimine||a.encaisse||a.arrive||a.estReel)return;
       if(Math.abs(a.d-v.d)<RAYON_BOMBE&&Math.abs(a.x-v.x)<12){
         a.vie-=DEGAT_BOMBE;a.v=0;a.vrille=.4;
         if(a===J.moi)J.secouement=18;
@@ -6716,7 +6844,9 @@ function etincelles(x,d,n){
     J.effets.push({genre:'etincelle',d,x,t:0,duree:.35,vx:(Math.random()-.5)*7,vd:-(2+Math.random()*7)});
 }
 function collisions(dt){
-  const vivants=J.voitures.filter(v=>!v.elimine&&!v.encaisse&&!v.arrive);
+  /* un vrai adversaire ne subit jamais de degats locaux : son sort ne se
+     decide que sur le serveur (encaisse, franchit, ou perd sa voiture) */
+  const vivants=J.voitures.filter(v=>!v.elimine&&!v.encaisse&&!v.arrive&&!v.estReel);
   vivants.forEach(v=>{ v.rearme=Math.max(0,(v.rearme||0)-dt); });
 
   /* une voiture du trafic : gros choc, 80 points de carrosserie, mais on repart */
@@ -7943,6 +8073,11 @@ dessinerBoutique(); majBoutique();
 $('pxBBoutique').onclick=clicBoutique;
 $('pxBAcheter').onclick=clicBoutique;
 
+function retourLobbySolo(){
+  $('pxLPartir').textContent='Partir tout de suite';
+  $('pxLTexte').innerHTML='Départ dans <b id="pxLSecondes">10</b> secondes. Les places libres seront prises par des conducteurs du périph.';
+}
+
 $('pxMLancer').onclick=async ()=>{
   Son.ouvrir();
   if(J.occupe) return;
@@ -7957,6 +8092,8 @@ $('pxMLancer').onclick=async ()=>{
     if(rep.voiture!==VOITURE_PREMIUM_INDICE) J.monVoiture=rep.voiture;
   }
   messagePeriph('');
+  J.modeMulti=false; J.reels=null;
+  retourLobbySolo();
   $('pxEcAccueil').hidden=true; $('pxEcLobby').hidden=false;
   J.phase='lobby'; J.lobbyJusqua=performance.now()+10000;
   const noms=NOMS_BOTS.slice().sort(()=>Math.random()-.5);
@@ -7964,7 +8101,103 @@ $('pxMLancer').onclick=async ()=>{
   J._arr=[0,1,2,3].map(i=>i===J.monVoiture?0:1800+Math.random()*6500);
   dessinerLobby(); boucleLobby();
 };
-$('pxLPartir').onclick=()=>{J.lobbyJusqua=performance.now();};
+
+/* ---------- multijoueur : une vraie file d'attente ---------- */
+let pollLobbyMulti=null;
+function arreterPollLobbyMulti(){ if(pollLobbyMulti){clearInterval(pollLobbyMulti); pollLobbyMulti=null;} }
+
+$('pxMLancerMulti').onclick=async ()=>{
+  Son.ouvrir();
+  if(J.occupe) return;
+  J.occupe=true;
+  const voitureChoisie=(J.voiturePremium&&J.premiumChoisie)?VOITURE_PREMIUM_INDICE:J.monVoiture;
+  const rep=await envoyer('periph-multi-rejoindre',{mise:J.mise,voiture:voitureChoisie,couleur:J.monVoiture});
+  J.occupe=false;
+  if(!rep||rep.erreur){ messagePeriph(rep&&rep.erreur?rep.erreur:'Le casino ne répond pas.'); return; }
+  messagePeriph('');
+  J.modeMulti=true; J.reels=null;
+  $('pxLPartir').textContent='Annuler';
+  $('pxLTexte').innerHTML='En attente d’un autre joueur…';
+  $('pxEcAccueil').hidden=true; $('pxEcLobby').hidden=false;
+  $('pxLPlaces').innerHTML='';
+  J.phase='lobbyMulti';
+  arreterPollLobbyMulti();
+  pollLobbyMulti=setInterval(sondageLobbyMulti,700);
+  sondageLobbyMulti();
+};
+
+async function sondageLobbyMulti(){
+  if(J.phase!=='lobbyMulti'){ arreterPollLobbyMulti(); return; }
+  const rep=await demander('periph-multi-etat');
+  if(!rep||J.phase!=='lobbyMulti') return;
+
+  if(rep.statut==='attente'){
+    $('pxLTexte').innerHTML='En attente d’un autre joueur…';
+  } else if(rep.statut==='compteADebours'){
+    $('pxLTexte').innerHTML=`Départ dans <b id="pxLSecondes">${rep.secondes}</b> secondes. Les places libres seront prises par des conducteurs du périph.`;
+  } else if(rep.statut==='parti'){
+    arreterPollLobbyMulti();
+    if(typeof rep.couleur==='number') J.monVoiture=rep.couleur;
+    J.premiumChoisie = rep.voiture===VOITURE_PREMIUM_INDICE;
+    if(typeof rep.solde==='number' && typeof E!=='undefined' && E.joueur){ E.joueur.solde=rep.solde; majSolde(); }
+    const adv=await envoyer('periph-multi-course',{});
+    J.reels={};
+    if(adv && Array.isArray(adv.membres)){
+      adv.membres.forEach(m=>{
+        if(typeof m.couleur==='number' && m.couleur!==J.monVoiture && !J.reels[m.couleur]){
+          J.reels[m.couleur]={pseudo:m.pseudo,distCible:distanceReelle(m.palier,m.fraction),premium:m.voiture===VOITURE_PREMIUM_INDICE};
+        }
+      });
+    }
+    $('pxEcLobby').hidden=true; $('pxAth').hidden=false; $('pxPupitre').hidden=false;
+    demarrerPartie();
+  } else {
+    // 'erreur' (solde insuffisant au demarrage) ou 'aucune' (file quittee ailleurs)
+    arreterPollLobbyMulti();
+    J.modeMulti=false; J.phase='accueil';
+    $('pxEcLobby').hidden=true; $('pxEcAccueil').hidden=false;
+    if(rep.statut==='erreur') messagePeriph(rep.erreur||'La course a été annulée.');
+  }
+}
+
+$('pxLPartir').onclick=()=>{
+  if(J.modeMulti&&J.phase==='lobbyMulti'){
+    arreterPollLobbyMulti();
+    envoyer('periph-multi-quitter',{});
+    J.modeMulti=false; J.phase='accueil';
+    retourLobbySolo();
+    $('pxEcLobby').hidden=true; $('pxEcAccueil').hidden=false;
+    return;
+  }
+  J.lobbyJusqua=performance.now();
+};
+
+/* ---------- multijoueur : pendant la course, on echange les positions ---------- */
+function demarrerBoucleMulti(){
+  arreterBoucleMulti();
+  J.multiTimer=setInterval(async ()=>{
+    if(!J.modeMulti||!J.moi){ arreterBoucleMulti(); return; }
+    if(!J.moi.elimine&&!J.moi.encaisse&&!J.moi.arrive){
+      const debut=J.moi.palier>0?distancePorte(J.moi.palier-1):0;
+      const long=ZONES[J.moi.palier]?ZONES[J.moi.palier].longueur:1;
+      const fraction=Math.max(0,Math.min(1,(J.moi.d-debut)/(long||1)));
+      envoyer('periph-multi-progres',{fraction});
+    }
+    const rep=await envoyer('periph-multi-course',{});
+    if(!rep||!Array.isArray(rep.membres)) return;
+    rep.membres.forEach(m=>{
+      if(typeof m.couleur!=='number') return;
+      const v=J.voitures[m.couleur];
+      if(!v||!v.estReel) return;
+      v.distCible=Math.max(v.distCible||0,distanceReelle(m.palier,m.fraction));
+      v.nom=m.pseudo;
+      if(m.statut==='crash'&&!v.elimine) eliminer(v,'reel');
+      else if(m.statut==='encaisse'&&!v.encaisse&&!v.elimine) v.encaisse=true;
+      else if(m.statut==='arrive'&&!v.arrive&&!v.elimine) finirCourse(v);
+    });
+  },700);
+}
+function arreterBoucleMulti(){ if(J.multiTimer){clearInterval(J.multiTimer); J.multiTimer=null;} }
 
 function dessinerLobby(){
   const t=10000-(J.lobbyJusqua-performance.now());
@@ -7996,6 +8229,7 @@ function boucleLobby(){
 function finirPartie(issue,cause){
   if(J.finEcrite)return;
   J.finEcrite=true; J.phase='fin';
+  arreterBoucleMulti();
   Son.silence();
   if(issue==='perdu'||issue==='double') envoyer('periph-perdu',{});
   $('pxADecision').hidden=true; $('pxPupitre').hidden=true;
@@ -8027,10 +8261,12 @@ function finirPartie(issue,cause){
   $('pxEcFin').hidden=false;
 }
 function rejouer(){
+  arreterBoucleMulti(); arreterPollLobbyMulti();
   $('pxEcFin').hidden=true; $('pxEcLobby').hidden=true;
   $('pxAth').hidden=true; $('pxPupitre').hidden=true; $('pxADecision').hidden=true;
   $('pxEcAccueil').hidden=false;
-  J.phase='accueil'; J.finEcrite=false;
+  J.phase='accueil'; J.finEcrite=false; J.modeMulti=false; J.reels=null;
+  retourLobbySolo();
   J.voitures=[];J.obstacles=[];J.bananes=[];J.effets=[];
   J.camera=0;J.palier=0;J.enJeu=0;J.secouement=0;J.zoom=zoomVise(0);
   J.moi=nouvelleVoiture(J.monVoiture,false,'Vous');
@@ -8062,7 +8298,9 @@ PERIPH.ouvrir=function(){
   if(!J.anim) J.anim=requestAnimationFrame(boucle);
 };
 PERIPH.fermer=function(){
-  if(J.phase!=='accueil'&&J.phase!=='fin') envoyer('periph-perdu',{});
+  if(J.phase==='lobbyMulti') envoyer('periph-multi-quitter',{});
+  else if(J.phase!=='accueil'&&J.phase!=='fin') envoyer('periph-perdu',{});
+  arreterBoucleMulti(); arreterPollLobbyMulti();
   PERIPH.ouvert=false;
   Son.silence();
   if(J.anim){ cancelAnimationFrame(J.anim); J.anim=null; }

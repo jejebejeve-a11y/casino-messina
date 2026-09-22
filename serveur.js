@@ -61,6 +61,19 @@ const PRIX_VOITURE_PREMIUM     = 1200;
 const VOITURE_PREMIUM_INDICE   = 4;
 const VITESSE_MAX_PERIPH_PREMIUM = 300 / 3.6;   // metres par seconde
 
+/* ---------- le periph en multijoueur ----------
+   Une file d'attente toute simple : des qu'un deuxieme joueur reel la
+   rejoint, un compte a rebours de dix secondes demarre pour tout le
+   monde. S'il redescend a moins de deux avant la fin, on annule, sans
+   frais pour personne. Au top depart, chacun est debite et sa course
+   demarre exactement comme en solo (meme fonction interne). Un petit
+   groupe de course garde ensuite, pendant la course, la progression
+   annoncee par chacun : ca ne sert qu'a dessiner la voiture des autres
+   joueurs, jamais a calculer un gain (ca, c'est toujours les routes
+   /api/periph-porte, /api/periph-encaisser, /api/periph-perdu, inchangees). */
+const DUREE_ATTENTE_PERIPH_MULTI = 10000;
+const EXPIRATION_COURSE_MULTI    = 5 * 60000;   // filet de securite
+
 function distancePeriph(palier) {
   let s = 0;
   for (let i = 0; i < palier && i < LONGUEURS_PERIPH.length; i++) s += LONGUEURS_PERIPH[i];
@@ -121,6 +134,7 @@ const Carnet = {
   token: null,
   pret: false,
   memoire: new Map(),        // repli, et copie de travail
+  indexMemoire: new Map(),   // repli pour l'index de tous les joueurs
 
   async demarrer() {
     const url   = String(process.env.UPSTASH_REDIS_REST_URL   || '').replace(/\/+$/, '');
@@ -209,6 +223,7 @@ const Carnet = {
       roulettes: compte.roulettes | 0,
       voiturePremium: !!compte.voiturePremium,
       perso:     compte.perso || ancienne.perso || null,
+      codesUtilises: Array.isArray(compte.codesUtilises) ? compte.codesUtilises : (ancienne.codesUtilises || []),
       vuLe:      new Date().toISOString()
     });
     this.memoire.set(compte.pseudoBas, fiche);
@@ -216,6 +231,46 @@ const Carnet = {
     if (!this.pret) return;
     this.commande(['SET', 'joueur:' + compte.pseudoBas, JSON.stringify(fiche)])
       .catch(e => console.log('Carnet : enregistrement impossible (' + e.message + ')'));
+  },
+
+  // Tient un seul index { pseudoBas: {pseudo, creeLe, vuLe} } pour pouvoir
+  // lister tous les joueurs deja crees (le code "RS6" s'en sert). On ne
+  // le touche qu'a la creation du compte et a la connexion, jamais a
+  // chaque appel : inutile de solliciter la base pour ca.
+  async indexerJoueur(pseudoBas, pseudo) {
+    const maintenant = new Date().toISOString();
+    if (!this.pret) {
+      const ancienne = this.indexMemoire.get(pseudoBas) || {};
+      this.indexMemoire.set(pseudoBas, { pseudo, creeLe: ancienne.creeLe || maintenant, vuLe: maintenant });
+      return;
+    }
+    try {
+      const r = await this.commande(['GET', 'index:joueurs']);
+      let index = {};
+      if (r && r.result) { try { index = JSON.parse(r.result); } catch (e) { index = {}; } }
+      const ancienne = index[pseudoBas] || {};
+      index[pseudoBas] = { pseudo, creeLe: ancienne.creeLe || maintenant, vuLe: maintenant };
+      await this.commande(['SET', 'index:joueurs', JSON.stringify(index)]);
+    } catch (e) {
+      console.log('Carnet : mise à jour de l’index impossible (' + e.message + ')');
+      const ancienne = this.indexMemoire.get(pseudoBas) || {};
+      this.indexMemoire.set(pseudoBas, { pseudo, creeLe: ancienne.creeLe || maintenant, vuLe: maintenant });
+    }
+  },
+
+  async listerJoueurs() {
+    if (!this.pret) {
+      return Array.from(this.indexMemoire.entries()).map(([pseudoBas, v]) => Object.assign({ pseudoBas }, v));
+    }
+    try {
+      const r = await this.commande(['GET', 'index:joueurs']);
+      let index = {};
+      if (r && r.result) { try { index = JSON.parse(r.result); } catch (e) { index = {}; } }
+      return Object.keys(index).map(pseudoBas => Object.assign({ pseudoBas }, index[pseudoBas]));
+    } catch (e) {
+      console.log('Carnet : lecture de l’index impossible (' + e.message + ')');
+      return Array.from(this.indexMemoire.entries()).map(([pseudoBas, v]) => Object.assign({ pseudoBas }, v));
+    }
   }
 };
 
@@ -872,6 +927,123 @@ function quitterTableRoulette(compte) {
 }
 
 /* ===================================================================
+   LE PERIPH — depart d'une course, en solo comme en multijoueur
+   -------------------------------------------------------------------
+   Factorise pour que la route /api/periph-demarrer (solo, inchangee)
+   et le demarrage d'un groupe multijoueur debitent la mise et ouvrent
+   la course exactement de la meme facon.
+   =================================================================== */
+function demarrerCourseInterne(compte, mise, voitureDemandee) {
+  const voiture = (Number(voitureDemandee) | 0) === VOITURE_PREMIUM_INDICE && compte.voiturePremium
+    ? VOITURE_PREMIUM_INDICE : bornerVoitureNormale(voitureDemandee);
+
+  compte.solde  = sous(compte.solde - mise);
+  compte.periph = { mise: mise, palier: 0, depart: Date.now(), voiture: voiture };
+  compte.periphs = (compte.periphs | 0) + 1;
+
+  const info = siegeDe(compte);
+  if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+  Carnet.enregistrer(compte);
+
+  return voiture;
+}
+
+/* ===================================================================
+   LE PERIPH EN MULTIJOUEUR — file d'attente et groupes de course
+   =================================================================== */
+const filePeriphMulti = [];             // {jeton, pseudo, mise, voiture, couleur, rejointLe}
+let   groupeEnFormationPeriph = null;   // {echeance, jetons:[...]}
+const groupesCoursePeriph = new Map();  // id -> {creeLe, membres:{jeton:{pseudo,couleur,palier,fraction,statut,maj}}}
+let   compteurGroupePeriph = 1;
+
+function retirerDeLaFilePeriph(jeton) {
+  const i = filePeriphMulti.findIndex(e => e.jeton === jeton);
+  if (i >= 0) filePeriphMulti.splice(i, 1);
+}
+
+function majGroupeCoursePeriph(compte, patch) {
+  if (!compte.periphMulti) return;
+  const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
+  if (g && g.membres[compte.jetonRef]) Object.assign(g.membres[compte.jetonRef], patch, { maj: Date.now() });
+}
+
+function formerGroupePeriph() {
+  if (groupeEnFormationPeriph) return;
+  if (filePeriphMulti.length < 2) return;
+  const membres = filePeriphMulti.slice(0, 4);
+  const prises = [];
+  membres.forEach(e => {
+    let c = bornerVoitureNormale(e.couleur);
+    if (prises.indexOf(c) >= 0) {
+      let libre = 0;
+      while (prises.indexOf(libre) >= 0 && libre < 4) libre++;
+      c = libre < 4 ? libre : 0;
+    }
+    prises.push(c);
+    e.couleurAffectee = c;
+  });
+  groupeEnFormationPeriph = {
+    echeance: Date.now() + DUREE_ATTENTE_PERIPH_MULTI,
+    jetons: membres.map(e => e.jeton)
+  };
+}
+
+function demarrerCoursePeriphMulti(jetons) {
+  const id = 'g' + (compteurGroupePeriph++);
+  const membres = {};
+  jetons.forEach(j => {
+    const entree = filePeriphMulti.find(e => e.jeton === j);
+    const compte = comptes.get(j);
+    retirerDeLaFilePeriph(j);
+    if (!entree || !compte) return;
+    if (entree.mise > compte.solde + 1e-9) {
+      compte.periphMultiErreur = 'Solde insuffisant : la course a démarré sans vous.';
+      return;
+    }
+    const voiture = demarrerCourseInterne(compte, entree.mise, entree.voiture);
+    compte.periphMulti = { groupeId: id, couleur: entree.couleurAffectee };
+    membres[j] = {
+      pseudo: compte.pseudo, couleur: entree.couleurAffectee,
+      palier: 0, fraction: 0, statut: 'course', maj: Date.now(),
+      voiture: voiture
+    };
+  });
+  if (Object.keys(membres).length) groupesCoursePeriph.set(id, { creeLe: Date.now(), membres });
+}
+
+function battementPeriphMulti() {
+  const now = Date.now();
+
+  // on retire les joueurs qui ne donnent plus de nouvelles
+  for (let i = filePeriphMulti.length - 1; i >= 0; i--) {
+    const e = filePeriphMulti[i];
+    const c = comptes.get(e.jeton);
+    if (!c || now - c.vu > ABSENCE_MAX) filePeriphMulti.splice(i, 1);
+  }
+
+  if (groupeEnFormationPeriph) {
+    const presents = groupeEnFormationPeriph.jetons.filter(j => filePeriphMulti.some(e => e.jeton === j));
+    if (presents.length < 2) {
+      groupeEnFormationPeriph = null;                 // annule : personne n'est debite
+    } else if (now >= groupeEnFormationPeriph.echeance) {
+      demarrerCoursePeriphMulti(presents);
+      groupeEnFormationPeriph = null;
+    }
+  } else {
+    formerGroupePeriph();
+  }
+
+  // les groupes de course perimes (course finie depuis un moment, ou trop vieille) sont oublies
+  groupesCoursePeriph.forEach((g, id) => {
+    const actif = Object.values(g.membres).some(m => m.statut === 'course');
+    if ((!actif && now - g.creeLe > 15000) || now - g.creeLe > EXPIRATION_COURSE_MULTI) {
+      groupesCoursePeriph.delete(id);
+    }
+  });
+}
+setInterval(battementPeriphMulti, 200);
+
+/* ===================================================================
    SERVEUR HTTP
    =================================================================== */
 function corpsJSON(req) {
@@ -929,6 +1101,27 @@ function siegeDe(compte) {
   return p ? { table, p } : { table, p: null };
 }
 
+// --- pour le code "RS6" : la liste de tous les comptes, avec leur presence
+// reelle si une session est ouverte sur ce serveur, sinon la derniere fois
+// vue selon l'index (voir Carnet.indexerJoueur). Les plus recemment vus
+// d'abord.
+function listeJoueursAvecPresence(liste) {
+  const maintenant = Date.now();
+  const joueurs = liste.map(j => {
+    let vuLe = j.vuLe || null, enLigne = false;
+    for (const c of comptes.values()) {
+      if (c.pseudoBas === j.pseudoBas) {
+        vuLe = new Date(c.vu).toISOString();
+        enLigne = (maintenant - c.vu) < ABSENCE_MAX;
+        break;
+      }
+    }
+    return { pseudo: j.pseudo, creeLe: j.creeLe || null, vuLe: vuLe, enLigne: enLigne };
+  });
+  joueurs.sort((a, b) => new Date(b.vuLe || 0) - new Date(a.vuLe || 0));
+  return joueurs;
+}
+
 const serveur = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const route = url.pathname;
@@ -963,7 +1156,7 @@ const serveur = http.createServer(async (req, res) => {
         solde: SOLDE_DEPART,
         mains: 0, gagnees: 0, perdues: 0, poissons: 0,
         penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null,
-        voiturePremium: false
+        voiturePremium: false, codesUtilises: []
       };
       if (!await Carnet.creer(fiche)) {
         return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
@@ -1318,18 +1511,8 @@ const serveur = http.createServer(async (req, res) => {
       if (mise > compte.solde) {
         return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       }
-      // la voiture premium n'est utilisable que si elle a ete achetee
-      const voiture = (Number(body.voiture) | 0) === VOITURE_PREMIUM_INDICE && compte.voiturePremium
-        ? VOITURE_PREMIUM_INDICE : bornerVoitureNormale(body.voiture);
-
       // une course abandonnee en route est simplement perdue : on repart proprement
-      compte.solde  = sous(compte.solde - mise);
-      compte.periph = { mise: mise, palier: 0, depart: Date.now(), voiture: voiture };
-      compte.periphs = (compte.periphs | 0) + 1;
-
-      const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
-      Carnet.enregistrer(compte);
+      const voiture = demarrerCourseInterne(compte, mise, body.voiture);
 
       return repondre(res, 200, {
         ok: true, mise: mise, palier: 0, solde: compte.solde, voiture: voiture,
@@ -1374,6 +1557,8 @@ const serveur = http.createServer(async (req, res) => {
       const ecoule   = (Date.now() - course.depart) / 1000;
       if (ecoule < attendu) {
         compte.periph = null;
+        majGroupeCoursePeriph(compte, { statut: 'crash' });
+        compte.periphMulti = null;
         Carnet.enregistrer(compte);
         return repondre(res, 400, { erreur: 'Course invalide.' });
       }
@@ -1383,9 +1568,13 @@ const serveur = http.createServer(async (req, res) => {
       const gain     = sous(course.mise * ECHELLE_PERIPH[suivant - 1]);
       const fini     = suivant >= ECHELLE_PERIPH.length;
 
+      // pour l'affichage de la voiture des autres joueurs reels (multijoueur uniquement)
+      majGroupeCoursePeriph(compte, { palier: suivant, fraction: 0, statut: fini ? 'arrive' : 'course' });
+
       if (fini) {                                   // Saint-Denis : on encaisse d'office
         compte.solde  = sous(compte.solde + gain);
         compte.periph = null;
+        compte.periphMulti = null;
         const info2 = siegeDe(compte);
         if (info2 && info2.p) { info2.p.solde = compte.solde; touche(info2.table); }
       }
@@ -1410,6 +1599,8 @@ const serveur = http.createServer(async (req, res) => {
       const gain = sous(course.mise * ECHELLE_PERIPH[course.palier - 1]);
       compte.solde  = sous(compte.solde + gain);
       compte.periph = null;
+      majGroupeCoursePeriph(compte, { statut: 'encaisse' });
+      compte.periphMulti = null;
 
       const info = siegeDe(compte);
       if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
@@ -1421,8 +1612,139 @@ const serveur = http.createServer(async (req, res) => {
     // --- la voiture est detruite, ou on s'est fait doubler ---
     if (route === '/api/periph-perdu' && req.method === 'POST') {
       compte.periph = null;
+      majGroupeCoursePeriph(compte, { statut: 'crash' });
+      compte.periphMulti = null;
       Carnet.enregistrer(compte);
       return repondre(res, 200, { ok: true, solde: compte.solde });
+    }
+
+    /* ===============================================================
+       LE PERIPH EN MULTIJOUEUR
+       ---------------------------------------------------------------
+       Une vraie file d'attente : le depart n'a lieu que si un deuxieme
+       joueur reel rejoint. Le gain/la perte de chacun reste toujours
+       gouverne par les routes ci-dessus, inchangees.
+       =============================================================== */
+
+    // --- on rejoint la file d'attente ---
+    if (route === '/api/periph-multi-rejoindre' && req.method === 'POST') {
+      if (compte.periph) return repondre(res, 409, { erreur: 'Terminez votre course en cours.' });
+      if (compte.periphMulti) return repondre(res, 409, { erreur: 'Vous êtes déjà en course.' });
+      if (filePeriphMulti.some(e => e.jeton === compte.jetonRef)) {
+        return repondre(res, 200, { ok: true });
+      }
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= MISE_MINI_PERIPH)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > MISE_MAXI_PERIPH) return repondre(res, 400, { erreur: 'Mise maximum : 100,00 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+
+      const voitureDemandee = (Number(body.voiture) | 0) === VOITURE_PREMIUM_INDICE && compte.voiturePremium
+        ? VOITURE_PREMIUM_INDICE : bornerVoitureNormale(body.voiture);
+      const couleur = bornerVoitureNormale(body.couleur);
+
+      compte.periphMultiErreur = null;
+      filePeriphMulti.push({
+        jeton: compte.jetonRef, pseudo: compte.pseudo, mise: mise,
+        voiture: voitureDemandee, couleur: couleur, rejointLe: Date.now()
+      });
+      return repondre(res, 200, { ok: true });
+    }
+
+    // --- on quitte la file d'attente (bouton ou changement d'avis) ---
+    if (route === '/api/periph-multi-quitter' && req.method === 'POST') {
+      retirerDeLaFilePeriph(compte.jetonRef);
+      return repondre(res, 200, { ok: true });
+    }
+
+    // --- etat de la file / du compte a rebours (appele en boucle) ---
+    if (route === '/api/periph-multi-etat') {
+      if (compte.periphMulti && groupesCoursePeriph.has(compte.periphMulti.groupeId)) {
+        return repondre(res, 200, {
+          statut: 'parti',
+          groupeId: compte.periphMulti.groupeId,
+          couleur: compte.periphMulti.couleur,
+          voiture: compte.periph ? compte.periph.voiture : compte.periphMulti.couleur,
+          solde: compte.solde
+        });
+      }
+      const enFile = filePeriphMulti.find(e => e.jeton === compte.jetonRef);
+      if (enFile) {
+        const dansGroupe = groupeEnFormationPeriph && groupeEnFormationPeriph.jetons.indexOf(compte.jetonRef) >= 0;
+        if (dansGroupe) {
+          const secondes = Math.max(0, Math.ceil((groupeEnFormationPeriph.echeance - Date.now()) / 1000));
+          return repondre(res, 200, {
+            statut: 'compteADebours', secondes: secondes,
+            effectif: groupeEnFormationPeriph.jetons.length
+          });
+        }
+        return repondre(res, 200, { statut: 'attente' });
+      }
+      if (compte.periphMultiErreur) {
+        const erreur = compte.periphMultiErreur;
+        compte.periphMultiErreur = null;
+        return repondre(res, 200, { statut: 'erreur', erreur: erreur });
+      }
+      return repondre(res, 200, { statut: 'aucune' });
+    }
+
+    // --- on annonce sa progression approximative, pour dessiner sa voiture chez les autres ---
+    if (route === '/api/periph-multi-progres' && req.method === 'POST') {
+      if (!compte.periphMulti) return repondre(res, 409, { erreur: 'pas en course' });
+      const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
+      if (g && g.membres[compte.jetonRef] && g.membres[compte.jetonRef].statut === 'course') {
+        g.membres[compte.jetonRef].fraction = Math.max(0, Math.min(1, Number(body.fraction) || 0));
+        g.membres[compte.jetonRef].maj = Date.now();
+      }
+      return repondre(res, 200, { ok: true });
+    }
+
+    // --- on recupere la progression des autres joueurs reels de la course ---
+    if (route === '/api/periph-multi-course') {
+      if (!compte.periphMulti) return repondre(res, 200, { membres: [] });
+      const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
+      if (!g) return repondre(res, 200, { membres: [] });
+      const membres = Object.keys(g.membres)
+        .filter(j => j !== compte.jetonRef)
+        .map(j => {
+          const m = g.membres[j];
+          return { pseudo: m.pseudo, couleur: m.couleur, voiture: m.voiture, palier: m.palier, fraction: m.fraction, statut: m.statut };
+        });
+      return repondre(res, 200, { membres: membres });
+    }
+
+    /* ===============================================================
+       CODES DU PROFIL
+       ---------------------------------------------------------------
+       "50€" credite 50,00 € une seule fois par compte. "RS6" ne touche
+       pas au solde : il revele la liste de tous les comptes deja crees
+       (pseudo, creation, derniere fois vu), pour le proprietaire du
+       site. On accepte l'espace, le signe € et "eur"/"euros" en trop,
+       parce que c'est malcommode a taper sur un telephone.
+       =============================================================== */
+    if (route === '/api/code' && req.method === 'POST') {
+      let normalise = String(body.code || '').trim().toLowerCase()
+        .replace(/\s+/g, '').replace(/€/g, '')
+        .replace(/(euros|euro|eur)$/, '');
+
+      if (normalise === '50') {
+        if (!Array.isArray(compte.codesUtilises)) compte.codesUtilises = [];
+        if (compte.codesUtilises.indexOf('50EUROS') >= 0) {
+          return repondre(res, 409, { erreur: 'Ce code a déjà été utilisé.' });
+        }
+        compte.codesUtilises.push('50EUROS');
+        compte.solde = sous(compte.solde + 50);
+        const info = siegeDe(compte);
+        if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, genre: 'credit', solde: compte.solde });
+      }
+
+      if (normalise === 'rs6') {
+        const liste = await Carnet.listerJoueurs();
+        return repondre(res, 200, { ok: true, genre: 'liste', joueurs: listeJoueursAvecPresence(liste) });
+      }
+
+      return repondre(res, 400, { erreur: 'Code invalide.' });
     }
 
     // --- ma fiche (écran profil) ---
@@ -1474,7 +1796,10 @@ const serveur = http.createServer(async (req, res) => {
    deux appareils feraient diverger le même solde. */
 function ouvrirSession(fiche) {
   for (const [j, c] of comptes) {
-    if (c.pseudoBas === fiche.pseudoBas) { quitterTable(c); quitterTableRoulette(c); comptes.delete(j); }
+    if (c.pseudoBas === fiche.pseudoBas) {
+      quitterTable(c); quitterTableRoulette(c); retirerDeLaFilePeriph(c.jetonRef);
+      comptes.delete(j);
+    }
   }
 
   const jeton = nouveauJeton();
@@ -1495,11 +1820,14 @@ function ouvrirSession(fiche) {
     defaitesPenalty: fiche.defaitesPenalty | 0,
     perso:     fiche.perso || null,
     voiturePremium: !!fiche.voiturePremium,
+    codesUtilises: Array.isArray(fiche.codesUtilises) ? fiche.codesUtilises.slice() : [],
     penalty: null,                       // aucune serie de penaltys en cours
     periph:  null,                       // aucune course de periph en cours
+    periphMulti: null,                   // pas dans un groupe de course multijoueur
     table: null, siege: -1, tableRoulette: false, vu: Date.now()
   };
   comptes.set(jeton, compte);
+  Carnet.indexerJoueur(fiche.pseudoBas, fiche.pseudo);
 
   return {
     jeton,
