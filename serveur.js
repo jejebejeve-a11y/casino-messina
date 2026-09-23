@@ -1080,7 +1080,7 @@ function etatPoker(table, jeton) {
 const tables = [
   neuveTable('majorelle', 'Jardin Majorelle', 0.01, 'vert'),
   neuveTable('palmeraie', 'Palmeraie Royale', 0.01, 'or'),
-  neuveTablePoker('poker', 'Médina d’Or')
+  neuveTablePoker('poker', 'Martin’s Poker')
 ];
 function trouverTable(id) { return tables.find(t => t.id === id) || null; }
 
