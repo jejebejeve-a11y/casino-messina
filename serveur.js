@@ -1905,6 +1905,163 @@ function battementPeriphMulti() {
 setInterval(battementPeriphMulti, 200);
 
 /* ===================================================================
+   LE PONT DE CRISTAL — solo et multijoueur
+   -------------------------------------------------------------------
+   Le serveur tire seul, au depart, quelle(s) vitre(s) tient/tiennent
+   a chaque rangee. La page ne fait que choisir une vitre et animer la
+   reponse. Les cotes (tables solo et duo) sont celles du prototype
+   valide : retour moyen toujours sous 1 euro par euro mise.
+   =================================================================== */
+const MODES_PONT = {
+  prudent:   { largeur: 3, solides: 2, rangees: 9,
+               solo: [1.44, 2.12, 3.08, 4.40, 6.30, 8.90, 12.60, 17.80, 25.00],
+               duo:  [1.20, 1.44, 1.72, 2.05, 2.45, 2.90, 3.45, 4.10, 4.90] },
+  classique: { largeur: 2, solides: 1, rangees: 7,
+               solo: [1.92, 3.72, 7.10, 13.40, 24.80, 45.00, 80.00],
+               duo:  [1.38, 1.90, 2.60, 3.60, 4.90, 6.60, 9.00] },
+  audacieux: { largeur: 3, solides: 1, rangees: 5,
+               solo: [2.85, 8.20, 22.50, 55.00, 100.00],
+               duo:  [1.70, 2.85, 4.80, 8.00, 13.50] }
+};
+const MISE_MINI_PONT = 0.10, MISE_MAXI_PONT = 200;
+const DUREE_ATTENTE_PONT_MULTI = 10000;
+const PONT_MULTI_MAX = 3;
+const EXPIRATION_PONT_MULTI = 10 * 60000;   // filet de securite
+
+/* un pont : pour chaque rangee, un tableau de booleens (vitre solide ?) */
+function tirerPont(m) {
+  const rangs = [];
+  for (let k = 0; k < m.rangees; k++) {
+    const ordre = [...Array(m.largeur).keys()];
+    for (let i = ordre.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); const t = ordre[i]; ordre[i] = ordre[j]; ordre[j] = t; }
+    const solide = new Array(m.largeur).fill(false);
+    ordre.slice(0, m.solides).forEach(j => { solide[j] = true; });
+    rangs.push(solide);
+  }
+  return rangs;
+}
+
+function soldeAuSiege(compte) {
+  const info = siegeDe(compte);
+  if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+}
+
+/* ---------- multijoueur : file d'attente, puis salons ---------- */
+const filePontMulti = [];              // {jeton, pseudo, mise, rejointLe}
+let   groupeEnFormationPont = null;    // {echeance, jetons:[...]}
+const salonsPont = new Map();          // id -> {creeLe, finiLe, rangs, revele, casses, membres:{jeton:{...}}}
+let   compteurSalonPont = 1;
+
+function retirerDeLaFilePont(jeton) {
+  const i = filePontMulti.findIndex(e => e.jeton === jeton);
+  if (i >= 0) filePontMulti.splice(i, 1);
+}
+
+function salonPontDe(compte) {
+  if (!compte.pontMulti) return null;
+  return salonsPont.get(compte.pontMulti.salonId) || null;
+}
+
+/* ce que chaque membre voit du salon : le pont connu de tous, et ou en est chacun */
+function vuePontMulti(compte, g) {
+  const m = MODES_PONT.classique;
+  return {
+    statut: 'parti', salonId: compte.pontMulti.salonId, ecoule: Date.now() - g.creeLe,
+    rangees: m.rangees, largeur: m.largeur, cotes: m.duo,
+    revele: g.revele, casses: g.casses,
+    membres: Object.keys(g.membres).map(j => {
+      const x = g.membres[j];
+      return { pseudo: x.pseudo, couleur: x.couleur, pos: x.pos, vitre: x.vitre, statut: x.statut,
+               gain: x.gain, moi: j === compte.jetonRef };
+    }),
+    solde: compte.solde
+  };
+}
+
+/* un joueur quitte un salon en pleine traversee : sa mise reste perdue */
+function abandonnerPontMulti(compte) {
+  const g = salonPontDe(compte);
+  if (g && g.membres[compte.jetonRef] && g.membres[compte.jetonRef].statut === 'jeu') {
+    g.membres[compte.jetonRef].statut = 'abandon';
+  }
+  compte.pontMulti = null;
+}
+
+function demarrerSalonPont(jetons) {
+  const id = 'p' + (compteurSalonPont++);
+  const m = MODES_PONT.classique;
+  const rangs = tirerPont(m);
+  const membres = {};
+  let couleur = 0;
+  jetons.forEach(j => {
+    const entree = filePontMulti.find(e => e.jeton === j);
+    const compte = comptes.get(j);
+    retirerDeLaFilePont(j);
+    if (!entree || !compte) return;
+    if (entree.mise > compte.solde + 1e-9) {
+      compte.pontMultiErreur = 'Solde insuffisant : la traversée a démarré sans vous.';
+      return;
+    }
+    // la mise est prise au depart, comme au periph multijoueur
+    compte.solde = sous(compte.solde - entree.mise);
+    compte.pont = null;
+    soldeAuSiege(compte);
+    Carnet.enregistrer(compte);
+    compte.pontMulti = { salonId: id };
+    membres[j] = { pseudo: compte.pseudo, couleur: couleur++, mise: entree.mise,
+                   pos: 0, vitre: -1, statut: 'jeu', gain: 0, maj: Date.now() };
+  });
+  if (Object.keys(membres).length) {
+    salonsPont.set(id, {
+      creeLe: Date.now(), finiLe: 0, rangs: rangs,
+      revele: new Array(m.rangees).fill(null),          // vitre solide, une fois la rangee foulee par quelqu'un
+      casses: Array.from({ length: m.rangees }, () => []), // vitres brisees sous quelqu'un
+      membres: membres
+    });
+  }
+}
+
+function battementPontMulti() {
+  const now = Date.now();
+  for (let i = filePontMulti.length - 1; i >= 0; i--) {
+    const c = comptes.get(filePontMulti[i].jeton);
+    if (!c || now - c.vu > ABSENCE_MAX) filePontMulti.splice(i, 1);
+  }
+
+  if (groupeEnFormationPont) {
+    const g = groupeEnFormationPont;
+    g.jetons = g.jetons.filter(j => filePontMulti.some(e => e.jeton === j));
+    // un troisieme joueur peut encore monter pendant le compte a rebours
+    for (const e of filePontMulti) {
+      if (g.jetons.length >= PONT_MULTI_MAX) break;
+      if (g.jetons.indexOf(e.jeton) < 0) g.jetons.push(e.jeton);
+    }
+    if (g.jetons.length < 2) {
+      groupeEnFormationPont = null;                  // annule : personne n'est debite
+    } else if (now >= g.echeance) {
+      demarrerSalonPont(g.jetons);
+      groupeEnFormationPont = null;
+    }
+  } else if (filePontMulti.length >= 2) {
+    groupeEnFormationPont = {
+      echeance: now + DUREE_ATTENTE_PONT_MULTI,
+      jetons: filePontMulti.slice(0, PONT_MULTI_MAX).map(e => e.jeton)
+    };
+  }
+
+  salonsPont.forEach((g, id) => {
+    Object.keys(g.membres).forEach(j => {
+      const x = g.membres[j], c = comptes.get(j);
+      if (x.statut === 'jeu' && (!c || now - c.vu > ABSENCE_MAX)) x.statut = 'abandon';
+    });
+    const actif = Object.values(g.membres).some(x => x.statut === 'jeu');
+    if (!actif && !g.finiLe) g.finiLe = now;
+    if ((!actif && now - g.finiLe > 15000) || now - g.creeLe > EXPIRATION_PONT_MULTI) salonsPont.delete(id);
+  });
+}
+setInterval(battementPontMulti, 200);
+
+/* ===================================================================
    SERVEUR HTTP
    =================================================================== */
 function corpsJSON(req) {
@@ -2707,6 +2864,168 @@ const serveur = http.createServer(async (req, res) => {
     // --- on recupere la progression des autres joueurs reels de la course ---
     if (route === '/api/periph-multi-course') {
       return repondre(res, 200, { membres: autresMembresPeriph(compte), t: Date.now() });
+    }
+
+    /* ===============================================================
+       LE PONT DE CRISTAL — SOLO
+       ---------------------------------------------------------------
+       Le pont est tire ici au depart et ne quitte jamais le serveur :
+       la page apprend seulement, rangee par rangee, si la vitre choisie
+       a tenu (et, une fois la rangee jouee, ou etait la bonne).
+       =============================================================== */
+    if (route === '/api/pont-demarrer' && req.method === 'POST') {
+      if (compte.pont) return repondre(res, 409, { erreur: 'Une traversée est déjà en cours.' });
+      const g = salonPontDe(compte);
+      if (g && g.membres[compte.jetonRef] && g.membres[compte.jetonRef].statut === 'jeu') {
+        return repondre(res, 409, { erreur: 'Une traversée multijoueur est en cours.' });
+      }
+      const nomMode = MODES_PONT[body.mode] ? body.mode : 'classique';
+      const m = MODES_PONT[nomMode];
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= MISE_MINI_PONT)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > MISE_MAXI_PONT)     return repondre(res, 400, { erreur: 'Mise maximum : 200 €.' });
+      if (mise > compte.solde)       return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+
+      compte.solde = sous(compte.solde - mise);
+      compte.pont = { mode: nomMode, mise: mise, rangs: tirerPont(m), pos: 0 };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise: mise, mode: nomMode, rangees: m.rangees, largeur: m.largeur, solde: compte.solde });
+    }
+
+    if (route === '/api/pont-avancer' && req.method === 'POST') {
+      const p = compte.pont;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
+      const m = MODES_PONT[p.mode];
+      const j = Number(body.vitre) | 0;
+      if (j < 0 || j >= m.largeur) return repondre(res, 400, { erreur: 'Vitre inconnue.' });
+      const k = p.pos + 1, rang = p.rangs[k - 1];
+      if (!rang[j]) {
+        compte.pont = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, tient: false, rangee: k, solides: rang, perdu: p.mise, solde: compte.solde });
+      }
+      p.pos = k;
+      const mult = m.solo[k - 1];
+      if (k >= m.rangees) {                       // la rive d'or : on encaisse d'office
+        const gain = sous(p.mise * mult);
+        compte.solde = sous(compte.solde + gain);
+        compte.pont = null;
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, tient: true, rangee: k, solides: rang, complete: true, mult: mult, gain: gain, solde: compte.solde });
+      }
+      return repondre(res, 200, { ok: true, tient: true, rangee: k, solides: rang, mult: mult, solde: compte.solde });
+    }
+
+    if (route === '/api/pont-encaisser' && req.method === 'POST') {
+      const p = compte.pont;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
+      if (p.pos < 1) return repondre(res, 400, { erreur: 'Franchissez au moins une rangée avant d’encaisser.' });
+      const mult = MODES_PONT[p.mode].solo[p.pos - 1];
+      const gain = sous(p.mise * mult);
+      compte.solde = sous(compte.solde + gain);
+      compte.pont = null;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gain: gain, mult: mult, rangee: p.pos, solde: compte.solde });
+    }
+
+    // on quitte en pleine traversee : la mise reste perdue, comme a Tower Rush
+    if (route === '/api/pont-abandonner' && req.method === 'POST') {
+      compte.pont = null;
+      return repondre(res, 200, { ok: true });
+    }
+
+    /* ===============================================================
+       LE PONT DE CRISTAL — MULTIJOUEUR
+       ---------------------------------------------------------------
+       Meme file d'attente que le periph (2e joueur -> 10 s -> depart,
+       3 joueurs au plus). Pas de tour de role : chacun avance quand il
+       veut sur le MEME pont. Toute rangee foulee par l'un (vitre qui
+       tient ou qui casse) devient connue de tout le salon.
+       =============================================================== */
+    if (route === '/api/pont-multi-rejoindre' && req.method === 'POST') {
+      if (compte.pontMulti) abandonnerPontMulti(compte);
+      if (compte.pont) compte.pont = null;
+      if (filePontMulti.some(e => e.jeton === compte.jetonRef)) return repondre(res, 200, { ok: true });
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= MISE_MINI_PONT)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > MISE_MAXI_PONT)     return repondre(res, 400, { erreur: 'Mise maximum : 200 €.' });
+      if (mise > compte.solde)       return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.pontMultiErreur = null;
+      filePontMulti.push({ jeton: compte.jetonRef, pseudo: compte.pseudo, mise: mise, rejointLe: Date.now() });
+      return repondre(res, 200, { ok: true });
+    }
+
+    if (route === '/api/pont-multi-quitter' && req.method === 'POST') {
+      retirerDeLaFilePont(compte.jetonRef);
+      if (compte.pontMulti) abandonnerPontMulti(compte);
+      return repondre(res, 200, { ok: true });
+    }
+
+    if (route === '/api/pont-multi-etat') {
+      const g = salonPontDe(compte);
+      if (g) return repondre(res, 200, vuePontMulti(compte, g));
+      if (compte.pontMulti) compte.pontMulti = null;      // salon expire
+      if (filePontMulti.some(e => e.jeton === compte.jetonRef)) {
+        const f = groupeEnFormationPont;
+        if (f && f.jetons.indexOf(compte.jetonRef) >= 0) {
+          return repondre(res, 200, { statut: 'compteADebours',
+            secondes: Math.max(0, Math.ceil((f.echeance - Date.now()) / 1000)), effectif: f.jetons.length });
+        }
+        return repondre(res, 200, { statut: 'attente' });
+      }
+      if (compte.pontMultiErreur) {
+        const erreur = compte.pontMultiErreur;
+        compte.pontMultiErreur = null;
+        return repondre(res, 200, { statut: 'erreur', erreur: erreur });
+      }
+      return repondre(res, 200, { statut: 'aucune' });
+    }
+
+    if (route === '/api/pont-multi-avancer' && req.method === 'POST') {
+      const g = salonPontDe(compte);
+      const moi = g && g.membres[compte.jetonRef];
+      if (!moi || moi.statut !== 'jeu') return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
+      const m = MODES_PONT.classique;
+      const j = Number(body.vitre) | 0;
+      if (j < 0 || j >= m.largeur) return repondre(res, 400, { erreur: 'Vitre inconnue.' });
+      const k = moi.pos + 1, rang = g.rangs[k - 1];
+      g.revele[k - 1] = rang.indexOf(true);           // desormais connue de tout le salon
+      moi.pos = k; moi.vitre = j; moi.maj = Date.now();
+      if (!rang[j]) {
+        moi.statut = 'tombe';
+        if (g.casses[k - 1].indexOf(j) < 0) g.casses[k - 1].push(j);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, Object.assign(vuePontMulti(compte, g),
+          { ok: true, tient: false, rangee: k, perdu: moi.mise }));
+      }
+      const mult = m.duo[k - 1];
+      if (k >= m.rangees) {
+        moi.gain = sous(moi.mise * mult);
+        moi.statut = 'arrive';
+        compte.solde = sous(compte.solde + moi.gain);
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, Object.assign(vuePontMulti(compte, g),
+          { ok: true, tient: true, rangee: k, complete: true, mult: mult, gain: moi.gain }));
+      }
+      return repondre(res, 200, Object.assign(vuePontMulti(compte, g), { ok: true, tient: true, rangee: k, mult: mult }));
+    }
+
+    if (route === '/api/pont-multi-encaisser' && req.method === 'POST') {
+      const g = salonPontDe(compte);
+      const moi = g && g.membres[compte.jetonRef];
+      if (!moi || moi.statut !== 'jeu') return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
+      if (moi.pos < 1) return repondre(res, 400, { erreur: 'Franchissez au moins une rangée avant d’encaisser.' });
+      const mult = MODES_PONT.classique.duo[moi.pos - 1];
+      moi.gain = sous(moi.mise * mult);
+      moi.statut = 'encaisse'; moi.maj = Date.now();
+      compte.solde = sous(compte.solde + moi.gain);
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, Object.assign(vuePontMulti(compte, g), { ok: true, gain: moi.gain, mult: mult, rangee: moi.pos }));
     }
 
     /* ===============================================================

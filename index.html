@@ -2098,6 +2098,204 @@ body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webki
 .visuel-poker .vp-c:nth-child(1){transform:rotate(-8deg) translateY(3px)} .visuel-poker .vp-c:nth-child(5){transform:rotate(8deg) translateY(3px)}
 .visuel-poker .vp-c:nth-child(2){transform:rotate(-3deg)} .visuel-poker .vp-c:nth-child(4){transform:rotate(3deg)}
 .sieges.six{display:grid;grid-template-columns:repeat(3,1fr)}
+/* ===== le calque plein ecran du Pont de Cristal (tout est limite a #pontPlein) ===== */
+.pont-plein{position:fixed;inset:0;height:100vh;height:100dvh;height:var(--vh-jeu,100dvh);z-index:900;overflow-y:auto;overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+#pontPlein[hidden]{display:none!important}
+#pontPlein [hidden]{display:none!important}
+body.pont-actif{overflow:hidden}
+#pontPlein{background:var(--fond)}
+#pontPlein .btn-fermer{font-size:16px;line-height:1}
+#pontPlein .duo-bandeau.trois{grid-template-columns:repeat(3,1fr)}
+#pontPlein .duo-joueur.moi{border-color:var(--ligne-forte)}
+#pontPlein .duo-joueur.encaisse{border-color:var(--or);box-shadow:0 0 12px rgba(230,192,101,.22)}
+#pontPlein .duo-joueur b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pontPlein .pion.encaisse{opacity:.45}
+#pontPlein .pion.moi .pion-nom{color:var(--or-clair)}
+#pontPlein .attente-bloc{text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+#pontPlein .attente-chrono{font-family:var(--num);font-size:56px;line-height:1;color:var(--or-clair);text-shadow:0 0 22px rgba(230,192,101,.45);min-height:56px}
+#pontPlein .attente-koalas{display:flex;gap:8px;justify-content:center}
+#pontPlein .attente-koalas svg{width:34px;height:34px}
+#pontPlein .attente-koalas svg.vide{opacity:.18}
+
+#pontPlein{
+  color-scheme:dark;
+  --fond:#0a0806; --fond2:#120e09; --carte:#16110b; --carte2:#1d170e;
+  --ligne:rgba(230,192,101,.22); --ligne-forte:rgba(230,192,101,.5);
+  --or:#e6c065; --or-clair:#fbe6a4; --or-fonce:#8a6a24; --or-nuit:#3a2c10;
+  --texte:#efe6d2; --texte-doux:#b3a585; --texte-pale:#7a6f58;
+  --danger:#c9604f; --glace:#d6e6ea;
+  --display:'Cinzel',Georgia,'Times New Roman',serif;
+  --num:'Bebas Neue','Arial Narrow',Impact,sans-serif;
+  --corps:'Jost','Avenir Next','Segoe UI',system-ui,sans-serif;
+  --incl:56deg;
+}
+#pontPlein{margin:0;color:var(--texte);font-family:var(--corps);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+#pontPlein button{font:inherit;color:inherit}
+#pontPlein button:focus-visible,#pontPlein summary:focus-visible{outline:2px solid var(--or-clair);outline-offset:2px}
+#pontPlein .app{max-width:540px;margin:0 auto;width:100%;padding-inline:16px;padding-block:14px 28px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}
+#pontPlein .entete{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#pontPlein .marque{display:flex;align-items:center;gap:10px;min-width:0}
+#pontPlein .marque svg{width:38px;height:38px;flex:none}
+#pontPlein .marque-txt{min-width:0}
+#pontPlein .sur-titre{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--texte-pale);font-weight:500}
+#pontPlein h1{margin:0;font-family:var(--display);font-weight:700;font-size:clamp(19px,5.4vw,24px);letter-spacing:.05em;color:var(--or-clair);line-height:1.1;text-wrap:balance}
+#pontPlein .solde{display:flex;align-items:center;gap:8px;flex:none}
+#pontPlein .solde-bloc{text-align:right}
+#pontPlein .solde-bloc span{display:block;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--texte-pale)}
+#pontPlein .solde-bloc b{font-family:var(--num);font-weight:400;font-size:24px;letter-spacing:.03em;color:var(--or);font-variant-numeric:tabular-nums;line-height:1}
+#pontPlein .btn-son{width:34px;height:34px;border-radius:50%;border:1px solid var(--ligne);background:var(--carte);display:grid;place-items:center;cursor:pointer;color:var(--or)}
+#pontPlein .btn-son svg{width:16px;height:16px}
+#pontPlein .btn-son[aria-pressed="true"] .onde{display:none}
+#pontPlein .scene-cadre{position:relative;height:clamp(360px,54vh,500px);border-radius:14px;overflow:hidden;
+  border:1px solid var(--ligne-forte);
+  box-shadow:0 0 0 4px var(--fond),0 0 0 5px rgba(230,192,101,.18),0 24px 60px -20px rgba(0,0,0,.9);
+  background:
+    radial-gradient(120% 60% at 50% 0%,rgba(230,192,101,.20),transparent 60%),
+    radial-gradient(90% 70% at 50% 110%,rgba(120,90,40,.25),transparent 70%),
+    linear-gradient(180deg,#17120a 0%,#0b0906 45%,#050403 100%)}
+#pontPlein .scene-cadre::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-image:radial-gradient(1px 1px at 12% 30%,rgba(251,230,164,.5),transparent 60%),radial-gradient(1px 1px at 82% 22%,rgba(251,230,164,.4),transparent 60%),radial-gradient(1.5px 1.5px at 70% 64%,rgba(251,230,164,.25),transparent 60%),radial-gradient(1px 1px at 22% 78%,rgba(251,230,164,.3),transparent 60%),radial-gradient(1px 1px at 91% 84%,rgba(251,230,164,.3),transparent 60%),radial-gradient(1px 1px at 6% 58%,rgba(251,230,164,.3),transparent 60%)}
+#pontPlein .scene{position:absolute;inset:0;perspective:720px;perspective-origin:50% -10%}
+#pontPlein .brume{position:absolute;left:0;right:0;top:0;height:32%;pointer-events:none;z-index:3;
+  background:linear-gradient(180deg,rgba(10,8,6,.92) 0%,rgba(10,8,6,.55) 45%,transparent 100%)}
+#pontPlein .plan{position:absolute;left:50%;bottom:-6px;width:var(--pw,300px);height:var(--ph,800px);margin-left:calc(var(--pw,300px) / -2);
+  transform-origin:50% 100%;transform:rotateX(var(--incl)) translateY(var(--cam,0px));transform-style:preserve-3d;
+  transition:transform .8s cubic-bezier(.22,.8,.25,1)}
+#pontPlein .poutre{position:absolute;top:0;bottom:0;width:12px;border-radius:2px;
+  background:linear-gradient(90deg,#5b4516,#e6c065 40%,#fbe6a4 55%,#b08a34 75%,#4a3712);box-shadow:0 0 12px rgba(230,192,101,.25)}
+#pontPlein .poutre.g{left:8px}
+#pontPlein .poutre.d{right:8px}
+#pontPlein .quai{position:absolute;left:0;right:0;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(180deg,#2a2112,#16110a);border:1px solid rgba(230,192,101,.45);
+  background-image:repeating-linear-gradient(90deg,rgba(230,192,101,.07) 0 1px,transparent 1px 22px),linear-gradient(180deg,#2a2112,#130f09)}
+#pontPlein .quai.depart{bottom:0}
+#pontPlein .quai.arrivee{top:0;background-image:radial-gradient(80% 90% at 50% 40%,rgba(230,192,101,.35),transparent 70%),repeating-linear-gradient(90deg,rgba(230,192,101,.1) 0 1px,transparent 1px 22px),linear-gradient(180deg,#3a2c12,#1a130a)}
+#pontPlein .quai-label{font-family:var(--display);font-weight:700;letter-spacing:.3em;font-size:12px;color:rgba(251,230,164,.8);text-transform:uppercase}
+#pontPlein .rangee{position:absolute;left:0;right:0;display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:10px;padding:9px 30px;box-sizing:border-box;
+  border-top:2px solid rgba(138,106,36,.7)}
+#pontPlein .rangee .num,#pontPlein .rangee .cote{position:absolute;top:50%;font-family:var(--num);font-size:15px;letter-spacing:.04em;line-height:1;transform:translateY(-50%);pointer-events:none}
+#pontPlein .rangee .num{left:-26px;color:var(--texte-pale)}
+#pontPlein .rangee .cote{right:-44px;color:rgba(230,192,101,.55);font-variant-numeric:tabular-nums}
+#pontPlein .rangee.atteinte .cote{color:var(--or-clair)}
+#pontPlein .rangee.active .cote{color:var(--or);text-shadow:0 0 10px rgba(230,192,101,.6)}
+#pontPlein .vitre{position:relative;border:1px solid rgba(225,238,242,.5);border-radius:4px;padding:0;cursor:default;overflow:hidden;
+  background:linear-gradient(135deg,rgba(220,236,240,.34),rgba(190,215,222,.12) 38%,rgba(255,255,255,.26) 50%,rgba(190,215,222,.1) 66%,rgba(220,236,240,.22));
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),inset 0 8px 18px rgba(255,255,255,.06);
+  transition:opacity .4s,filter .4s,border-color .3s,box-shadow .3s,background .3s}
+#pontPlein .vitre::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.18) 45%,transparent 55%);opacity:.6;pointer-events:none}
+#pontPlein .rangee.devant .vitre{opacity:.5;filter:blur(.4px) saturate(.6)}
+#pontPlein .rangee.active .vitre{cursor:pointer;border-color:rgba(230,192,101,.85);animation:pc-pulsation 1.8s ease-in-out infinite}
+#pontPlein .rangee.active .vitre:hover,#pontPlein .rangee.active .vitre:focus-visible{background:linear-gradient(135deg,rgba(251,230,164,.35),rgba(214,230,234,.1) 45%,rgba(251,230,164,.25));border-color:var(--or-clair)}
+@keyframes pc-pulsation{0%,100%{box-shadow:0 0 0 1px rgba(230,192,101,.25),0 0 14px rgba(230,192,101,.18)}50%{box-shadow:0 0 0 1px rgba(230,192,101,.6),0 0 24px rgba(230,192,101,.42)}}
+#pontPlein .vitre.solide{border-color:var(--or);background:linear-gradient(135deg,rgba(230,192,101,.38),rgba(230,192,101,.1) 45%,rgba(251,230,164,.3));box-shadow:0 0 18px rgba(230,192,101,.3),inset 0 0 12px rgba(251,230,164,.25)}
+#pontPlein .vitre.solide .marque-ok{opacity:1}
+#pontPlein .marque-ok{position:absolute;inset:0;margin:auto;width:22px;height:22px;opacity:0;transition:opacity .3s;pointer-events:none}
+#pontPlein .vitre.fragile{opacity:.7;border-color:rgba(201,96,79,.55);background:repeating-linear-gradient(135deg,rgba(201,96,79,.16) 0 2px,transparent 2px 9px),linear-gradient(135deg,rgba(214,230,234,.1),rgba(214,230,234,.03))}
+#pontPlein .vitre.brisee{background:rgba(0,0,0,.25);border-color:rgba(214,230,234,.2);border-style:dashed;box-shadow:none}
+#pontPlein .vitre.brisee::after{display:none}
+#pontPlein .vitre .restes{position:absolute;inset:0;width:100%;height:100%;display:none}
+#pontPlein .vitre.brisee .restes{display:block}
+#pontPlein .vitre.eclair{animation:pc-eclair .35s ease-out}
+@keyframes pc-eclair{0%{background:rgba(255,255,255,.9)}100%{}}
+#pontPlein .vitre.revele{animation:pc-revele 1.1s ease-in-out 2}
+@keyframes pc-revele{50%{box-shadow:0 0 36px rgba(251,230,164,.8),inset 0 0 22px rgba(251,230,164,.5)}}
+#pontPlein .pion{position:absolute;width:0;height:0;transform-style:preserve-3d;pointer-events:none;
+  transition:left .42s cubic-bezier(.45,.05,.3,1),top .42s cubic-bezier(.45,.05,.3,1)}
+#pontPlein .pion-ombre{position:absolute;left:-18px;top:-7px;width:36px;height:14px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.7),transparent)}
+#pontPlein .pion-debout{position:absolute;left:-23px;bottom:0;width:46px;height:50px;transform-origin:50% 100%;transform:rotateX(calc(var(--incl) * -1))}
+#pontPlein .pion-saut{width:46px;height:46px;position:absolute;bottom:2px;left:0}
+#pontPlein .pion-saut svg{width:100%;height:100%;display:block;filter:drop-shadow(0 3px 4px rgba(0,0,0,.6))}
+#pontPlein .pion.saute .pion-saut{animation:pc-saut .42s cubic-bezier(.3,.6,.4,1)}
+@keyframes pc-saut{0%{transform:translateY(0) scale(1,1)}12%{transform:translateY(2px) scale(1.08,.9)}50%{transform:translateY(-30px) scale(.96,1.05)}88%{transform:translateY(0) scale(1.06,.92)}100%{transform:translateY(0) scale(1)}}
+#pontPlein .pion.chute{transition:none;animation:pc-chute 1.1s cubic-bezier(.55,0,.85,.4) forwards}
+#pontPlein .pion.chute .pion-ombre{opacity:0}
+@keyframes pc-chute{0%{transform:translateZ(0);opacity:1}100%{transform:translateZ(-340px) rotateZ(25deg);opacity:0}}
+#pontPlein .pion-nom{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--texte-doux);white-space:nowrap;font-weight:600}
+#pontPlein .hud{position:absolute;left:0;right:0;top:0;z-index:5;display:grid;grid-template-columns:1fr auto 1fr;align-items:start;padding:12px 14px;gap:8px;pointer-events:none}
+#pontPlein .hud-cell span{display:block;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--texte-pale);font-weight:500}
+#pontPlein .hud-cell b{font-family:var(--num);font-weight:400;font-size:21px;letter-spacing:.03em;color:var(--texte);font-variant-numeric:tabular-nums;line-height:1.05}
+#pontPlein .hud-cell.d{text-align:right}
+#pontPlein .hud-mult{text-align:center}
+#pontPlein .hud-mult b{display:block;font-family:var(--num);font-weight:400;font-size:44px;line-height:.95;color:var(--or-clair);letter-spacing:.02em;text-shadow:0 0 22px rgba(230,192,101,.45);font-variant-numeric:tabular-nums}
+#pontPlein .hud-mult span{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--texte-pale)}
+#pontPlein .hud-mult.monte b{animation:pc-monte .5s ease-out}
+@keyframes pc-monte{0%{transform:scale(1.28);color:#fff}100%{transform:scale(1)}}
+#pontPlein .annonce{position:absolute;left:50%;bottom:16px;z-index:6;transform:translate(-50%,8px);opacity:0;transition:opacity .25s,transform .25s;
+  background:rgba(10,8,6,.86);border:1px solid var(--ligne-forte);color:var(--or-clair);padding:7px 14px;border-radius:20px;font-size:13px;white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+#pontPlein .annonce.vue{opacity:1;transform:translate(-50%,0)}
+#pontPlein .annonce.rouge{color:#f1b3a8;border-color:rgba(201,96,79,.6)}
+#pontPlein .commandes{background:linear-gradient(180deg,var(--carte2),var(--carte));border:1px solid var(--ligne);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+#pontPlein .ligne-ctrl{display:flex;flex-direction:column;gap:6px}
+#pontPlein .etiquette{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--texte-pale);font-weight:500;display:flex;justify-content:space-between;gap:8px}
+#pontPlein .etiquette em{font-style:normal;letter-spacing:.04em;text-transform:none;color:var(--texte-doux);font-size:12px}
+#pontPlein .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--ligne);border-radius:10px;overflow:hidden;background:rgba(0,0,0,.25)}
+#pontPlein .seg button{border:0;background:transparent;padding:9px 6px;cursor:pointer;font-size:13.5px;color:var(--texte-doux);font-weight:500;letter-spacing:.02em}
+#pontPlein .seg button+button{border-left:1px solid var(--ligne)}
+#pontPlein .seg button[aria-pressed="true"]{background:linear-gradient(180deg,#3d2e12,#241b0b);color:var(--or-clair);box-shadow:inset 0 -2px 0 var(--or)}
+#pontPlein .seg small{display:block;font-size:10px;color:var(--texte-pale);letter-spacing:.08em;text-transform:uppercase}
+#pontPlein .seg button[aria-pressed="true"] small{color:var(--or)}
+#pontPlein .mise-rangee{display:flex;align-items:center;gap:10px}
+#pontPlein .pas{width:40px;height:40px;border-radius:50%;border:1px solid var(--ligne-forte);background:rgba(0,0,0,.3);cursor:pointer;font-size:20px;line-height:1;color:var(--or-clair);flex:none}
+#pontPlein .pas:disabled{opacity:.35;cursor:default}
+#pontPlein .mise-val{flex:1;text-align:center;font-family:var(--num);font-size:34px;letter-spacing:.03em;color:var(--or-clair);font-variant-numeric:tabular-nums;line-height:1}
+#pontPlein .jetons{display:flex;gap:6px;justify-content:space-between}
+#pontPlein .jeton{flex:1;min-width:0;aspect-ratio:1;max-width:48px;border-radius:50%;cursor:pointer;border:0;padding:0;font-family:var(--num);font-size:14px;letter-spacing:.02em;color:#1a1308;
+  background:radial-gradient(circle,#f3dc94 0 46%,#b68b31 47% 52%,#f0d27e 53% 60%,#8a6a24 61% 63%,transparent 64%),repeating-conic-gradient(#e6c065 0 15deg,#1d160c 15deg 30deg);
+  box-shadow:0 2px 6px rgba(0,0,0,.5)}
+#pontPlein .jeton[aria-pressed="true"]{outline:2px solid var(--or-clair);outline-offset:2px}
+#pontPlein .jeton:disabled{opacity:.3;cursor:default}
+#pontPlein .btn-or{border:0;border-radius:11px;padding:14px 16px;cursor:pointer;font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;color:#1a1207;
+  background:linear-gradient(180deg,#f7e2a0 0%,#e0b650 48%,#a97e27 100%);box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 8px 22px -8px rgba(230,192,101,.6);display:flex;justify-content:center;align-items:baseline;gap:10px}
+#pontPlein .btn-or b{font-family:var(--num);font-weight:400;font-size:22px;letter-spacing:.03em}
+#pontPlein .btn-or:disabled{filter:grayscale(.75) brightness(.55);cursor:default;box-shadow:none}
+#pontPlein .btn-or.pret{animation:pc-appel 1.6s ease-in-out infinite}
+@keyframes pc-appel{50%{box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 0 0 4px rgba(230,192,101,.18),0 10px 30px -6px rgba(230,192,101,.8)}}
+#pontPlein .btn-sec{border:1px solid var(--ligne-forte);background:transparent;border-radius:11px;padding:10px 14px;cursor:pointer;color:var(--or-clair);font-size:13px;letter-spacing:.06em}
+#pontPlein .note{font-size:12.5px;color:var(--texte-doux);margin:0;line-height:1.45}
+#pontPlein .note b{color:var(--or-clair);font-weight:500}
+#pontPlein .consigne{font-family:var(--display);font-size:15px;color:var(--or-clair);text-align:center;margin:0;letter-spacing:.03em;min-height:1.4em;text-wrap:balance}
+#pontPlein .duo-bandeau{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#pontPlein .duo-joueur{display:flex;align-items:center;gap:8px;border:1px solid var(--ligne);border-radius:10px;padding:6px 8px;background:rgba(0,0,0,.2)}
+#pontPlein .duo-joueur svg{width:28px;height:28px;flex:none}
+#pontPlein .duo-joueur div{font-size:12px;line-height:1.25;min-width:0}
+#pontPlein .duo-joueur b{display:block;font-weight:600;color:var(--texte)}
+#pontPlein .duo-joueur span{color:var(--texte-doux)}
+#pontPlein .duo-joueur.tour{border-color:var(--or);box-shadow:0 0 12px rgba(230,192,101,.22)}
+#pontPlein .duo-joueur.dehors{opacity:.5}
+#pontPlein .regles{border-top:1px solid var(--ligne);padding-top:10px}
+#pontPlein .regles summary{cursor:pointer;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--texte-doux)}
+#pontPlein .regles ul{margin:10px 0 0;padding-left:18px;font-size:13px;color:var(--texte-doux);display:grid;gap:5px}
+#pontPlein .table-cotes{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+#pontPlein .table-cotes span{font-family:var(--num);font-size:15px;letter-spacing:.03em;border:1px solid var(--ligne);border-radius:6px;padding:3px 7px;color:var(--or);font-variant-numeric:tabular-nums}
+#pontPlein .table-cotes span i{font-style:normal;color:var(--texte-pale);margin-right:4px}
+#pontPlein .resultat{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:radial-gradient(70% 55% at 50% 45%,rgba(60,44,14,.55),rgba(5,4,3,.9));opacity:0;transition:opacity .35s}
+#pontPlein .resultat.vue{opacity:1}
+#pontPlein .res-carte{width:100%;max-width:380px;box-sizing:border-box;text-align:center;padding:22px 20px 20px;border-radius:16px;border:1px solid var(--ligne-forte);
+  background:linear-gradient(180deg,rgba(29,23,14,.96),rgba(14,11,7,.97));box-shadow:0 30px 80px rgba(0,0,0,.8);display:flex;flex-direction:column;gap:10px;align-items:center;transform:translateY(10px) scale(.97);transition:transform .45s cubic-bezier(.2,.9,.3,1.2)}
+#pontPlein .resultat.vue .res-carte{transform:none}
+#pontPlein .res-visuel{position:relative;width:200px;height:150px;display:grid;place-items:center}
+#pontPlein .rayons{position:absolute;inset:-40px;border-radius:50%;background:repeating-conic-gradient(rgba(251,230,164,.22) 0 7deg,transparent 7deg 20deg);
+  -webkit-mask:radial-gradient(closest-side,#000 30%,transparent 100%);mask:radial-gradient(closest-side,#000 30%,transparent 100%);animation:pc-tourne 14s linear infinite}
+@keyframes pc-tourne{to{transform:rotate(360deg)}}
+#pontPlein .res-visuel svg{position:relative;width:190px;height:150px}
+#pontPlein .coffre-couvercle{transform-origin:100px 72px;transform-box:view-box;animation:pc-ouvre .8s .15s cubic-bezier(.3,1.4,.5,1) both}
+@keyframes pc-ouvre{from{transform:rotateX(0) translateY(40px) scaleY(.2)}to{transform:none}}
+#pontPlein .coffre-lueur{animation:pc-lueur 2.2s ease-in-out infinite}
+@keyframes pc-lueur{50%{opacity:.6}}
+#pontPlein .res-sur{font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--texte-pale)}
+#pontPlein .res-titre{margin:0;font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.06em;color:var(--or-clair)}
+#pontPlein .res-montant{font-family:var(--num);font-size:56px;line-height:.95;color:var(--or);letter-spacing:.02em;text-shadow:0 0 30px rgba(230,192,101,.5);font-variant-numeric:tabular-nums}
+#pontPlein .res-montant.perdu{color:var(--texte-doux);text-shadow:none;font-size:40px}
+#pontPlein .res-detail{font-size:13.5px;color:var(--texte-doux);margin:0}
+#pontPlein .res-detail b{color:var(--texte);font-weight:500}
+#pontPlein .res-carte .btn-or{width:100%;margin-top:6px}
+#pontPlein .pc-fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
+@media (max-width:380px){#pontPlein .hud-mult b{font-size:38px}
+#pontPlein .rangee .cote{font-size:13px;right:-40px}}
+@media (prefers-reduced-motion:reduce){#pontPlein .rangee.active .vitre,#pontPlein .btn-or.pret,#pontPlein .rayons,#pontPlein .coffre-lueur{animation:none}
+#pontPlein .plan{transition-duration:.2s}}
 </style>
 </head>
 <body>
@@ -2233,6 +2431,11 @@ body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webki
           <button class="carte-jeu" data-jeu="periph">
             <div class="cj-titre serif">Le jeu du périph</div>
             <div class="cj-texte">Porte Dauphine → Saint-Denis en voiture sans permis, et pas de frein. Douze portes à franchir, cinquante fois la mise au bout.</div>
+            <div class="cj-pied">Jouer</div>
+          </button>
+          <button class="carte-jeu" data-jeu="pont">
+            <div class="cj-titre serif">Le Pont de Cristal</div>
+            <div class="cj-texte">Un koala, un pont de vitres au-dessus du vide. Une seule tient à chaque rangée. Encaissez quand vous voulez, seul ou à trois sur le même pont.</div>
             <div class="cj-pied">Jouer</div>
           </button>
           <button class="carte-jeu" data-jeu="tower">
@@ -3336,10 +3539,15 @@ function fermerJeu() {
   arreterPenalty();
   if (window.PERIPH && PERIPH.ouvert) PERIPH.fermer();
   if (window.TOUR && TOUR.ouvert) TOUR.fermer();
+  if (window.PONT && PONT.ouvert) PONT.fermer(true);
 }
 function ouvrirJeu(nom) {
   if (nom === 'periph') {                 // le periph prend tout l'ecran
     if (window.PERIPH && PERIPH.ouvrir) PERIPH.ouvrir();
+    return;
+  }
+  if (nom === 'pont') {                   // le Pont de Cristal aussi
+    if (window.PONT && PONT.ouvrir) PONT.ouvrir();
     return;
   }
   if (nom === 'tower') {                  // Tower Rush prend tout l'ecran aussi
@@ -7712,6 +7920,151 @@ window.addEventListener('error', function (ev) {
 
 </div>
 
+<div id="pontPlein" class="pont-plein" hidden>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="pc-g-or" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbe6a4"/><stop offset=".45" stop-color="#e6c065"/><stop offset="1" stop-color="#8a6a24"/></linearGradient>
+    <linearGradient id="pc-g-or-fourrure" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6dc92"/><stop offset="1" stop-color="#c0973c"/></linearGradient>
+    <linearGradient id="pc-g-ivoire" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbf8f0"/><stop offset=".5" stop-color="#cfc7b6"/><stop offset="1" stop-color="#7d7465"/></linearGradient>
+    <linearGradient id="pc-g-ivoire-fourrure" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1ede4"/><stop offset="1" stop-color="#b3ab9b"/></linearGradient>
+    <linearGradient id="pc-g-cuivre" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6c9a2"/><stop offset=".5" stop-color="#c47a45"/><stop offset="1" stop-color="#6a3417"/></linearGradient>
+    <linearGradient id="pc-g-cuivre-fourrure" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1c29a"/><stop offset="1" stop-color="#b0673a"/></linearGradient>
+    <symbol id="pc-koala-or" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="31" fill="url(#pc-g-or)"/>
+      <circle cx="32" cy="32" r="26.5" fill="#15100a" stroke="#fbe6a4" stroke-opacity=".5" stroke-width=".8"/>
+      <circle cx="19.5" cy="25" r="8.5" fill="url(#pc-g-or-fourrure)"/><circle cx="44.5" cy="25" r="8.5" fill="url(#pc-g-or-fourrure)"/>
+      <circle cx="19.8" cy="25.8" r="4.4" fill="#6f5419"/><circle cx="44.2" cy="25.8" r="4.4" fill="#6f5419"/>
+      <ellipse cx="32" cy="36" rx="14.5" ry="12.8" fill="url(#pc-g-or-fourrure)"/>
+      <circle cx="26" cy="33" r="1.7" fill="#120d06"/><circle cx="38" cy="33" r="1.7" fill="#120d06"/>
+      <ellipse cx="32" cy="39.5" rx="4.4" ry="5.8" fill="#15100a"/><ellipse cx="30.7" cy="37.6" rx="1.2" ry="1.7" fill="#fbe6a4" opacity=".55"/>
+      <path d="M25 48.5 l7 -2.2 l7 2.2 l-7 2.2z" fill="#15100a"/><circle cx="32" cy="48.5" r="1.3" fill="#e6c065"/>
+    </symbol>
+    <symbol id="pc-koala-ivoire" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="31" fill="url(#pc-g-ivoire)"/>
+      <circle cx="32" cy="32" r="26.5" fill="#17140f" stroke="#fbf8f0" stroke-opacity=".45" stroke-width=".8"/>
+      <circle cx="19.5" cy="25" r="8.5" fill="url(#pc-g-ivoire-fourrure)"/><circle cx="44.5" cy="25" r="8.5" fill="url(#pc-g-ivoire-fourrure)"/>
+      <circle cx="19.8" cy="25.8" r="4.4" fill="#6c665a"/><circle cx="44.2" cy="25.8" r="4.4" fill="#6c665a"/>
+      <ellipse cx="32" cy="36" rx="14.5" ry="12.8" fill="url(#pc-g-ivoire-fourrure)"/>
+      <circle cx="26" cy="33" r="1.7" fill="#120d06"/><circle cx="38" cy="33" r="1.7" fill="#120d06"/>
+      <ellipse cx="32" cy="39.5" rx="4.4" ry="5.8" fill="#17140f"/><ellipse cx="30.7" cy="37.6" rx="1.2" ry="1.7" fill="#fff" opacity=".5"/>
+      <path d="M25 48.5 l7 -2.2 l7 2.2 l-7 2.2z" fill="#8a6a24"/><circle cx="32" cy="48.5" r="1.3" fill="#fbe6a4"/>
+    </symbol>
+    <symbol id="pc-koala-cuivre" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="31" fill="url(#pc-g-cuivre)"/>
+      <circle cx="32" cy="32" r="26.5" fill="#17140f" stroke="#fbf8f0" stroke-opacity=".45" stroke-width=".8"/>
+      <circle cx="19.5" cy="25" r="8.5" fill="url(#pc-g-cuivre-fourrure)"/><circle cx="44.5" cy="25" r="8.5" fill="url(#pc-g-cuivre-fourrure)"/>
+      <circle cx="19.8" cy="25.8" r="4.4" fill="#6c665a"/><circle cx="44.2" cy="25.8" r="4.4" fill="#6c665a"/>
+      <ellipse cx="32" cy="36" rx="14.5" ry="12.8" fill="url(#pc-g-cuivre-fourrure)"/>
+      <circle cx="26" cy="33" r="1.7" fill="#120d06"/><circle cx="38" cy="33" r="1.7" fill="#120d06"/>
+      <ellipse cx="32" cy="39.5" rx="4.4" ry="5.8" fill="#17140f"/><ellipse cx="30.7" cy="37.6" rx="1.2" ry="1.7" fill="#fff" opacity=".5"/>
+      <path d="M25 48.5 l7 -2.2 l7 2.2 l-7 2.2z" fill="#8a6a24"/><circle cx="32" cy="48.5" r="1.3" fill="#fbe6a4"/>
+    </symbol>
+    <symbol id="pc-coche" viewBox="0 0 24 24"><path d="M12 2 L22 12 L12 22 L2 12Z" fill="none" stroke="#fbe6a4" stroke-width="1.4"/><path d="M8 12.2 l2.8 2.8 l5.2 -5.6" fill="none" stroke="#fbe6a4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+
+<div class="app">
+  <header class="entete">
+    <div class="marque">
+      <button class="btn-son btn-fermer" id="pcQuitter" aria-label="Quitter le jeu" title="Quitter">✕</button>
+      <svg aria-hidden="true"><use href="#pc-koala-or"/></svg>
+      <div class="marque-txt">
+        <div class="sur-titre">Casino Messina</div>
+        <h1>Le Pont de Cristal</h1>
+      </div>
+    </div>
+    <div class="solde">
+      <div class="solde-bloc"><span>Solde</span><b id="pcSolde">0,00 €</b></div>
+      <button class="btn-son" id="pcBtnSon" aria-pressed="false" aria-label="Couper le son" title="Son">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="onde" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="scene-cadre" aria-label="Le pont">
+    <div class="scene" id="pcScene"><div class="plan" id="pcPlan"></div></div>
+    <div class="brume"></div>
+    <div class="hud">
+      <div class="hud-cell"><span id="pcHudRangLbl">Rangées</span><b id="pcHudRang">0 / 7</b></div>
+      <div class="hud-mult" id="pcHudMultBloc"><b id="pcHudMult">x1,00</b><span id="pcHudMultLbl">Cote actuelle</span></div>
+      <div class="hud-cell d"><span id="pcHudGainLbl">Gain max</span><b id="pcHudGain">0,00 €</b></div>
+    </div>
+    <div class="annonce" id="pcAnnonce" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="commandes" id="pcPanneauMise">
+    <div class="ligne-ctrl">
+      <div class="etiquette">Partie</div>
+      <div class="seg" id="pcSegJeu">
+        <button type="button" data-jeu="solo" aria-pressed="true">Solo</button>
+        <button type="button" data-jeu="multi" aria-pressed="false">Multijoueur <small>2 à 3 joueurs</small></button>
+      </div>
+    </div>
+    <div class="ligne-ctrl" id="pcLigneRisque">
+      <div class="etiquette">Risque</div>
+      <div class="seg" id="pcSegRisque">
+        <button type="button" data-risque="prudent" aria-pressed="false">Prudent</button>
+        <button type="button" data-risque="classique" aria-pressed="true">Classique</button>
+        <button type="button" data-risque="audacieux" aria-pressed="false">Audacieux</button>
+      </div>
+      <p class="note" id="pcDescRisque"></p>
+    </div>
+    <p class="note" id="pcNoteMulti" hidden>Jusqu'à <b>3 joueurs</b> sur le même pont (Classique : 2 vitres, 7 rangées). Pas de tour de rôle : chacun avance à son rythme. Dès qu'un joueur pose la patte sur une rangée, <b>tout le monde voit</b> où était la bonne vitre. Les cotes sont donc plus douces qu'en solo.</p>
+    <div class="ligne-ctrl">
+      <div class="etiquette">Mise <em>de 0,10 € à 200 €</em></div>
+      <div class="mise-rangee">
+        <button type="button" class="pas" id="pcMiseMoins" aria-label="Baisser la mise">−</button>
+        <div class="mise-val" id="pcMiseVal">1,00 €</div>
+        <button type="button" class="pas" id="pcMisePlus" aria-label="Augmenter la mise">+</button>
+      </div>
+      <div class="jetons" id="pcJetons"></div>
+    </div>
+    <button type="button" class="btn-or pret" id="pcBtnDepart"><span id="pcBtnDepartTxt">Traverser</span> <b id="pcBtnDepartMise">1,00 €</b></button>
+    <details class="regles">
+      <summary>Comment ça marche</summary>
+      <ul>
+        <li>Chaque rangée du pont cache une ou deux vitres qui cèdent. Touchez une vitre pour sauter dessus.</li>
+        <li>Si elle tient, votre cote monte. Si elle casse, la mise est perdue.</li>
+        <li>Après votre premier saut réussi, vous pouvez encaisser à tout moment : mise × cote.</li>
+        <li>Atteindre la rive d'or paie la cote maximale.</li>
+        <li>En multijoueur, une rangée déjà foulée par un autre joueur est révélée pour tous.</li>
+      </ul>
+      <div class="table-cotes" id="pcTableCotes"></div>
+    </details>
+  </section>
+
+  <section class="commandes" id="pcPanneauAttente" hidden>
+    <div class="attente-bloc">
+      <div class="attente-koalas" id="pcAttenteKoalas"></div>
+      <div class="attente-chrono" id="pcAttenteChrono"></div>
+      <p class="consigne" id="pcAttenteTxt">En attente d'un autre joueur…</p>
+      <p class="note">Mise : <b id="pcAttenteMise">1,00 €</b> · débitée seulement au départ.</p>
+      <button type="button" class="btn-sec" id="pcQuitterFile">Quitter la file</button>
+    </div>
+  </section>
+
+  <section class="commandes" id="pcPanneauJeu" hidden>
+    <div class="duo-bandeau trois" id="pcBandeau" hidden></div>
+    <p class="consigne" id="pcConsigne">Choisissez une vitre</p>
+    <button type="button" class="btn-or" id="pcBtnEncaisser" disabled>Encaisser <b id="pcBtnEncaisserMontant"></b></button>
+    <p class="note" style="text-align:center">Mise engagée : <b id="pcMiseEngagee">1,00 €</b> · Prochaine cote : <b id="pcCoteSuivante">x1,92</b></p>
+  </section>
+</div>
+
+<div class="resultat" id="pcResultat" hidden>
+  <div class="res-carte" role="dialog" aria-modal="true" aria-labelledby="pcResTitre">
+    <div class="res-visuel" id="pcResVisuel"></div>
+    <div class="res-sur" id="pcResSur"></div>
+    <h2 class="res-titre" id="pcResTitre"></h2>
+    <div class="res-montant" id="pcResMontant"></div>
+    <p class="res-detail" id="pcResDetail"></p>
+    <button type="button" class="btn-or" id="pcBtnRejouer">Nouvelle traversée</button>
+  </div>
+</div>
+<canvas class="pc-fx" aria-hidden="true"></canvas>
+</div>
+
 <div id="tourPlein" class="tour-plein" hidden>
 <div class="app">
   <div class="topbar">
@@ -11728,5 +12081,794 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
   $('trQuitter').onclick=function(){ TOUR.fermer(); };
 })();
 </script>
+<script>
+/* ===== LE PONT DE CRISTAL =====
+   Porte du prototype valide (visuels, sons, cotes). L'argent et le pont
+   lui-meme sont entierement decides par serveur.js (routes /api/pont-*) :
+   la page choisit une vitre et anime la reponse du serveur.
+   Multijoueur : file d'attente comme au periph, puis chacun avance a son
+   rythme sur le meme pont ; les rangees foulees par l'un sont revelees
+   a tous. */
+window.PONT = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const racine = document.getElementById('pontPlein');
+const $ = s => racine.querySelector(s);
+
+const MODES = {
+  prudent:   { nom:'Prudent',   largeur:3, solides:2, rangees:9,
+               solo:[1.44, 2.12, 3.08, 4.40, 6.30, 8.90, 12.60, 17.80, 25.00],
+               duo: [1.20, 1.44, 1.72, 2.05, 2.45, 2.90, 3.45, 4.10, 4.90] },
+  classique: { nom:'Classique', largeur:2, solides:1, rangees:7,
+               solo:[1.92, 3.72, 7.10, 13.40, 24.80, 45.00, 80.00],
+               duo: [1.38, 1.90, 2.60, 3.60, 4.90, 6.60, 9.00] },
+  audacieux: { nom:'Audacieux', largeur:3, solides:1, rangees:5,
+               solo:[2.85, 8.20, 22.50, 55.00, 100.00],
+               duo: [1.70, 2.85, 4.80, 8.00, 13.50] }
+};
+const MISE_MIN = 0.10, MISE_MAX = 200;
+const PALIERS = [0.10, 0.20, 0.50, 1, 2, 5, 10, 20, 50, 100, 200];
+const JETONS = [0.10, 0.50, 1, 5, 25, 100];
+const REDUIT = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SONDAGE_MS = 250;   // meme cadence que la progression du periph multijoueur
+const KOALAS = ['pc-koala-or', 'pc-koala-ivoire', 'pc-koala-cuivre'];
+
+const fmtEur = new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR' });
+const eur = v => fmtEur.format(v);
+const cote = v => 'x' + v.toLocaleString('fr-FR', { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits:2 });
+const jetonTxt = v => v < 1 ? v.toLocaleString('fr-FR', { minimumFractionDigits:2 }) : String(v);
+const sleep = ms => new Promise(r => setTimeout(r, REDUIT ? ms * 0.5 : ms));
+const arrondi = v => Math.round(v * 100) / 100;
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+function nomPosition(j, w) { return w === 2 ? ['gauche', 'droite'][j] : ['gauche', 'du centre', 'droite'][j]; }
+function laPosition(j, w) { return w === 2 ? ['à gauche', 'à droite'][j] : ['à gauche', 'au centre', 'à droite'][j]; }
+
+function soldeActuel() { return (typeof E !== 'undefined' && E.joueur && typeof E.joueur.solde === 'number') ? E.joueur.solde : 0; }
+function poserSolde(v) {
+  if (typeof v !== 'number') return;
+  if (typeof E !== 'undefined' && E.joueur) E.joueur.solde = v;
+  if (typeof majSolde === 'function') { try { majSolde(); } catch (e) {} }
+  $('#pcSolde').textContent = eur(soldeActuel());
+}
+
+/* =====================================================================
+   SON — synthèse Web Audio (reprise telle quelle du prototype)
+   ===================================================================== */
+const Son = (() => {
+  let ctx = null, sortie, reverb, bruit, coupe = false;
+  function init() {
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { ctx = new AC(); } catch (e) { return null; }
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.25;
+    sortie = ctx.createGain(); sortie.gain.value = 0.85;
+    sortie.connect(comp); comp.connect(ctx.destination);
+    // réverbération courte : réponse impulsionnelle générée
+    const n = Math.floor(ctx.sampleRate * 1.8), ir = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3.4); }
+    reverb = ctx.createConvolver(); reverb.buffer = ir;
+    const rg = ctx.createGain(); rg.gain.value = 0.28; reverb.connect(rg); rg.connect(sortie);
+    const nb = ctx.sampleRate * 2; bruit = ctx.createBuffer(1, nb, ctx.sampleRate);
+    const bd = bruit.getChannelData(0); for (let i = 0; i < nb; i++) bd[i] = Math.random() * 2 - 1;
+    return ctx;
+  }
+  function reveil() { const c = init(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
+  function bus(humide) {
+    const g = ctx.createGain(); g.connect(sortie);
+    if (humide > 0) { const w = ctx.createGain(); w.gain.value = humide; g.connect(w); w.connect(reverb); }
+    return g;
+  }
+  function pret() { return !coupe && ctx && ctx.state === 'running'; }
+  function ton({ f, fin, type = 'sine', t = 0, dur = .3, vol = .2, att = .004, humide = .25, detune = 0 }) {
+    const t0 = ctx.currentTime + t, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); o.detune.value = detune;
+    if (fin) o.frequency.exponentialRampToValueAtTime(fin, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + att);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(bus(humide)); o.start(t0); o.stop(t0 + dur + .05);
+  }
+  function souffle({ t = 0, dur = .3, vol = .2, filtre = 'bandpass', f = 1000, fFin, q = 1, att = .002, humide = .2 }) {
+    const t0 = ctx.currentTime + t, s = ctx.createBufferSource(), bq = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = bruit; s.loop = true;
+    bq.type = filtre; bq.frequency.setValueAtTime(f, t0); bq.Q.value = q;
+    if (fFin) bq.frequency.exponentialRampToValueAtTime(fFin, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + att);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    s.connect(bq); bq.connect(g); g.connect(bus(humide));
+    s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + .05);
+  }
+  // gamme pentatonique qui monte avec les rangées : chaque pas sonne "plus haut"
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+  const note = (base, i) => base * Math.pow(2, PENTA[Math.min(i, PENTA.length - 1)] / 12);
+  return {
+    reveil,
+    setCoupe(v) { coupe = v; },
+    clic() { if (!pret()) return; ton({ f: 2200, type: 'triangle', dur: .05, vol: .05, humide: 0 }); },
+    saut(doux) { if (!pret()) return;
+      souffle({ dur: .26, vol: doux ? .06 : .11, f: 500, fFin: 2600, q: 1.2, att: .05, humide: .05 }); },
+    tient(rang, doux) { if (!pret()) return;
+      const k = doux ? .55 : 1;
+      // appui franc sur verre trempé : "toc" grave + claquement court
+      ton({ f: 150, fin: 85, dur: .18, vol: .45 * k, humide: .05 });
+      souffle({ dur: .035, vol: .22 * k, filtre: 'highpass', f: 3500, humide: .1 });
+      // cloche de cristal (partiels légèrement inharmoniques)
+      const f = note(659.25, rang - 1);
+      ton({ f, dur: 1.4, vol: .16 * k, humide: .5, t: .01 });
+      ton({ f: f * 2.01, dur: .9, vol: .06 * k, humide: .5, t: .01 });
+      ton({ f: f * 3.02, dur: .5, vol: .03 * k, humide: .5, t: .01 });
+      if (!doux) { // petite montée de la cote : arpège rapide
+        [1.25, 1.5, 2].forEach((r, i) => ton({ f: f * r, type: 'triangle', t: .09 + i * .065, dur: .32, vol: .07, humide: .45 }));
+      } },
+    brise() { if (!pret()) return;
+      ton({ f: 2400, fin: 300, type: 'square', dur: .025, vol: .12, humide: 0 });
+      souffle({ dur: .42, vol: .7, filtre: 'highpass', f: 1800, att: .001, humide: .3 });
+      souffle({ dur: .7, vol: .3, filtre: 'bandpass', f: 5200, fFin: 3000, q: .7, humide: .45 });
+      ton({ f: 90, fin: 40, dur: .3, vol: .35, humide: .05 });
+      for (let i = 0; i < 16; i++) { // éclats qui retombent
+        const t = .06 + Math.random() * .85, f = 3200 + Math.random() * 4800;
+        ton({ f, t, dur: .06 + Math.random() * .12, vol: .03 + Math.random() * .07, humide: .55 });
+        if (i % 2) souffle({ t, dur: .05, vol: .08, filtre: 'bandpass', f: f * .9, q: 6, humide: .4 });
+      } },
+    chute() { if (!pret()) return;
+      souffle({ t: .15, dur: 1.1, vol: .16, filtre: 'lowpass', f: 1400, fFin: 180, att: .1, humide: .3 });
+      ton({ f: 440, fin: 110, t: .15, dur: 1, vol: .06, type: 'triangle', humide: .4 }); },
+    encaisse(grand) { if (!pret()) return;
+      // cascade de pièces d'or : partiels métalliques (rapport 2,76)
+      const n = grand ? 22 : 14;
+      for (let i = 0; i < n; i++) {
+        const t = i * .05 + Math.random() * .02, f = 2300 + Math.random() * 1500, v = .1 * (1 - i / (n * 1.3));
+        ton({ f, t, dur: .22, vol: v, humide: .35 }); ton({ f: f * 2.76, t, dur: .12, vol: v * .5, humide: .35 });
+      }
+      // accord chaud (Do majeur 9) en nappe
+      [261.63, 329.63, 392, 493.88, 587.33].forEach((f, i) => {
+        ton({ f, type: 'sawtooth', t: .05, dur: 1.9, vol: .025, att: .12, humide: .6, detune: i % 2 ? 6 : -6 });
+      });
+      // mélodie qui s'élève
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => ton({ f, type: 'triangle', t: .1 + i * .085, dur: .5, vol: .09, humide: .5 }));
+      ton({ f: 2093, t: .55, dur: 1.6, vol: .07, humide: .7 });
+      souffle({ t: .5, dur: 1.4, vol: .05, filtre: 'highpass', f: 7500, att: .2, humide: .8 });
+      if (grand) [1318.5, 1567.98, 2093].forEach((f, i) => ton({ f, type: 'triangle', t: .75 + i * .09, dur: .7, vol: .07, humide: .6 })); }
+  };
+})();
+
+
+/* =====================================================================
+   EFFETS — éclats de verre, étincelles, pluie d'or
+   ===================================================================== */
+const FX = (() => {
+  const cv = $('.pc-fx'), cx = cv.getContext('2d');
+  let parts = [], actif = false, dpr = 1, dernier = 0;
+  function taille() { dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; }
+  addEventListener('resize', taille); taille();
+  const r = (a, b) => a + Math.random() * (b - a);
+  function dessiner(p, a) {
+    cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
+    if (p.type === 'eclat') {
+      cx.globalAlpha = a; cx.beginPath(); cx.moveTo(p.pts[0], p.pts[1]); cx.lineTo(p.pts[2], p.pts[3]); cx.lineTo(p.pts[4], p.pts[5]); cx.closePath();
+      cx.fillStyle = 'rgba(214,232,238,.42)'; cx.fill(); cx.strokeStyle = 'rgba(255,255,255,.85)'; cx.lineWidth = .8; cx.stroke();
+    } else if (p.type === 'etincelle') {
+      cx.globalAlpha = a; cx.fillStyle = p.c; const s = p.s;
+      cx.beginPath(); cx.moveTo(0, -s); cx.lineTo(s * .25, 0); cx.lineTo(0, s); cx.lineTo(-s * .25, 0); cx.closePath(); cx.fill();
+      cx.beginPath(); cx.moveTo(-s, 0); cx.lineTo(0, s * .25); cx.lineTo(s, 0); cx.lineTo(0, -s * .25); cx.closePath(); cx.fill();
+    } else if (p.type === 'piece') {
+      cx.globalAlpha = a; const sx = Math.max(.08, Math.abs(Math.cos(p.vie * p.spin))); cx.scale(sx, 1);
+      cx.beginPath(); cx.arc(0, 0, p.s, 0, 7); cx.fillStyle = '#a57b25'; cx.fill();
+      cx.beginPath(); cx.arc(0, 0, p.s * .82, 0, 7); cx.fillStyle = sx > .5 ? '#f0cf74' : '#d6ad4c'; cx.fill();
+      cx.beginPath(); cx.arc(-p.s * .25, -p.s * .25, p.s * .3, 0, 7); cx.fillStyle = 'rgba(255,245,210,.7)'; cx.fill();
+    } else if (p.type === 'lingot') {
+      cx.globalAlpha = a; const w = p.s * 2.2, h = p.s;
+      cx.beginPath(); cx.moveTo(-w / 2, h / 2); cx.lineTo(w / 2, h / 2); cx.lineTo(w * .36, -h / 2); cx.lineTo(-w * .36, -h / 2); cx.closePath();
+      const g = cx.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, '#fff0b8'); g.addColorStop(.35, '#e8c160'); g.addColorStop(1, '#8f6a1f');
+      cx.fillStyle = g; cx.fill(); cx.strokeStyle = 'rgba(80,58,14,.8)'; cx.lineWidth = 1; cx.stroke();
+      cx.fillStyle = 'rgba(255,248,220,.55)'; cx.fillRect(-w * .3, -h * .38, w * .6, h * .14);
+    }
+    cx.restore();
+  }
+  function boucle(t) {
+    const dt = Math.min(.05, (t - (dernier || t)) / 1000 || .016); dernier = t;
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, innerWidth, innerHeight);
+    parts = parts.filter(p => (p.vie += dt) < p.max);
+    for (const p of parts) {
+      if (p.vie < 0) continue;
+      p.vy += p.g * dt; p.vx *= (1 - p.frein * dt); p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      const a = Math.min(1, (p.max - p.vie) / (p.max * .35)) * Math.min(1, (p.vie + .001) / .06);
+      dessiner(p, Math.max(0, a));
+    }
+    if (parts.length) requestAnimationFrame(boucle); else { actif = false; dernier = 0; cx.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+  function lancer() { if (!actif) { actif = true; requestAnimationFrame(boucle); } }
+  const facteur = REDUIT ? .4 : 1;
+  return {
+    eclats(rect) {
+      const cxr = rect.left + rect.width / 2, cyr = rect.top + rect.height / 2;
+      for (let i = 0; i < 34 * facteur; i++) {
+        const s = r(5, 15), x = r(rect.left, rect.right), y = r(rect.top, rect.bottom);
+        parts.push({ type: 'eclat', x, y, vx: (x - cxr) * r(2, 5) + r(-40, 40), vy: r(-160, 20), g: 900, frein: .6, rot: r(0, 6), vr: r(-9, 9), vie: 0, max: r(.8, 1.4),
+          pts: [r(-s, s), -s, s, r(-s, s) * .6, -s * r(.3, 1), s] });
+      }
+      for (let i = 0; i < 20 * facteur; i++) parts.push({ type: 'etincelle', x: r(rect.left, rect.right), y: r(rect.top, rect.bottom), vx: r(-80, 80), vy: r(-120, 40), g: 500, frein: 1, rot: 0, vr: 0, vie: 0, max: r(.3, .7), s: r(2, 4), c: '#eaf5f8' });
+      lancer();
+    },
+    etincelles(rect, n = 16) {
+      const x0 = rect.left + rect.width / 2, y0 = rect.top + rect.height / 2;
+      for (let i = 0; i < n * facteur; i++) { const a = r(0, 6.28), v = r(60, 190);
+        parts.push({ type: 'etincelle', x: x0, y: y0, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, g: 260, frein: 2, rot: 0, vr: 0, vie: 0, max: r(.4, .9), s: r(2.5, 5), c: Math.random() < .5 ? '#fbe6a4' : '#e6c065' }); }
+      lancer();
+    },
+    tresor(x0, y0, grand) {
+      const n = (grand ? 70 : 42) * facteur;
+      for (let i = 0; i < n; i++) { const a = r(-2.6, -.55), v = r(260, 620), lingot = Math.random() < .22;
+        parts.push({ type: lingot ? 'lingot' : 'piece', x: x0 + r(-30, 30), y: y0, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 980, frein: .4, rot: r(-.5, .5), vr: lingot ? r(-4, 4) : r(-1, 1),
+          spin: r(4, 11), vie: -r(0, .5), max: r(1.8, 2.8), s: lingot ? r(9, 13) : r(6, 10) }); }
+      for (let i = 0; i < 40 * facteur; i++) parts.push({ type: 'etincelle', x: x0 + r(-80, 80), y: y0 + r(-70, 20), vx: r(-30, 30), vy: r(-60, -10), g: 0, frein: 1, rot: 0, vr: 0, vie: -r(0, 1.2), max: r(.6, 1.2), s: r(2, 5), c: '#fff1bf' });
+      // pluie depuis le haut
+      for (let i = 0; i < (grand ? 50 : 26) * facteur; i++) { const lingot = Math.random() < .2;
+        parts.push({ type: lingot ? 'lingot' : 'piece', x: r(0, innerWidth), y: -20, vx: r(-20, 20), vy: r(80, 220), g: 520, frein: 0, rot: r(-.5, .5), vr: r(-2, 2), spin: r(4, 10), vie: -r(.3, 1.6), max: r(2.6, 3.6), s: lingot ? r(8, 12) : r(6, 9) }); }
+      lancer();
+    }
+  };
+})();
+
+
+/* =====================================================================
+   ÉTAT DU JEU
+   ===================================================================== */
+const S = {
+  mise: 1, jeu: 'solo', risque: 'classique',
+  phase: 'repos',          // repos | attente | jeu | fin
+  rangs: [],               // [{solide:[bool]|null, casses:[j]}]
+  occupe: false, miseEngagee: 0,
+  moi: { pos: 0, vitre: -1, vivant: true },
+  membres: [],             // multijoueur : ce que dit le serveur
+  vus: {},                 // multijoueur : dernier etat anime de chaque koala (par couleur)
+  sondage: 0, chrono: -1
+};
+const G = { rowH: 84, startH: 104, endH: 110, rail: 30, pw: 300 };
+const multi = () => S.jeu === 'multi';
+const mode = () => multi() ? MODES.classique : MODES[S.risque];
+const R = () => mode().rangees;
+const table = () => multi() ? mode().duo : mode().solo;
+const multDe = pos => pos <= 0 ? 1 : table()[Math.min(pos, R()) - 1];
+const moiMembre = () => S.membres.find(m => m.moi);
+
+function hauteurPlan() { return G.endH + R() * G.rowH + G.startH; }
+function yCentre(k) {
+  if (k <= 0) return G.endH + R() * G.rowH + G.startH * .55;
+  if (k > R()) return G.endH * .55;
+  return G.endH + (R() - k) * G.rowH + G.rowH / 2 + 6;
+}
+function xCentre(k, j) {
+  if (k <= 0 || k > R() || j < 0) return G.pw / 2;
+  const w = mode().largeur, inner = G.pw - 2 * G.rail, gap = 10;
+  const cell = (inner - gap * (w - 1)) / w;
+  return G.rail + j * (cell + gap) + cell / 2;
+}
+function mesurer() {
+  const w = $('#pcScene').clientWidth || 320;
+  G.pw = Math.round(Math.max(220, Math.min(w - 96, 320)));
+}
+
+const restesSVG = () => {
+  const r = (a, b) => (a + Math.random() * (b - a)).toFixed(1);
+  const polys = [`0,0 ${r(18, 30)},0 ${r(4, 10)},${r(14, 26)}`, `${r(40, 50)},0 ${r(58, 66)},0 ${r(50, 56)},${r(8, 14)}`,
+    `100,0 100,${r(20, 34)} ${r(80, 88)},${r(4, 10)}`, `100,${r(55, 65)} 100,100 ${r(82, 90)},100 ${r(92, 96)},${r(74, 84)}`,
+    `0,100 0,${r(64, 74)} ${r(10, 16)},${r(84, 92)} ${r(20, 28)},100`, `${r(56, 62)},100 ${r(40, 46)},100 ${r(50, 54)},${r(86, 92)}`,
+    `0,${r(38, 44)} ${r(6, 12)},${r(46, 50)} 0,${r(54, 58)}`];
+  return `<svg class="restes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${polys.map(p => `<polygon points="${p}" fill="rgba(214,232,238,.28)" stroke="rgba(255,255,255,.55)" stroke-width=".8" vector-effect="non-scaling-stroke"/>`).join('')}</svg>`;
+};
+
+function construirePont() {
+  mesurer();
+  const m = mode(), plan = $('#pcPlan'), ph = hauteurPlan();
+  plan.style.setProperty('--pw', G.pw + 'px'); plan.style.setProperty('--ph', ph + 'px');
+  let h = `<div class="poutre g"></div><div class="poutre d"></div>`;
+  h += `<div class="quai arrivee" style="height:${G.endH}px"><span class="quai-label">Rive d'or</span></div>`;
+  for (let k = 1; k <= m.rangees; k++) {
+    const top = G.endH + (m.rangees - k) * G.rowH;
+    h += `<div class="rangee" data-k="${k}" style="top:${top}px;height:${G.rowH}px;--cols:${m.largeur}"><span class="num">${k}</span><span class="cote">${cote(table()[k - 1])}</span>`;
+    for (let j = 0; j < m.largeur; j++) h += `<button type="button" class="vitre" data-k="${k}" data-j="${j}" tabindex="-1" aria-label="Rangée ${k}, vitre ${nomPosition(j, m.largeur)}"><svg class="marque-ok" aria-hidden="true"><use href="#pc-coche"/></svg>${restesSVG()}</button>`;
+    h += `</div>`;
+  }
+  h += `<div class="quai depart" style="height:${G.startH}px"><span class="quai-label" style="transform:translateY(20px)">Départ</span></div>`;
+  if (multi() && S.membres.length) {
+    S.membres.forEach(mb => { h += pionHTML(mb.couleur, mb.moi ? 'Vous' : mb.pseudo, mb.moi); });
+  } else {
+    h += pionHTML(0, multi() ? 'Vous' : '', true);
+  }
+  plan.innerHTML = h;
+  if (multi()) S.membres.forEach(mb => {
+    const el = pionEl(mb.couleur);
+    if (el && (mb.statut === 'tombe' || mb.statut === 'abandon')) el.classList.add('chute');
+  });
+  placerPions(); majPont(); majCamera();
+}
+function pionHTML(c, nom, moi) {
+  return `<div class="pion${moi ? ' moi' : ''}" id="pc-pion-${c}"><div class="pion-ombre"></div><div class="pion-debout"><div class="pion-saut">${nom ? `<span class="pion-nom">${esc(nom)}</span>` : ''}<svg aria-hidden="true"><use href="#${KOALAS[c % 3]}"/></svg></div></div></div>`;
+}
+const pionEl = c => racine.querySelector('#pc-pion-' + c);
+const couleurMoi = () => { const m = moiMembre(); return m ? m.couleur : 0; };
+
+function placerPions() {
+  const poser = (c, pos, vitre, dx) => {
+    const el = pionEl(c); if (!el) return;
+    el.style.left = (xCentre(pos, vitre) + dx) + 'px'; el.style.top = yCentre(pos) + 'px';
+  };
+  if (!multi() || !S.membres.length) { poser(0, S.moi.pos, S.moi.vitre, 0); return; }
+  // les koalas au meme endroit se serrent cote a cote
+  const lieux = {};
+  S.membres.forEach(mb => {
+    const p = mb.moi ? S.moi : mb;
+    const cle = (p.pos <= 0 || p.pos > R()) ? p.pos + ':x' : p.pos + ':' + p.vitre;
+    (lieux[cle] = lieux[cle] || []).push(mb);
+  });
+  Object.values(lieux).forEach(groupe => {
+    const n = groupe.length, ecart = groupe[0] && (groupe[0].moi ? S.moi.pos : groupe[0].pos) <= 0 ? 26 : 16;
+    groupe.forEach((mb, i) => {
+      const p = mb.moi ? S.moi : mb;
+      poser(mb.couleur, p.pos, p.vitre, (i - (n - 1) / 2) * ecart);
+      const el = pionEl(mb.couleur);
+      if (el) el.classList.toggle('encaisse', mb.statut === 'encaisse');
+    });
+  });
+}
+function majPont() {
+  const actifK = (S.phase === 'jeu' && !S.occupe && S.moi.vivant && S.moi.pos < R()) ? S.moi.pos + 1 : -1;
+  const atteint = S.moi.pos;
+  racine.querySelectorAll('.rangee').forEach(el => {
+    const k = +el.dataset.k, rg = S.rangs[k - 1], resolu = !!(rg && rg.solide);
+    el.classList.toggle('active', k === actifK);
+    el.classList.toggle('devant', S.phase === 'jeu' ? (!resolu && k > S.moi.pos + 1) : false);
+    el.classList.toggle('atteinte', k <= atteint && atteint > 0);
+    el.querySelectorAll('.vitre').forEach(v => {
+      const j = +v.dataset.j, casse = !!(rg && rg.casses && rg.casses.indexOf(j) >= 0);
+      v.classList.toggle('solide', !!(resolu && rg.solide[j]));
+      v.classList.toggle('brisee', casse);
+      v.classList.toggle('fragile', !!(resolu && !rg.solide[j] && !casse));
+      v.tabIndex = k === actifK ? 0 : -1;
+      v.setAttribute('aria-disabled', k === actifK ? 'false' : 'true');
+    });
+  });
+}
+function majCamera() {
+  let focus = 0;
+  if (S.phase !== 'repos' && S.phase !== 'attente') {
+    focus = S.moi.pos;
+    if (!S.moi.vivant && multi()) S.membres.forEach(mb => { if (!mb.moi && mb.statut === 'jeu') focus = Math.max(focus, mb.pos); });
+  }
+  const maxCam = Math.max(0, (R() - 3.4) * G.rowH);
+  const cam = Math.max(0, Math.min(maxCam, (Math.min(focus, R()) - .4) * G.rowH));
+  $('#pcPlan').style.setProperty('--cam', cam + 'px');
+}
+function hop(c) {
+  const el = pionEl(c); if (!el) return;
+  el.classList.remove('saute'); void el.offsetWidth; el.classList.add('saute');
+  setTimeout(() => el.classList.remove('saute'), 450);
+}
+const vitreEl = (k, j) => racine.querySelector(`.vitre[data-k="${k}"][data-j="${j}"]`);
+
+/* ---------- affichages ---------- */
+let annonceT = 0;
+function annonce(txt, rouge) {
+  const el = $('#pcAnnonce'); el.textContent = txt; el.classList.toggle('rouge', !!rouge); el.classList.add('vue');
+  clearTimeout(annonceT); annonceT = setTimeout(() => el.classList.remove('vue'), 2200);
+}
+function majHUD(monte) {
+  const m = S.moi;
+  $('#pcSolde').textContent = eur(soldeActuel());
+  if (S.phase === 'repos' || S.phase === 'attente') {
+    const max = table()[R() - 1];
+    $('#pcHudRangLbl').textContent = 'Rangées'; $('#pcHudRang').textContent = R();
+    $('#pcHudMult').textContent = cote(table()[0]); $('#pcHudMultLbl').textContent = '1re rangée';
+    $('#pcHudGainLbl').textContent = 'Gain max'; $('#pcHudGain').textContent = eur(arrondi(S.mise * max));
+    return;
+  }
+  if (!m.vivant) {
+    $('#pcHudRangLbl').textContent = 'Rangée'; $('#pcHudRang').textContent = `${m.pos} / ${R()}`;
+    $('#pcHudMult').textContent = 'x0'; $('#pcHudMultLbl').textContent = 'Vitre brisée';
+    $('#pcHudGainLbl').textContent = 'Mise perdue'; $('#pcHudGain').textContent = eur(S.miseEngagee);
+    return;
+  }
+  const mult = multDe(m.pos);
+  $('#pcHudRangLbl').textContent = 'Rangée'; $('#pcHudRang').textContent = `${Math.min(m.pos, R())} / ${R()}`;
+  $('#pcHudMult').textContent = cote(mult); $('#pcHudMultLbl').textContent = 'Cote actuelle';
+  $('#pcHudGainLbl').textContent = m.pos > 0 ? 'Gain en cours' : 'Mise';
+  $('#pcHudGain').textContent = eur(m.pos > 0 ? arrondi(S.miseEngagee * mult) : S.miseEngagee);
+  if (monte) { const b = $('#pcHudMultBloc'); b.classList.remove('monte'); void b.offsetWidth; b.classList.add('monte'); }
+}
+function majMiseUI() {
+  const m = mode(), solde = soldeActuel();
+  if (S.mise > solde) S.mise = Math.max(MISE_MIN, PALIERS.filter(p => p <= solde).pop() || MISE_MIN);
+  $('#pcMiseVal').textContent = eur(S.mise); $('#pcBtnDepartMise').textContent = eur(S.mise);
+  $('#pcBtnDepartTxt').textContent = multi() ? 'Rejoindre' : 'Traverser';
+  $('#pcMiseMoins').disabled = S.mise <= MISE_MIN;
+  const suiv = PALIERS.find(p => p > S.mise);
+  $('#pcMisePlus').disabled = S.mise >= MISE_MAX || !suiv || suiv > solde;
+  racine.querySelectorAll('.jeton').forEach(b => { const v = +b.dataset.v; b.setAttribute('aria-pressed', v === S.mise ? 'true' : 'false'); b.disabled = v > solde; });
+  $('#pcBtnDepart').disabled = !(solde >= MISE_MIN && S.mise <= solde);
+  const nbCasse = m.largeur - m.solides;
+  $('#pcDescRisque').textContent = `${m.largeur} vitres, ${nbCasse === 1 ? '1 casse' : '1 seule tient'} · ${m.rangees} rangées · jusqu'à ${cote(table()[m.rangees - 1])}`;
+  racine.querySelectorAll('#pcSegRisque button').forEach(b => b.setAttribute('aria-pressed', b.dataset.risque === S.risque ? 'true' : 'false'));
+  racine.querySelectorAll('#pcSegJeu button').forEach(b => b.setAttribute('aria-pressed', b.dataset.jeu === S.jeu ? 'true' : 'false'));
+  $('#pcLigneRisque').hidden = multi(); $('#pcNoteMulti').hidden = !multi();
+  $('#pcTableCotes').innerHTML = table().map((v, i) => `<span><i>${i + 1}</i>${cote(v)}</span>`).join('');
+  majHUD();
+}
+function etatTxt(p) {
+  if (p.statut === 'tombe') return `Tombé rangée ${p.pos}`;
+  if (p.statut === 'abandon') return 'Parti';
+  if (p.statut === 'encaisse') return `Encaissé ${eur(p.gain || 0)}`;
+  if (p.statut === 'arrive' || p.pos >= R()) return 'Arrivé';
+  return p.pos === 0 ? 'Au départ' : `Rangée ${p.pos}`;
+}
+function majControles() {
+  const enJeu = S.phase === 'jeu' || S.phase === 'fin';
+  $('#pcPanneauMise').hidden = S.phase !== 'repos';
+  $('#pcPanneauAttente').hidden = S.phase !== 'attente';
+  $('#pcPanneauJeu').hidden = !enJeu;
+  const m = S.moi;
+  const peutEncaisser = S.phase === 'jeu' && !S.occupe && m.vivant && m.pos >= 1 && m.pos < R();
+  const b = $('#pcBtnEncaisser');
+  b.disabled = !peutEncaisser; b.classList.toggle('pret', peutEncaisser);
+  $('#pcBtnEncaisserMontant').textContent = m.pos >= 1 && m.vivant ? eur(arrondi(S.miseEngagee * multDe(m.pos))) : '';
+  $('#pcMiseEngagee').textContent = eur(S.miseEngagee);
+  $('#pcCoteSuivante').textContent = m.pos < R() ? cote(multDe(m.pos + 1)) : '—';
+  const bd = $('#pcBandeau');
+  bd.hidden = !multi() || !S.membres.length;
+  if (!bd.hidden) {
+    bd.innerHTML = S.membres.map(mb => {
+      const p = mb.moi ? Object.assign({}, mb, { pos: S.moi.pos }) : mb;
+      const cls = ['duo-joueur', mb.moi ? 'moi' : '', mb.statut === 'encaisse' || mb.statut === 'arrive' ? 'encaisse' : '',
+        mb.statut === 'tombe' || mb.statut === 'abandon' ? 'dehors' : ''].join(' ');
+      return `<div class="${cls}"><svg aria-hidden="true"><use href="#${KOALAS[mb.couleur % 3]}"/></svg><div><b>${mb.moi ? 'Vous' : esc(mb.pseudo)}</b><span>${esc(etatTxt(p))}</span></div></div>`;
+    }).join('');
+  }
+  majPont(); majHUD();
+}
+function consigne(t) { $('#pcConsigne').textContent = t; }
+function consigneJeu() {
+  if (S.phase !== 'jeu' || !S.moi.vivant) return;
+  const k = S.moi.pos + 1, rg = S.rangs[k - 1];
+  if (k > R()) return;
+  if (rg && rg.solide) consigne(`Rangée ${k} déjà révélée : la bonne vitre brille`);
+  else if (S.moi.pos === 0) consigne(`Choisissez une vitre de la rangée 1`);
+  else consigne(`Rangée ${k} : une autre vitre, ou encaissez`);
+}
+
+/* =====================================================================
+   DÉROULEMENT — SOLO
+   ===================================================================== */
+function rangsVides() { S.rangs = Array.from({ length: R() }, () => ({ solide: null, casses: [] })); }
+
+async function demarrerSolo() {
+  if (S.occupe) return;
+  S.occupe = true; $('#pcBtnDepart').disabled = true;
+  Son.reveil(); Son.clic();
+  const r = await envoyer('pont-demarrer', { mise: S.mise, mode: S.risque });
+  S.occupe = false;
+  if (!r || r.erreur) { annonce(r && r.erreur ? (r.erreur === 'reseau' ? 'Erreur réseau.' : r.erreur) : 'Erreur réseau.', true); majMiseUI(); return; }
+  poserSolde(r.solde);
+  S.miseEngagee = r.mise; rangsVides();
+  S.moi = { pos: 0, vitre: -1, vivant: true }; S.membres = [];
+  S.phase = 'jeu';
+  construirePont(); majControles(); consigneJeu();
+}
+
+/* un saut, en solo comme en multijoueur : le serveur dit si la vitre tient */
+async function choisir(j) {
+  if (S.phase !== 'jeu' || S.occupe || !S.moi.vivant) return;
+  const k = S.moi.pos + 1; if (k > R()) return;
+  const rg = S.rangs[k - 1];
+  if (rg && rg.solide && !rg.solide[j]) { annonce('Cette vitre est connue : elle cède.', true); return; }
+  const connue = !!(rg && rg.solide);
+  S.occupe = true; majControles(); consigne('…');
+  const c = multi() ? couleurMoi() : 0;
+  Son.saut(false);
+  const avant = { pos: S.moi.pos, vitre: S.moi.vitre };
+  S.moi.pos = k; S.moi.vitre = j; placerPions(); hop(c);
+  const [r] = await Promise.all([envoyer(multi() ? 'pont-multi-avancer' : 'pont-avancer', { vitre: j }), sleep(430)]);
+  if (!r || r.erreur) {
+    S.moi.pos = avant.pos; S.moi.vitre = avant.vitre; S.occupe = false; placerPions(); majControles(); consigneJeu();
+    annonce(r && r.erreur && r.erreur !== 'reseau' ? r.erreur : 'Erreur réseau, réessayez.', true);
+    return;
+  }
+  poserSolde(r.solde);
+  if (multi()) { S.vus[c] = { pos: k, statut: r.tient ? (r.complete ? 'arrive' : 'jeu') : 'tombe' }; appliquerVue(r, true); }
+  else S.rangs[k - 1] = { solide: r.solides, casses: r.tient ? [] : [j] };
+  if (r.tient) {
+    Son.tient(k, connue);
+    const v = vitreEl(k, j); if (v) FX.etincelles(v.getBoundingClientRect(), connue ? 8 : 18);
+    majControles(); majHUD(true); majCamera();
+    if (r.complete) { await sleep(500); return gagner(true, r.gain, r.mult); }
+    annonce(k === 1 ? 'La vitre tient. Vous pouvez encaisser.' : `La vitre tient : ${cote(r.mult)}`);
+    S.occupe = false; majControles(); consigneJeu();
+    return;
+  }
+  // la vitre cède
+  S.moi.vivant = false;
+  const v = vitreEl(k, j);
+  if (v) { v.classList.add('eclair'); FX.eclats(v.getBoundingClientRect()); }
+  Son.brise(); Son.chute();
+  const pion = pionEl(c); if (pion) pion.classList.add('chute');
+  majControles();
+  const row = S.rangs[k - 1];
+  racine.querySelectorAll(`.vitre[data-k="${k}"]`).forEach(el => { if (row.solide && row.solide[+el.dataset.j]) el.classList.add('revele'); });
+  annonce('La vitre a cédé', true);
+  await sleep(1200);
+  const bonnes = (row.solide || []).map((s, i) => s ? laPosition(i, mode().largeur) : null).filter(Boolean);
+  S.phase = 'fin'; S.occupe = false;
+  montrerResultat({ gagne: false, rang: k,
+    detail: `${bonnes.length > 1 ? 'Les vitres solides étaient' : 'La vitre solide était'} ${bonnes.join(' et ')}.` +
+      (multi() ? ' Les autres joueurs voient maintenant cette rangée.' : '') });
+}
+
+async function encaisser() {
+  const m = S.moi;
+  if (S.phase !== 'jeu' || S.occupe || !m.vivant || m.pos < 1) return;
+  Son.reveil();
+  S.occupe = true; majControles();
+  const r = await envoyer(multi() ? 'pont-multi-encaisser' : 'pont-encaisser', {});
+  if (!r || r.erreur) { S.occupe = false; majControles(); annonce(r && r.erreur && r.erreur !== 'reseau' ? r.erreur : 'Erreur réseau, réessayez.', true); return; }
+  poserSolde(r.solde);
+  if (multi()) { S.vus[couleurMoi()] = { pos: m.pos, statut: 'encaisse' }; appliquerVue(r, true); }
+  return gagner(false, r.gain, r.mult);
+}
+async function gagner(complete, gain, mult) {
+  S.occupe = true;
+  const m = S.moi;
+  if (complete) { m.pos = R() + 1; m.vitre = -1; placerPions(); hop(multi() ? couleurMoi() : 0); await sleep(450); }
+  S.phase = 'fin'; S.occupe = false;
+  montrerResultat({ gagne: true, complete, gain, mult, rang: Math.min(m.pos, R()) });
+}
+
+/* ---------- écran de résultat ---------- */
+const COFFRE = `<div class="rayons"></div>
+<svg viewBox="0 0 200 160" aria-hidden="true">
+  <defs>
+    <linearGradient id="pc-cf-bois" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1e0e"/><stop offset="1" stop-color="#120c05"/></linearGradient>
+    <radialGradient id="pc-cf-lueur" cx=".5" cy=".6" r=".5"><stop offset="0" stop-color="#fff3c4" stop-opacity=".95"/><stop offset="1" stop-color="#e6c065" stop-opacity="0"/></radialGradient>
+    <linearGradient id="pc-cf-lingot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset=".4" stop-color="#e8c160"/><stop offset="1" stop-color="#8f6a1f"/></linearGradient>
+  </defs>
+  <g class="coffre-couvercle">
+    <path d="M34 76 L40 30 Q100 8 160 30 L166 76 Z" fill="url(#pc-cf-bois)" stroke="#e6c065" stroke-width="2"/>
+    <path d="M60 22 L56 76 M140 22 L144 76" stroke="#e6c065" stroke-width="5"/>
+    <path d="M40 30 Q100 8 160 30" fill="none" stroke="#fbe6a4" stroke-width="2.5"/>
+  </g>
+  <ellipse class="coffre-lueur" cx="100" cy="78" rx="80" ry="34" fill="url(#pc-cf-lueur)"/>
+  <g>
+    <path d="M52 80 Q100 56 148 80 Z" fill="#d9ae48"/>
+    <g fill="url(#pc-cf-lingot)" stroke="#6e5214" stroke-width=".8">
+      <path d="M62 76 l30 0 l-5 -9 l-20 0z"/><path d="M104 76 l30 0 l-5 -9 l-20 0z"/><path d="M83 68 l30 0 l-5 -9 l-20 0z"/>
+    </g>
+    <g fill="#f0cf74" stroke="#a57b25" stroke-width="1.2">
+      <ellipse cx="58" cy="78" rx="7" ry="3"/><ellipse cx="142" cy="78" rx="7" ry="3"/><ellipse cx="98" cy="77" rx="7" ry="3"/><ellipse cx="120" cy="70" rx="6" ry="2.6"/><ellipse cx="76" cy="69" rx="6" ry="2.6"/>
+    </g>
+  </g>
+  <rect x="30" y="78" width="140" height="66" rx="5" fill="url(#pc-cf-bois)" stroke="#e6c065" stroke-width="2"/>
+  <rect x="30" y="78" width="140" height="9" fill="#e6c065"/><rect x="30" y="80" width="140" height="2" fill="#fbe6a4" opacity=".7"/>
+  <rect x="52" y="78" width="9" height="66" fill="#c9a24a"/><rect x="139" y="78" width="9" height="66" fill="#c9a24a"/>
+  <rect x="88" y="94" width="24" height="28" rx="3" fill="#e6c065" stroke="#fbe6a4"/><circle cx="100" cy="105" r="3.5" fill="#1a1207"/><rect x="98.6" y="106" width="2.8" height="9" fill="#1a1207"/>
+</svg>`;
+const VITRE_BRISEE = `<svg viewBox="0 0 200 150" aria-hidden="true" style="width:150px;height:120px">
+  <rect x="50" y="18" width="100" height="114" rx="4" fill="none" stroke="#8a6a24" stroke-width="4"/>
+  <g fill="rgba(214,232,238,.2)" stroke="rgba(235,245,248,.75)" stroke-width="1.2">
+    <polygon points="54,22 92,22 60,58"/><polygon points="146,22 146,64 116,22"/><polygon points="54,128 54,86 78,128"/><polygon points="146,128 118,128 146,96"/><polygon points="100,22 112,22 104,36"/>
+  </g>
+  <g stroke="rgba(235,245,248,.35)" stroke-width="1"><path d="M100 75 L60 58 M100 75 L116 22 M100 75 L146 96 M100 75 L78 128 M100 75 L104 36"/></g>
+</svg>`;
+
+
+function montrerResultat(r) {
+  const box = $('#pcResultat');
+  $('#pcResVisuel').innerHTML = r.gagne ? COFFRE : VITRE_BRISEE;
+  const mt = $('#pcResMontant'); mt.classList.toggle('perdu', !r.gagne);
+  if (r.gagne) {
+    $('#pcResSur').textContent = r.complete ? 'Rive d\'or atteinte' : `Encaissé à la rangée ${r.rang} sur ${R()}`;
+    $('#pcResTitre').textContent = r.complete ? 'Traversée complète' : 'Le trésor est à vous';
+    $('#pcResDetail').innerHTML = `Mise <b>${eur(S.miseEngagee)}</b> × cote <b>${cote(r.mult)}</b>`;
+    mt.textContent = '+ ' + eur(0);
+  } else {
+    $('#pcResSur').textContent = `Rangée ${r.rang} sur ${R()}`;
+    $('#pcResTitre').textContent = 'La vitre a cédé';
+    mt.textContent = '− ' + eur(S.miseEngagee);
+    $('#pcResDetail').textContent = r.detail;
+  }
+  $('#pcBtnRejouer').textContent = r.gagne ? 'Nouvelle traversée' : 'Rejouer';
+  box.hidden = false; void box.offsetWidth; box.classList.add('vue');
+  majControles();
+  if (r.gagne) {
+    Son.encaisse(r.complete || r.mult >= 10);
+    setTimeout(() => { const v = $('#pcResVisuel').getBoundingClientRect(); FX.tresor(v.left + v.width / 2, v.top + v.height * .5, r.complete || r.mult >= 10); }, 260);
+    const t0 = performance.now(), d = REDUIT ? 200 : 1100;
+    const pas = t => { const x = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - x, 3); mt.textContent = '+ ' + eur(arrondi(r.gain * e)); if (x < 1) requestAnimationFrame(pas); };
+    requestAnimationFrame(pas);
+  }
+}
+function fermerResultat(immediat) {
+  const box = $('#pcResultat'); box.classList.remove('vue');
+  if (immediat) box.hidden = true; else setTimeout(() => { box.hidden = true; }, 300);
+  arreterSondage();
+  S.phase = 'repos'; S.occupe = false;
+  S.moi = { pos: 0, vitre: -1, vivant: true }; S.membres = []; S.vus = {};
+  rangsVides();
+  construirePont(); majMiseUI(); majControles();
+}
+
+/* =====================================================================
+   DÉROULEMENT — MULTIJOUEUR
+   ===================================================================== */
+function arreterSondage() { clearTimeout(S.sondage); S.sondage = 0; }
+function planifierSondage() { clearTimeout(S.sondage); S.sondage = setTimeout(sonder, SONDAGE_MS); }
+
+async function rejoindre() {
+  if (S.occupe) return;
+  S.occupe = true; $('#pcBtnDepart').disabled = true;
+  Son.reveil(); Son.clic();
+  const r = await envoyer('pont-multi-rejoindre', { mise: S.mise });
+  S.occupe = false;
+  if (!r || r.erreur) { annonce(r && r.erreur && r.erreur !== 'reseau' ? r.erreur : 'Erreur réseau.', true); majMiseUI(); return; }
+  S.phase = 'attente'; S.chrono = -1; S.miseEngagee = S.mise;
+  $('#pcAttenteMise').textContent = eur(S.mise);
+  majAttente({ statut: 'attente' });
+  majControles();
+  sonder();
+}
+function majAttente(e) {
+  const n = e.statut === 'compteADebours' ? e.effectif : 1;
+  $('#pcAttenteKoalas').innerHTML = KOALAS.map((k, i) => `<svg aria-hidden="true" class="${i < n ? '' : 'vide'}"><use href="#${k}"/></svg>`).join('');
+  if (e.statut === 'compteADebours') {
+    $('#pcAttenteChrono').textContent = e.secondes;
+    $('#pcAttenteTxt').textContent = `Départ dans ${e.secondes} s · ${e.effectif} joueurs`;
+    if (e.secondes !== S.chrono) { S.chrono = e.secondes; Son.clic(); }
+  } else {
+    $('#pcAttenteChrono').textContent = '';
+    $('#pcAttenteTxt').textContent = 'En attente d\'un autre joueur…';
+    S.chrono = -1;
+  }
+}
+async function quitterFile() {
+  arreterSondage();
+  await envoyer('pont-multi-quitter', {});
+  S.phase = 'repos'; majMiseUI(); majControles();
+}
+
+async function sonder() {
+  S.sondage = 0;
+  if (!PONT.ouvert || !multi() || S.phase === 'repos') return;
+  const e = await demander('pont-multi-etat');
+  if (!PONT.ouvert || !multi() || S.phase === 'repos') return;
+  if (!e || e.erreur) { planifierSondage(); return; }
+  if (S.phase === 'attente') {
+    if (e.statut === 'attente' || e.statut === 'compteADebours') majAttente(e);
+    else if (e.statut === 'erreur' || e.statut === 'aucune') {
+      annonce(e.erreur || 'La file d\'attente a été perdue.', true);
+      S.phase = 'repos'; majMiseUI(); majControles(); return;
+    } else if (e.statut === 'parti') {
+      debutMulti(e);
+    }
+  } else if (e.statut === 'parti') {
+    appliquerVue(e, true);
+  } else if (S.phase === 'jeu') {
+    // le salon a disparu (filet de securite cote serveur)
+    annonce('La partie a expiré.', true);
+    fermerResultat(true); return;
+  }
+  planifierSondage();
+}
+
+function debutMulti(e) {
+  S.membres = e.membres; S.vus = {};
+  e.membres.forEach(mb => { S.vus[mb.couleur] = { pos: mb.pos, statut: mb.statut }; });
+  const moi = moiMembre();
+  S.moi = { pos: moi ? moi.pos : 0, vitre: moi ? moi.vitre : -1, vivant: !moi || moi.statut === 'jeu' };
+  S.phase = 'jeu'; S.occupe = false;
+  appliquerRangs(e);
+  poserSolde(e.solde);
+  construirePont(); majControles(); consigneJeu();
+  Son.tient(1, true);
+  annonce(`C'est parti ! ${e.membres.length} koalas sur le pont, chacun à son rythme.`);
+}
+
+function appliquerRangs(e) {
+  S.rangs = Array.from({ length: e.rangees }, (_, k) => ({
+    solide: e.revele[k] == null ? null : Array.from({ length: e.largeur }, (_, j) => j === e.revele[k]),
+    casses: e.casses[k] || []
+  }));
+}
+
+/* on applique l'etat du salon ; les pas des AUTRES koalas sont animes ici */
+function appliquerVue(e, animer) {
+  if (!e || !e.membres) return;
+  appliquerRangs(e);
+  S.membres = e.membres;
+  if (typeof e.solde === 'number') poserSolde(e.solde);
+  const moi = moiMembre();
+  if (moi && !S.occupe && S.phase === 'jeu') {
+    if (moi.pos !== S.moi.pos && moi.statut === 'jeu') { S.moi.pos = moi.pos; S.moi.vitre = moi.vitre; }
+    if (moi.statut !== 'jeu' && moi.statut !== 'arrive' && moi.statut !== 'encaisse' && S.moi.vivant) S.moi.vivant = false;
+  }
+  e.membres.forEach(mb => {
+    if (mb.moi) return;
+    const avant = S.vus[mb.couleur] || { pos: 0, statut: 'jeu' };
+    const el = pionEl(mb.couleur);
+    if (animer && mb.pos > avant.pos) {
+      hop(mb.couleur); Son.saut(true);
+      if (mb.statut === 'tombe') {
+        const v = vitreEl(mb.pos, mb.vitre);
+        if (v) { v.classList.add('eclair'); FX.eclats(v.getBoundingClientRect()); }
+        Son.brise();
+        if (el) setTimeout(() => el.classList.add('chute'), 420);
+        annonce(`La vitre de ${mb.pseudo} a cédé : rangée ${mb.pos} révélée`, true);
+      } else {
+        Son.tient(mb.pos, true);
+        const v = vitreEl(mb.pos, mb.vitre); if (v) FX.etincelles(v.getBoundingClientRect(), 6);
+        if (mb.statut === 'arrive') annonce(`${mb.pseudo} atteint la rive d'or !`);
+      }
+    } else if (mb.statut !== avant.statut) {
+      if (mb.statut === 'encaisse' && animer) annonce(`${mb.pseudo} encaisse ${eur(mb.gain || 0)}`);
+      if ((mb.statut === 'tombe' || mb.statut === 'abandon') && el) el.classList.add('chute');
+    }
+    S.vus[mb.couleur] = { pos: mb.pos, statut: mb.statut };
+  });
+  placerPions(); majControles(); majCamera();
+  if (!S.occupe) consigneJeu();
+}
+
+/* ---------- ouverture / fermeture ---------- */
+PONT.ouvrir = function () {
+  PONT.ouvert = true;
+  racine.hidden = false;
+  document.body.classList.add('pont-actif');
+  // filet de securite : une traversee restee ouverte (onglet ferme) est abandonnee
+  envoyer('pont-abandonner', {});
+  envoyer('pont-multi-quitter', {});
+  fermerResultat(true);
+};
+PONT.fermer = function (sansQuestion) {
+  if (S.phase === 'jeu' && S.moi.vivant && !sansQuestion &&
+      !confirm('Quitter la traversée ? La mise engagée sera perdue.')) return false;
+  arreterSondage();
+  if (S.phase === 'jeu' || S.phase === 'attente') envoyer(multi() ? 'pont-multi-quitter' : 'pont-abandonner', {});
+  S.phase = 'repos';
+  PONT.ouvert = false;
+  racine.hidden = true;
+  document.body.classList.remove('pont-actif');
+  return true;
+};
+
+/* ---------- branchements ---------- */
+$('#pcPlan').addEventListener('click', e => {
+  const v = e.target.closest('.vitre'); if (!v) return;
+  const k = +v.dataset.k; if (k !== S.moi.pos + 1) return;
+  Son.reveil(); choisir(+v.dataset.j);
+});
+$('#pcBtnDepart').addEventListener('click', () => { if (S.phase !== 'repos') return; multi() ? rejoindre() : demarrerSolo(); });
+$('#pcBtnEncaisser').addEventListener('click', encaisser);
+$('#pcBtnRejouer').addEventListener('click', () => { Son.reveil(); Son.clic(); fermerResultat(); });
+$('#pcQuitterFile').addEventListener('click', () => { Son.clic(); quitterFile(); });
+$('#pcQuitter').addEventListener('click', () => PONT.fermer());
+$('#pcSegJeu').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || S.phase !== 'repos') return; Son.reveil(); Son.clic(); S.jeu = b.dataset.jeu; rangsVides(); construirePont(); majMiseUI(); });
+$('#pcSegRisque').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || S.phase !== 'repos') return; Son.reveil(); Son.clic(); S.risque = b.dataset.risque; rangsVides(); construirePont(); majMiseUI(); });
+$('#pcMiseMoins').addEventListener('click', () => { Son.reveil(); Son.clic(); const p = PALIERS.filter(v => v < S.mise).pop(); if (p) { S.mise = p; majMiseUI(); } });
+$('#pcMisePlus').addEventListener('click', () => { Son.reveil(); Son.clic(); const p = PALIERS.find(v => v > S.mise); if (p && p <= soldeActuel() && p <= MISE_MAX) { S.mise = p; majMiseUI(); } });
+$('#pcJetons').innerHTML = JETONS.map(v => `<button type="button" class="jeton" data-v="${v}" aria-label="Miser ${eur(v)}">${jetonTxt(v)}</button>`).join('');
+$('#pcJetons').addEventListener('click', e => { const b = e.target.closest('.jeton'); if (!b) return; Son.reveil(); Son.clic(); S.mise = +b.dataset.v; majMiseUI(); });
+$('#pcBtnSon').addEventListener('click', () => { const b = $('#pcBtnSon'), c = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', c); b.setAttribute('aria-label', c ? 'Rétablir le son' : 'Couper le son'); Son.setCoupe(c); if (!c) { Son.reveil(); Son.clic(); } });
+document.addEventListener('keydown', e => {
+  if (!PONT.ouvert || S.phase !== 'jeu' || S.occupe) return;
+  const w = mode().largeur, touches = w === 2 ? { ArrowLeft: 0, ArrowRight: 1 } : { ArrowLeft: 0, ArrowDown: 1, ArrowUp: 1, ArrowRight: 2 };
+  if (e.key in touches) { e.preventDefault(); Son.reveil(); choisir(touches[e.key]); }
+});
+let redim = 0;
+addEventListener('resize', () => { if (!PONT.ouvert) return; clearTimeout(redim); redim = setTimeout(() => {
+  const avant = G.pw; mesurer(); if (G.pw === avant) return;
+  if (S.phase === 'repos') construirePont(); else { $('#pcPlan').style.setProperty('--pw', G.pw + 'px'); placerPions(); }
+}, 150); });
+
+rangsVides();
+})();
+</script>
+
 </body>
 </html>
