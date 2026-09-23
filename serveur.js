@@ -870,7 +870,15 @@ function etatPour(table, jeton) {
     provocation,
     message: table.message,
     assis: moiIndex >= 0,
-    chat: table.chat.map(m => ({ id: m.id, nom: m.nom, texte: m.texte, systeme: !!m.systeme, moi: !!(m.jeton && m.jeton === jeton) }))
+    chat: table.chat.map(m => ({
+      id: m.id, nom: m.nom, texte: m.texte, systeme: !!m.systeme, t: m.t || 0,
+      moi: !!(m.jeton && m.jeton === jeton),
+      cadeau: m.cadeau ? {
+        de: m.cadeau.de, a: m.cadeau.a, montant: m.cadeau.montant,
+        pourMoi: m.cadeau.aJeton === jeton,     // c'est moi qui reçois
+        deMoi:   m.cadeau.deJeton === jeton     // c'est moi qui offre
+      } : null
+    }))
   };
 }
 
@@ -1526,7 +1534,13 @@ const serveur = http.createServer(async (req, res) => {
       cible.solde = sous(cible.solde + v);
       majSoldeCompte(p);
       majSoldeCompte(cible);
-      table.chat.push({ id: ++table.chatId, systeme: true, texte: p.nom + ' offre ' + eur(v) + ' à ' + cible.nom + '.', t: Date.now() });
+      // le don est inscrit dans le chat de la table ; le champ "cadeau"
+      // permet au destinataire (et a lui seul) d'afficher une notification
+      table.chat.push({
+        id: ++table.chatId, systeme: true,
+        texte: p.nom + ' offre ' + eur(v) + ' à ' + cible.nom + '.', t: Date.now(),
+        cadeau: { de: p.nom, a: cible.nom, montant: v, deJeton: p.jeton, aJeton: cible.jeton }
+      });
       if (table.chat.length > CHAT_MAX) table.chat.splice(0, table.chat.length - CHAT_MAX);
       touche(table);
       return repondre(res, 200, etatPour(table, compte.jetonRef));
