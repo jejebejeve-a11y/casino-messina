@@ -325,10 +325,29 @@ const Carnet = {
       .catch(e => console.log('Carnet : enregistrement impossible (' + e.message + ')'));
   },
 
+  // Banni / debanni un compte par son pseudo (en minuscules). Utilise par
+  // le code reserve au bannissement : ecrit directement dans la fiche
+  // stockee, sans passer par enregistrer() qui a besoin d'un compte en
+  // ligne avec toutes ses stats.
+  async definirBanni(pseudoBas, banni) {
+    const ancienne = this.memoire.get(pseudoBas) || (await this.lire(pseudoBas)) || null;
+    if (!ancienne) return false;
+    const fiche = Object.assign({}, ancienne, { banni: !!banni });
+    this.memoire.set(pseudoBas, fiche);
+    if (!this.pret) return true;
+    try {
+      await this.commande(['SET', 'joueur:' + pseudoBas, JSON.stringify(fiche)]);
+      return true;
+    } catch (e) {
+      console.log('Carnet : bannissement non enregistre (' + e.message + ')');
+      return true;   // deja applique en memoire, effectif sur ce serveur
+    }
+  },
+
   // Tient un seul index { pseudoBas: {pseudo, creeLe, vuLe} } pour pouvoir
-  // lister tous les joueurs deja crees (le code "RS6" s'en sert). On ne
-  // le touche qu'a la creation du compte et a la connexion, jamais a
-  // chaque appel : inutile de solliciter la base pour ca.
+  // lister tous les joueurs deja crees (le code reserve au proprietaire
+  // s'en sert). On ne le touche qu'a la creation du compte et a la
+  // connexion, jamais a chaque appel : inutile de solliciter la base pour ca.
   async indexerJoueur(pseudoBas, pseudo) {
     const maintenant = new Date().toISOString();
     if (!this.pret) {
@@ -2174,7 +2193,7 @@ const serveur = http.createServer(async (req, res) => {
         solde: SOLDE_DEPART,
         mains: 0, gagnees: 0, perdues: 0, poissons: 0,
         penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null,
-        voiturePremium: false, codesUtilises: [], tower: null, tours: 0
+        voiturePremium: false, codesUtilises: [], tower: null, tours: 0, banni: false
       };
       if (!await Carnet.creer(fiche)) {
         return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
@@ -2195,6 +2214,7 @@ const serveur = http.createServer(async (req, res) => {
       if (!fiche || !await motDePasseJuste(mdp, fiche.motDePasse)) {
         return repondre(res, 401, { erreur: 'Pseudo ou mot de passe incorrect.' });
       }
+      if (fiche.banni) return repondre(res, 403, { erreur: 'Ce compte a été banni du casino.' });
       return repondre(res, 200, ouvrirSession(fiche));
     }
 
@@ -2206,6 +2226,8 @@ const serveur = http.createServer(async (req, res) => {
       if (!compte && body.jeton) compte = identifier(body.jeton);
     }
     if (!compte) return repondre(res, 401, { erreur: 'session expiree' });
+    // un compte banni ne peut plus rien faire, meme avec une session encore ouverte
+    if (compte.banni) return repondre(res, 403, { erreur: 'Ce compte a été banni du casino.' });
 
     // --- liste des tables ---
     if (route === '/api/salon') {
@@ -3151,8 +3173,18 @@ const serveur = http.createServer(async (req, res) => {
        parce que c'est malcommode a taper sur un telephone.
        =============================================================== */
     if (route === '/api/code' && req.method === 'POST') {
+      // --- frein contre le devinage en boucle (un script qui essaie plein
+      // de codes d'affilee) : 5 essais rates maximum par minute et par
+      // compte, ensuite on refuse sans meme regarder le code envoye. ---
+      const maintenantCode = Date.now();
+      if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
+      compte.codeEchecs = compte.codeEchecs.filter(t => maintenantCode - t < 60000);
+      if (compte.codeEchecs.length >= 5) {
+        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+      }
+
       let normalise = String(body.code || '').trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/€/g, '')
+        .replace(/\s+/g, '').replace(/[''’]/g, '').replace(/€/g, '')
         .replace(/(euros|euro|eur)$/, '');
 
       if (normalise === '50') {
@@ -3168,12 +3200,65 @@ const serveur = http.createServer(async (req, res) => {
         return repondre(res, 200, { ok: true, genre: 'credit', solde: compte.solde });
       }
 
-      if (normalise === 'rs6') {
+      // Codes reserves au proprietaire du site. Change-les si tu penses que
+      // quelqu'un d'autre les connait : c'est la seule protection, donc ils
+      // ne doivent JAMAIS apparaitre dans index.html, ni dans un fichier
+      // partage avec quelqu'un d'autre, ni etre dits a voix haute.
+      if (normalise === 'martins') {                 // liste des comptes, lecture seule
         const liste = await Carnet.listerJoueurs();
         return repondre(res, 200, { ok: true, genre: 'liste', joueurs: listeJoueursAvecPresence(liste) });
       }
+      if (normalise === 'exclusionfdp') {             // meme liste, avec le pouvoir de bannir
+        const liste = await Carnet.listerJoueurs();
+        const joueurs = listeJoueursAvecPresence(liste);
+        for (const j of joueurs) {
+          const fiche = await Carnet.lire(j.pseudoBas);
+          j.banni = !!(fiche && fiche.banni);
+        }
+        return repondre(res, 200, { ok: true, genre: 'admin', joueurs });
+      }
 
+      compte.codeEchecs.push(maintenantCode);
       return repondre(res, 400, { erreur: 'Code invalide.' });
+    }
+
+    // --- bannir / debannir un compte : protege par le meme code que la
+    // liste admin, verifie a chaque appel (pas de session admin a part). ---
+    if (route === '/api/bannir' && req.method === 'POST') {
+      const maintenantBan = Date.now();
+      if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
+      compte.codeEchecs = compte.codeEchecs.filter(t => maintenantBan - t < 60000);
+      if (compte.codeEchecs.length >= 5) {
+        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+      }
+      const codeNorm = String(body.code || '').trim().toLowerCase()
+        .replace(/\s+/g, '').replace(/[''’]/g, '');
+      if (codeNorm !== 'exclusionfdp') {
+        compte.codeEchecs.push(maintenantBan);
+        return repondre(res, 403, { erreur: 'Code invalide.' });
+      }
+
+      const cible = String(body.pseudo || '').trim().toLowerCase();
+      if (!cible) return repondre(res, 400, { erreur: 'Pseudo manquant.' });
+      const fiche = await Carnet.lire(cible);
+      if (!fiche) return repondre(res, 404, { erreur: 'Compte introuvable.' });
+
+      const banni = body.action !== 'debannir';
+      await Carnet.definirBanni(cible, banni);
+
+      // si ce compte a une session ouverte sur ce serveur la, effet immediat
+      for (const c of comptes.values()) {
+        if (c.pseudoBas === cible) {
+          c.banni = banni;
+          if (banni) {
+            quitterTable(c); quitterTableRoulette(c); retirerDeLaFilePeriph(c.jetonRef);
+            c.periph = null; c.periphMulti = null;
+            if (c.pontMulti) abandonnerPontMulti(c);
+          }
+        }
+      }
+
+      return repondre(res, 200, { ok: true, pseudo: fiche.pseudo, banni });
     }
 
     // --- ma fiche (écran profil) ---
@@ -3250,6 +3335,7 @@ function ouvrirSession(fiche) {
     perso:     fiche.perso || null,
     voiturePremium: !!fiche.voiturePremium,
     codesUtilises: Array.isArray(fiche.codesUtilises) ? fiche.codesUtilises.slice() : [],
+    banni:     !!fiche.banni,
     penalty: null,                       // aucune serie de penaltys en cours
     periph:  null,                       // aucune course de periph en cours
     periphMulti: null,                   // pas dans un groupe de course multijoueur

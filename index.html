@@ -732,13 +732,20 @@ body{
 .msg-code.ko{color:#E07A7A}
 .liste-joueurs{margin-top:12px;max-height:340px;overflow-y:auto}
 .ligne-joueur{
-  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;
   padding:9px 0;border-bottom:1px solid rgba(212,175,55,.1);font-size:12.5px;
 }
 .ligne-joueur .nm{color:var(--craie,#e9e4da);font-weight:600;display:flex;align-items:center;gap:7px}
 .ligne-joueur .pt{color:rgba(243,232,213,.45);text-align:right;font-size:11px;line-height:1.4}
 .pastille-ligne{width:8px;height:8px;border-radius:50%;background:#5b5f66;flex-shrink:0}
 .pastille-ligne.en-ligne{background:#57c26a;box-shadow:0 0 6px #57c26a}
+.tag-banni{color:#ff8080;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1px solid rgba(255,128,128,.4);border-radius:5px;padding:1px 5px}
+.btn-bannir{
+  flex:0 0 100%;order:3;margin-top:2px;padding:7px 10px;border-radius:8px;border:1px solid rgba(200,60,60,.5);
+  background:rgba(140,20,20,.25);color:#ffb3b3;font-size:11.5px;font-weight:700;cursor:pointer;
+}
+.btn-bannir.est-banni{border-color:rgba(212,175,55,.4);background:rgba(212,175,55,.12);color:#e9c869}
+.btn-bannir:disabled{opacity:.4;pointer-events:none}
 
 /* ---------- PERSONNAGE ---------- */
 #ecranPersonnage{align-items:center;justify-content:center;padding:24px;
@@ -3641,8 +3648,8 @@ async function majProfil() {
   majSolde();
 }
 
-/* ---------- le code du profil (bonus, ou liste "RS6") ---------- */
-function afficherListeJoueurs(joueurs) {
+/* ---------- le code du profil (bonus, ou reserve au proprietaire) ---------- */
+function afficherListeJoueurs(joueurs, admin) {
   const bloc = $('pfListeJoueurs');
   if (!joueurs || !joueurs.length) {
     bloc.hidden = true; bloc.innerHTML = ''; return;
@@ -3650,9 +3657,24 @@ function afficherListeJoueurs(joueurs) {
   bloc.hidden = false;
   bloc.innerHTML = joueurs.map(j => `
     <div class="ligne-joueur">
-      <span class="nm"><span class="pastille-ligne ${j.enLigne ? 'en-ligne' : ''}"></span>${j.pseudo}</span>
+      <span class="nm"><span class="pastille-ligne ${j.enLigne ? 'en-ligne' : ''}"></span>${j.pseudo}${j.banni ? ' <b class="tag-banni">banni</b>' : ''}</span>
       <span class="pt">Créé le ${dateCourte(j.creeLe)}<br>Vu ${tempsEcoule(j.vuLe)}</span>
+      ${admin ? `<button type="button" class="btn-bannir${j.banni ? ' est-banni' : ''}" data-pseudo="${j.pseudoBas}" data-action="${j.banni ? 'debannir' : 'bannir'}">${j.banni ? 'Débannir' : 'Bannir'}</button>` : ''}
     </div>`).join('');
+  if (admin) {
+    bloc.querySelectorAll('.btn-bannir').forEach(b => {
+      b.onclick = async () => {
+        b.disabled = true;
+        const rep = await envoyer('bannir', {
+          code: $('pfCodeChamp').value.trim(),
+          pseudo: b.dataset.pseudo,
+          action: b.dataset.action
+        });
+        if (!rep || rep.erreur) { alert((rep && rep.erreur) || 'Le casino ne répond pas.'); b.disabled = false; return; }
+        $('pfCodeValider').click();   // recharge la liste avec les statuts à jour
+      };
+    });
+  }
 }
 $('pfCodeValider').onclick = async () => {
   const champ = $('pfCodeChamp'), msg = $('pfCodeMsg');
@@ -3675,7 +3697,11 @@ $('pfCodeValider').onclick = async () => {
   } else if (rep.genre === 'liste') {
     msg.className = 'msg-code ok';
     msg.textContent = rep.joueurs.length + ' compte(s) au total.';
-    afficherListeJoueurs(rep.joueurs);
+    afficherListeJoueurs(rep.joueurs, false);
+  } else if (rep.genre === 'admin') {
+    msg.className = 'msg-code ok';
+    msg.textContent = rep.joueurs.length + ' compte(s) — gestion des bannissements.';
+    afficherListeJoueurs(rep.joueurs, true);
   }
 };
 $('pfCodeChamp').addEventListener('keydown', e => {
