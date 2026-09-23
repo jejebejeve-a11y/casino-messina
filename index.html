@@ -405,13 +405,32 @@ body{
 }
 .score-bulle.saute{border-color:#B84040;color:#E89090}
 
+/* ---------- skins de table : vert (par defaut) / noir-or ---------- */
+#ecranSalle.skin-or .tapis{ --feutre:#181310; --feutre2:#060504; }
+#ecranSalle.skin-or .place{ background:rgba(24,17,10,.5); }
+#ecranSalle.skin-or .score-bulle{ background:rgba(10,8,5,.6); }
+
 .sieges-jeu{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:22px}
 .place{
   border:1px solid rgba(212,175,55,.2);border-radius:3px;padding:11px 7px;
   background:rgba(8,26,22,.45);text-align:center;min-height:150px;
   display:flex;flex-direction:column;align-items:center;
   transition:border-color .3s, box-shadow .3s;
+  position:relative;
 }
+.place-cadeau{
+  position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;
+  background:rgba(212,175,55,.18);border:1px solid rgba(212,175,55,.5);
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  cursor:pointer;line-height:1;
+}
+.place-cadeau:active{transform:scale(.9)}
+.place-solde{font-size:9.5px;color:rgba(243,232,213,.45);margin-top:2px}
+.place-solde.masque{opacity:.35;font-style:italic}
+.main-split{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.main-split .un-split{display:flex;flex-direction:column;align-items:center;gap:2px;padding:2px 3px;border-radius:3px}
+.main-split .un-split.active-split{background:rgba(240,217,140,.12)}
+.main-split .main-cartes{gap:3px;min-height:0}
 .place.moi{border-color:rgba(212,175,55,.75);box-shadow:0 0 0 1px rgba(212,175,55,.2), 0 8px 26px rgba(0,0,0,.4)}
 .place.tour{border-color:var(--or-clair);box-shadow:0 0 22px rgba(240,217,140,.3)}
 .place.vide{opacity:.4;justify-content:center}
@@ -481,6 +500,31 @@ body{
 .resultat{
   text-align:center;font-family:'Cormorant Garamond',serif;font-size:22px;
   padding:10px;color:var(--or-clair);min-height:46px;
+}
+
+/* ---------- chat de table ---------- */
+#ecranSalle{position:relative}
+.chat-panneau{
+  position:absolute;left:0;right:0;top:52px;z-index:20;max-height:0;overflow:hidden;
+  background:rgba(10,8,5,.95);border-bottom:1px solid rgba(212,175,55,.4);
+  transition:max-height .3s ease;
+}
+.chat-panneau.ouvert{max-height:42vh}
+.chat-messages{max-height:calc(42vh - 52px);overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.chat-msg{font-size:12.5px;color:var(--beige);line-height:1.4}
+.chat-msg b{color:var(--or-clair);font-weight:600}
+.chat-msg.systeme{color:rgba(212,175,55,.75);font-style:italic;text-align:center;font-size:11px}
+.chat-msg.moi b{color:#F0D98C}
+.chat-saisie{display:flex;gap:6px;padding:8px 10px;border-top:1px solid rgba(212,175,55,.2)}
+.chat-saisie input{
+  flex:1;min-width:0;padding:9px 11px;background:rgba(255,253,248,.05);
+  border:1px solid rgba(212,175,55,.3);border-radius:2px;color:var(--beige);font-size:13px;
+}
+.chat-saisie input:focus{outline:none;border-color:var(--or)}
+.chat-saisie button{
+  padding:9px 14px;background:linear-gradient(180deg,var(--or-clair),#B8941F);
+  border:none;border-radius:2px;color:#1A1405;cursor:pointer;font-size:11px;
+  font-family:'Jost',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.1em;
 }
 .resultat.gagne{color:#8FD9A8}
 .resultat.perdu{color:#E08585}
@@ -1491,12 +1535,24 @@ body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webki
   <div class="entete">
     <div class="entete-logo serif" id="titreSalle">&#9827; MESSINA</div>
     <div class="entete-droite">
+      <div class="avatar-mini" id="btnVisibilite" title="Afficher / masquer mon solde aux autres">&#128065;</div>
       <div class="solde">
         <div class="solde-lib">Solde</div>
         <div class="solde-val" id="affSolde2">22,00 €</div>
       </div>
+      <div class="avatar-mini" id="btnChat" title="Discussion de la table" style="position:relative">
+        &#128172;<span id="chatPastille" style="display:none;position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:#D4AF37"></span>
+      </div>
       <div class="avatar-mini" id="btnSon2" title="Son">&#128266;</div>
       <div class="avatar-mini" id="btnQuitter" title="Quitter la table">&#10005;</div>
+    </div>
+  </div>
+
+  <div class="chat-panneau" id="chatPanneau">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-saisie">
+      <input type="text" id="chatChamp" placeholder="Écrire un message…" maxlength="240">
+      <button id="chatEnvoyer">Envoyer</button>
     </div>
   </div>
 
@@ -1543,6 +1599,7 @@ body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webki
       <button class="principal" id="btnCarte">Carte</button>
       <button id="btnRester">Rester</button>
       <button id="btnDoubler">Doubler</button>
+      <button id="btnDiviser">Séparer</button>
     </div>
 
     <div class="resultat serif" id="zoneResultat"></div>
@@ -2534,6 +2591,9 @@ let etatCible     = null;
 let enAnimation   = false;
 let dernierMot    = '';
 let dernierResultat = '';
+let chatCursor    = 0;     // les messages d'id <= ceci ne sont pas ré-affichés (on vient d'arriver)
+let chatVus       = new Set();
+let soldesVisibles = false;
 
 /* ===================================================================
    ARRIVEE ET DEPART
@@ -2549,17 +2609,28 @@ async function rejoindreTable(id) {
 
   E.table = { id: id, nom: e.nom };
   $('titreSalle').textContent = e.nom;
+  $('ecranSalle').classList.toggle('skin-or', e.skin === 'or');
   montrerEcran('ecranSalle');
   initSon(); ambianceOn();
 
   M.banque = []; M.places = [null, null, null];
-  M.cacheeRevelee = false; M.indexActif = -1; M.phase = e.phase;
+  M.cacheeRevelee = false; M.indexActif = -1; M.mainActive = 0; M.phase = e.phase;
   signatureBanque = 'neuf'; signaturePlaces = 'neuf';
   dessinerBanque(); dessinerPlaces();
   $('zoneResultat').textContent = '';
   $('zoneResultat').className = 'resultat serif';
   $('champMise').value = '';
   dernierMot = ''; dernierResultat = '';
+
+  // le chat repart de zero a chaque entree dans une table : on ne
+  // revoit jamais l'historique d'avant notre arrivee
+  chatCursor = (e.chat && e.chat.length) ? e.chat[e.chat.length - 1].id : 0;
+  chatVus = new Set();
+  $('chatMessages').innerHTML = '';
+  $('chatPanneau').classList.remove('ouvert');
+  $('chatPastille').style.display = 'none';
+  soldesVisibles = !!e.monSoldeVisible;
+  majBoutonVisibilite();
 
   etatCible = e;
   synchroniser();
@@ -2632,16 +2703,18 @@ async function appliquer(e) {
   }
 
   /* --- nouvelle manche : la table se vide d'un coup --- */
+  const nCartes = (p) => p.mains.reduce((n, m) => n + m.cartes.length, 0);
   const cartesServeur = e.banque.length +
-    e.places.reduce((n, p) => n + (p ? p.main.length : 0), 0);
+    e.places.reduce((n, p) => n + (p ? nCartes(p) : 0), 0);
   const cartesEcran = M.banque.length +
-    M.places.reduce((n, p) => n + (p ? p.main.length : 0), 0);
+    M.places.reduce((n, p) => n + (p ? nCartes(p) : 0), 0);
 
   if (cartesServeur === 0 && cartesEcran > 0) {
     M.banque = [];
     M.places = [null, null, null];
     M.cacheeRevelee = false;
     M.indexActif = -1;
+    M.mainActive = 0;
     $('zoneResultat').textContent = '';
     $('zoneResultat').className = 'resultat serif';
     $('champMise').value = '';
@@ -2654,28 +2727,46 @@ async function appliquer(e) {
     const s = e.places[i];
     if (!s) { M.places[i] = null; continue; }
     if (!M.places[i] || M.places[i].nom !== s.nom) {
-      M.places[i] = { nom: s.nom, moi: s.moi, bot: s.bot, mise: s.mise, main: [], etat: s.etat };
+      M.places[i] = {
+        nom: s.nom, moi: s.moi, bot: s.bot, humain: s.humain,
+        solde: s.solde, soldeVisible: s.soldeVisible,
+        mains: s.mains.map(() => ({ cartes: [], mise: 0, etat: 'attente' })),
+        etat: s.etat
+      };
     } else {
-      M.places[i].mise = s.mise;
-      M.places[i].etat = s.etat;
-      M.places[i].moi  = s.moi;
+      M.places[i].solde = s.solde;
+      M.places[i].soldeVisible = s.soldeVisible;
+      M.places[i].etat  = s.etat;
+      M.places[i].moi   = s.moi;
+      // une main de plus est apparue (partage/split)
+      while (M.places[i].mains.length < s.mains.length) {
+        M.places[i].mains.push({ cartes: [], mise: 0, etat: 'attente' });
+      }
+      for (let h = 0; h < s.mains.length; h++) {
+        M.places[i].mains[h].mise = s.mains[h].mise;
+        M.places[i].mains[h].etat = s.mains[h].etat;
+      }
     }
   }
 
   /* --- les cartes qui viennent d'arriver, une par une --- */
   let securite = 0;
-  while (securite++ < 24) {
+  while (securite++ < 40) {
     let posee = false;
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 3 && !posee; i++) {
       const s = e.places[i], d = M.places[i];
-      if (s && d && d.main.length < s.main.length) {
-        await volerCarte();
-        if (!E.table) return;
-        d.main.push(s.main[d.main.length]);
-        dessinerPlaces();
-        posee = true;
-        break;
+      if (!s || !d) continue;
+      for (let h = 0; h < s.mains.length; h++) {
+        const sm = s.mains[h], dm = d.mains[h];
+        if (dm && sm && dm.cartes.length < sm.cartes.length) {
+          await volerCarte();
+          if (!E.table) return;
+          dm.cartes.push(sm.cartes[dm.cartes.length]);
+          dessinerPlaces();
+          posee = true;
+          break;
+        }
       }
     }
     if (posee) continue;
@@ -2700,9 +2791,13 @@ async function appliquer(e) {
   }
 
   /* --- de qui est-ce le tour --- */
-  M.indexActif = e.indexActif;
-  M.phase      = e.phase;
+  M.indexActif  = e.indexActif;
+  M.mainActive  = e.mainActive || 0;
+  M.phase       = e.phase;
   dessinerPlaces();
+
+  /* --- le chat de la table --- */
+  if (e.chat) afficherChat(e.chat);
 
   /* --- la parole du croupier --- */
   if (e.message && e.message !== dernierMot) {
@@ -2758,7 +2853,10 @@ function majCommandes(e) {
   if (e.phase === 'joueur' && e.monTour) {
     zAct.style.display = 'flex';
     $('btnDoubler').disabled = !e.peutDoubler;
-    lib.innerHTML = 'À vous — <b>' + e.secondes + ' s</b>';
+    $('btnDiviser').disabled = !e.peutDiviser;
+    lib.innerHTML = 'À vous' + (e.places[e.monIndex] && e.places[e.monIndex].mains.length > 1
+        ? ' — main ' + ((e.mainActive || 0) + 1)
+        : '') + ' — <b>' + e.secondes + ' s</b>';
     majBarre(e.secondes, 10);
     return;
   }
@@ -2836,6 +2934,7 @@ async function agir(action) {
 $('btnCarte').onclick   = () => { if (M.phase === 'joueur') agir('carte');   };
 $('btnRester').onclick  = () => { if (M.phase === 'joueur') agir('rester');  };
 $('btnDoubler').onclick = () => { if (M.phase === 'joueur') agir('doubler'); };
+$('btnDiviser').onclick = () => { if (M.phase === 'joueur') agir('diviser'); };
 
 /* ===================================================================
    ANIMATIONS ET RENDU  (inchanges)
@@ -2944,28 +3043,54 @@ function dessinerBanque() {
   }
 }
 
+function uneMainHTML(m, active) {
+  const t = compter(m.cartes);
+  return '<div class="un-split' + (active ? ' active-split' : '') + '">' +
+           '<div class="main-cartes">' + m.cartes.map(c => carteHTML(c, false)).join('') + '</div>' +
+           (m.cartes.length
+             ? '<div class="score-bulle' + (t > 21 ? ' saute' : '') + '">' + (t > 21 ? t + ' ✕' : t) + '</div>'
+             : '') +
+         '</div>';
+}
+
 function dessinerPlaces() {
   const z = $('siegesJeu');
 
   const sig = M.places.map(p => p
-    ? p.nom + '|' + p.mise + '|' + p.main.map(c => c ? c.h + c.s : '?').join(',')
+    ? p.nom + '|' + p.solde + '|' + p.soldeVisible + '|' + p.mains.map(m => m.mise + ':' + m.cartes.map(c => c ? c.h + c.s : '?').join(',')).join('#')
     : '-'
-  ).join('#');
+  ).join('##');
 
   if (sig !== signaturePlaces) {
     signaturePlaces = sig;
-    z.innerHTML = M.places.map(p => {
+    z.innerHTML = M.places.map((p, i) => {
       if (!p) return '<div class="place vide">Place libre</div>';
-      const t = compter(p.main);
+      const miseTotale = p.mains.reduce((s, m) => s + m.mise, 0);
+      const soldeHTML = p.moi
+        ? ''
+        : (p.soldeVisible && typeof p.solde === 'number'
+            ? '<div class="place-solde">' + eur(p.solde) + '</div>'
+            : '<div class="place-solde masque">solde masqué</div>');
+      const cadeauHTML = (!p.moi && p.humain)
+        ? '<div class="place-cadeau" data-place="' + i + '" title="Offrir de l’argent à ' + p.nom + '">&#127873;</div>'
+        : '';
+      const mainsHTML = p.mains.length > 1
+        ? '<div class="main-split">' + p.mains.map((m, h) =>
+            uneMainHTML(m, i === M.indexActif && h === M.mainActive && (M.phase === 'joueur' || M.phase === 'bot'))
+          ).join('') + '</div>'
+        : (p.mains[0] ? uneMainHTML(p.mains[0], false) : '');
       return '<div class="place' + (p.moi ? ' moi' : '') + '">' +
+               cadeauHTML +
                '<div class="place-nom">' + p.nom + (p.moi ? ' · vous' : '') + '</div>' +
-               '<div class="place-mise">' + (p.mise > 0 ? eur(p.mise) : '—') + '</div>' +
-               '<div class="main-cartes">' + p.main.map(c => carteHTML(c, false)).join('') + '</div>' +
-               (p.main.length
-                 ? '<div class="score-bulle' + (t > 21 ? ' saute' : '') + '">' + (t > 21 ? t + ' ✕' : t) + '</div>'
-                 : '') +
+               '<div class="place-mise">' + (miseTotale > 0 ? eur(miseTotale) : '—') + '</div>' +
+               mainsHTML +
+               soldeHTML +
              '</div>';
     }).join('');
+
+    Array.prototype.forEach.call(z.querySelectorAll('.place-cadeau'), b => {
+      b.onclick = (ev) => { ev.stopPropagation(); ouvrirCadeau(Number(b.dataset.place)); };
+    });
   }
 
   // la mise en avant du joueur dont c'est le tour ne redessine pas les cartes
@@ -2974,6 +3099,73 @@ function dessinerPlaces() {
     el.classList.toggle('tour', actif);
   });
 }
+
+/* ===================================================================
+   CADEAU, CHAT, VISIBILITÉ DU SOLDE
+   =================================================================== */
+async function ouvrirCadeau(place) {
+  const p = M.places[place];
+  if (!p) return;
+  const txt = prompt('Combien voulez-vous offrir à ' + p.nom + ' (en €) ?', '1');
+  if (txt === null) return;
+  const v = parseFloat(String(txt).replace(',', '.'));
+  if (!isFinite(v) || v < 0.01) { direKoala('Un montant valable, s’il vous plaît.'); return; }
+  const r = await envoyer('table-offrir', { place: place, montant: Math.round(v * 100) / 100 });
+  if (!r || r.erreur) { direKoala(r && r.erreur === 'solde insuffisant' ? 'Votre solde ne suit pas.' : 'Le don a échoué.'); return; }
+  etatCible = r;
+  synchroniser();
+}
+
+function majBoutonVisibilite() {
+  const b = $('btnVisibilite');
+  if (!b) return;
+  b.textContent = soldesVisibles ? '\u{1F441}' : '\u{1F576}';
+  b.title = soldesVisibles ? 'Votre solde est affiché aux autres — cliquez pour le masquer' : 'Votre solde est masqué aux autres — cliquez pour l’afficher';
+  b.style.opacity = soldesVisibles ? '1' : '.55';
+}
+$('btnVisibilite').onclick = async () => {
+  soldesVisibles = !soldesVisibles;
+  majBoutonVisibilite();
+  await envoyer('table-visibilite', { visible: soldesVisibles });
+};
+
+function afficherChat(liste) {
+  const box = $('chatMessages');
+  let nouveau = false;
+  for (const m of liste) {
+    if (m.id <= chatCursor || chatVus.has(m.id)) continue;
+    chatVus.add(m.id);
+    nouveau = true;
+    const d = document.createElement('div');
+    d.className = 'chat-msg' + (m.systeme ? ' systeme' : '') + (m.moi ? ' moi' : '');
+    d.innerHTML = m.systeme
+      ? m.texte.replace(/</g, '&lt;')
+      : '<b>' + m.nom.replace(/</g, '&lt;') + '</b> ' + m.texte.replace(/</g, '&lt;');
+    box.appendChild(d);
+  }
+  if (nouveau) {
+    box.scrollTop = box.scrollHeight;
+    if (!$('chatPanneau').classList.contains('ouvert')) $('chatPastille').style.display = 'block';
+  }
+}
+$('btnChat').onclick = () => {
+  const p = $('chatPanneau');
+  p.classList.toggle('ouvert');
+  if (p.classList.contains('ouvert')) {
+    $('chatPastille').style.display = 'none';
+    $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+  }
+};
+async function envoyerChat() {
+  const champ = $('chatChamp');
+  const texte = champ.value.trim();
+  if (!texte || !E.table) return;
+  champ.value = '';
+  const r = await envoyer('table-chat', { texte: texte });
+  if (r && !r.erreur) { etatCible = r; synchroniser(); }
+}
+$('chatEnvoyer').onclick = envoyerChat;
+$('chatChamp').addEventListener('keydown', e => { if (e.key === 'Enter') envoyerChat(); });
 
 let chronoBulle = null;
 function direKoala(texte) {

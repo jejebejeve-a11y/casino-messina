@@ -18,12 +18,13 @@ const PORT    = process.env.PORT || 3000;
 const DOSSIER = __dirname;
 
 /* ---------- durees, en millisecondes ---------- */
-const DUREE_MISE      = 10000;  // temps pour miser
-const DUREE_TOUR      = 10000;  // temps pour jouer son tour
-const DUREE_RESULTAT  = 5200;   // affichage du resultat avant la manche suivante
-const DELAI_CARTE     = 430;    // entre deux cartes distribuees
-const DELAI_BANQUE    = 760;    // entre deux cartes de la banque
-const DELAI_BOT       = 900;    // temps de reflexion d'un bot
+const DUREE_MISE      = 12000;  // temps pour miser
+const DUREE_TOUR      = 15000;  // temps pour jouer son tour
+const DUREE_RESULTAT  = 6000;   // affichage du resultat avant la manche suivante
+const DELAI_CARTE     = 560;    // entre deux cartes distribuees
+const DELAI_BANQUE    = 950;    // entre deux cartes de la banque
+const DELAI_BOT       = 1300;   // temps de reflexion d'un bot
+const CHAT_MAX        = 60;     // messages de chat conserves par table
 const ABSENCE_MAX     = 15000;  // sans nouvelles, un joueur perd sa place
 const SOLDE_DEPART    = 22;
 
@@ -368,26 +369,29 @@ function nouveauJeton() { return crypto.randomBytes(16).toString('hex'); }
    =================================================================== */
 const NOMS_BOTS = ['Salvatore', 'Nadia', 'Marco', 'Enzo', 'Livia'];
 
-function neuveTable(id, nom, mini) {
+function neuveTable(id, nom, mini, skin) {
   return {
-    id, nom, mini,
+    id, nom, mini, skin: skin || 'vert',
     sabot: neufSabot(),
     banque: [],
     places: [null, null, null],
     indexActif: -1,
+    mainActive: 0,
     phase: 'attente',
     echeance: 0,
     prochaineCarte: 0,
     fileDistribution: [],
     cacheeRevelee: false,
     message: '',
+    chat: [],
+    chatId: 0,
     version: 1
   };
 }
 
 const tables = [
-  neuveTable('majorelle', 'Jardin Majorelle', 0.01),
-  neuveTable('palmeraie', 'Palmeraie Royale', 0.01)
+  neuveTable('majorelle', 'Jardin Majorelle', 0.01, 'vert'),
+  neuveTable('palmeraie', 'Palmeraie Royale', 0.01, 'or')
 ];
 function trouverTable(id) { return tables.find(t => t.id === id) || null; }
 
@@ -397,6 +401,12 @@ function tirer(table) {
 }
 function touche(table) { table.version++; }
 function dire(table, texte) { table.message = texte; }
+
+/* ---------- une main de blackjack (une place peut en avoir deux
+   apres un partage/split) ---------- */
+function neuveMain(mise) {
+  return { cartes: [], mise: mise || 0, etat: 'attente', resultat: null };
+}
 
 /* ---------- les bots remplissent les places vides ---------- */
 function garnirDeBots(table) {
@@ -411,9 +421,9 @@ function garnirDeBots(table) {
     pris.push(libre);
     table.places[i] = {
       type: 'bot', jeton: null, nom: libre,
-      main: [], mise: 0, etat: 'attente',
+      mains: [neuveMain(0)], etat: 'attente',
       solde: sous(30 + crypto.randomInt(60)),
-      resultat: null, pertesDeSuite: 0, provocation: false
+      resultat: null, pertesDeSuite: 0, provocation: false, soldeVisible: true
     };
   }
 }
@@ -424,7 +434,10 @@ function retirerBotsSiPlusPersonne(table) {
   table.phase = 'attente';
   table.banque = [];
   table.indexActif = -1;
+  table.mainActive = 0;
   table.message = '';
+  table.chat = [];
+  table.chatId = 0;
   touche(table);
 }
 
@@ -434,6 +447,7 @@ function retirerBotsSiPlusPersonne(table) {
 function nouvelleManche(table) {
   table.banque = [];
   table.indexActif = -1;
+  table.mainActive = 0;
   table.cacheeRevelee = false;
   table.fileDistribution = [];
 
@@ -442,8 +456,7 @@ function nouvelleManche(table) {
   let quelquUnPeutJouer = false;
   for (const p of table.places) {
     if (!p) continue;
-    p.main = [];
-    p.mise = 0;
+    p.mains = [neuveMain(0)];
     p.resultat = null;
     p.provocation = false;
     // sans argent, on reste spectateur (on ne bloque pas la table)
@@ -468,7 +481,7 @@ function nouvelleManche(table) {
   for (const p of table.places) {
     if (p && p.type === 'bot' && p.etat === 'attente') {
       const m = Math.min(sous((crypto.randomInt(300) + 50) / 100), p.solde);
-      p.mise = m;
+      p.mains[0].mise = m;
       p.solde = sous(p.solde - m);
     }
   }
@@ -478,11 +491,11 @@ function nouvelleManche(table) {
 function demarrerDistribution(table) {
   // mise automatique pour les humains qui n'ont rien pose
   for (const p of table.places) {
-    if (p && p.type === 'humain' && p.etat === 'attente' && p.mise === 0) {
+    if (p && p.type === 'humain' && p.etat === 'attente' && p.mains[0].mise === 0) {
       const auto = Math.min(1, p.solde);
       if (auto >= 0.01) {
-        p.mise = sous(auto);
-        p.solde = sous(p.solde - p.mise);
+        p.mains[0].mise = sous(auto);
+        p.solde = sous(p.solde - p.mains[0].mise);
         majSoldeCompte(p);
       } else {
         p.etat = 'spectateur';
@@ -491,7 +504,7 @@ function demarrerDistribution(table) {
   }
 
   const actifs = [];
-  table.places.forEach((p, i) => { if (p && p.mise > 0) actifs.push(i); });
+  table.places.forEach((p, i) => { if (p && p.mains[0].mise > 0) actifs.push(i); });
 
   if (actifs.length === 0) {                 // personne n'a mise : on relance
     table.phase = 'resultat';
@@ -523,30 +536,23 @@ function poserProchaineCarte(table) {
   if (etape.cible === 'banque') table.banque.push(tirer(table));
   else {
     const p = table.places[etape.index];
-    if (p) p.main.push(tirer(table));
+    if (p) p.mains[0].cartes.push(tirer(table));
   }
   touche(table);
 
   if (table.fileDistribution.length === 0) {
     if (estBlackjack(table.banque)) { passerALaBanque(table); return; }
     table.indexActif = -1;
+    table.mainActive = 0;
     tourSuivant(table);
   } else {
     table.prochaineCarte = Date.now() + DELAI_CARTE;
   }
 }
 
-function tourSuivant(table) {
-  table.indexActif++;
-  while (table.indexActif < table.places.length) {
-    const p = table.places[table.indexActif];
-    if (p && p.mise > 0 && p.etat === 'attente') break;
-    table.indexActif++;
-  }
-
-  if (table.indexActif >= table.places.length) { passerALaBanque(table); return; }
-
-  const p = table.places[table.indexActif];
+/* ---------- fait demarrer le chrono / le message pour la place et
+   la main actuellement actives ---------- */
+function demarrerTourDe(table, p) {
   if (p.type === 'bot') {
     table.phase = 'bot';
     table.echeance = Date.now() + DELAI_BOT;
@@ -554,19 +560,47 @@ function tourSuivant(table) {
   } else {
     table.phase = 'joueur';
     table.echeance = Date.now() + DUREE_TOUR;
-    dire(table, 'À vous de décider.');
+    dire(table, p.mains.length > 1
+      ? 'À vous de décider (main ' + (table.mainActive + 1) + ').'
+      : 'À vous de décider.');
   }
   touche(table);
+}
+
+/* ---------- avance au prochain joueur/main a jouer. Gere le fait
+   qu'une place partagee (split) a deux mains a jouer l'une apres
+   l'autre avant de passer a la place suivante. ---------- */
+function tourSuivant(table) {
+  // la place courante a-t-elle une deuxieme main encore a jouer ?
+  const courant = table.indexActif >= 0 ? table.places[table.indexActif] : null;
+  if (courant && table.mainActive === 0 && courant.mains.length > 1 &&
+      courant.mains[1].etat === 'attente') {
+    table.mainActive = 1;
+    demarrerTourDe(table, courant);
+    return;
+  }
+
+  table.indexActif++;
+  table.mainActive = 0;
+  while (table.indexActif < table.places.length) {
+    const p = table.places[table.indexActif];
+    if (p && p.mains[0].mise > 0 && p.mains[0].etat === 'attente') break;
+    table.indexActif++;
+  }
+
+  if (table.indexActif >= table.places.length) { passerALaBanque(table); return; }
+  demarrerTourDe(table, table.places[table.indexActif]);
 }
 
 function jouerBot(table) {
   const p = table.places[table.indexActif];
   if (!p) { tourSuivant(table); return; }
+  const m = p.mains[0];
 
-  if (compter(p.main) < 17) {
-    p.main.push(tirer(table));
-    if (compter(p.main) > 21) {
-      p.etat = 'saute';
+  if (compter(m.cartes) < 17) {
+    m.cartes.push(tirer(table));
+    if (compter(m.cartes) > 21) {
+      m.etat = 'saute';
       touche(table);
       tourSuivant(table);
     } else {
@@ -574,7 +608,7 @@ function jouerBot(table) {
       touche(table);
     }
   } else {
-    p.etat = 'reste';
+    m.etat = 'reste';
     touche(table);
     tourSuivant(table);
   }
@@ -584,6 +618,7 @@ function passerALaBanque(table) {
   table.phase = 'banque';
   table.cacheeRevelee = true;
   table.indexActif = -1;
+  table.mainActive = 0;
   table.prochaineCarte = Date.now() + DELAI_BANQUE;
   table.echeance = Date.now() + 20000;           // filet de securite
   dire(table, 'La banque joue.');
@@ -591,7 +626,7 @@ function passerALaBanque(table) {
 }
 
 function banqueJoue(table) {
-  const resteDesJoueurs = table.places.some(p => p && p.mise > 0 && p.etat !== 'saute');
+  const resteDesJoueurs = table.places.some(p => p && p.mains.some(m => m.mise > 0 && m.etat !== 'saute'));
   if (resteDesJoueurs && compter(table.banque) < 17) {
     table.banque.push(tirer(table));
     table.prochaineCarte = Date.now() + DELAI_BANQUE;
@@ -606,39 +641,59 @@ function conclure(table) {
   const bjBanque = estBlackjack(table.banque);
 
   for (const p of table.places) {
-    if (!p || p.mise === 0) continue;
-    const tm = compter(p.main);
-    const bjMoi = estBlackjack(p.main);
-    let texte = '', classe = '';
+    if (!p) continue;
+    const misesJouees = p.mains.filter(m => m.mise > 0);
+    if (!misesJouees.length) continue;
 
-    if (tm > 21) {
-      texte = 'Vous dépassez 21. La banque encaisse ' + eur(p.mise) + '.';
-      classe = 'perdu';
-    } else if (bjMoi && !bjBanque) {
-      const g = sous(p.mise * 2.5);
-      p.solde = sous(p.solde + g);
-      texte = 'Blackjack ! Vous empochez ' + eur(g) + '.';
-      classe = 'gagne';
-    } else if (tb > 21) {
-      const g = sous(p.mise * 2);
-      p.solde = sous(p.solde + g);
-      texte = 'La banque saute. Vous empochez ' + eur(g) + '.';
-      classe = 'gagne';
-    } else if (tm > tb) {
-      const g = sous(p.mise * 2);
-      p.solde = sous(p.solde + g);
-      texte = tm + ' contre ' + tb + '. Vous empochez ' + eur(g) + '.';
-      classe = 'gagne';
-    } else if (tm < tb) {
-      texte = tb + ' pour la banque. Vous perdez ' + eur(p.mise) + '.';
-      classe = 'perdu';
-    } else {
-      p.solde = sous(p.solde + p.mise);
-      texte = 'Égalité à ' + tm + '. Mise rendue.';
-      classe = '';
+    let netTotal = 0;
+    const morceaux = [];
+
+    for (const m of misesJouees) {
+      const tm = compter(m.cartes);
+      const bjMoi = p.mains.length === 1 && estBlackjack(m.cartes);
+      let texte = '', classe = '', delta = 0;
+
+      if (tm > 21) {
+        texte = 'dépasse 21, la banque encaisse ' + eur(m.mise);
+        classe = 'perdu';
+        delta = -m.mise;
+      } else if (bjMoi && !bjBanque) {
+        const g = sous(m.mise * 2.5);
+        delta = g - m.mise;
+        texte = 'blackjack, +' + eur(g - m.mise);
+        classe = 'gagne';
+      } else if (tb > 21) {
+        const g = sous(m.mise * 2);
+        delta = g - m.mise;
+        texte = 'la banque saute, +' + eur(g - m.mise);
+        classe = 'gagne';
+      } else if (tm > tb) {
+        const g = sous(m.mise * 2);
+        delta = g - m.mise;
+        texte = tm + ' contre ' + tb + ', +' + eur(g - m.mise);
+        classe = 'gagne';
+      } else if (tm < tb) {
+        texte = tb + ' pour la banque, -' + eur(m.mise);
+        classe = 'perdu';
+        delta = -m.mise;
+      } else {
+        texte = 'égalité à ' + tm + ', mise rendue';
+        classe = '';
+        delta = 0;
+      }
+
+      m.resultat = { texte, classe };
+      p.solde = sous(p.solde + m.mise + delta);
+      netTotal += delta;
+      morceaux.push(texte);
     }
 
-    p.resultat = { texte, classe };
+    const classeGlobale = netTotal > 0 ? 'gagne' : (netTotal < 0 ? 'perdu' : '');
+    const texteGlobal = misesJouees.length > 1
+      ? morceaux.map((t, i) => 'Main ' + (i + 1) + ' : ' + t + '.').join(' ')
+      : (morceaux[0] ? morceaux[0].charAt(0).toUpperCase() + morceaux[0].slice(1) + '.' : '');
+
+    p.resultat = { texte: texteGlobal, classe: classeGlobale };
     majSoldeCompte(p);
 
     // on inscrit la manche au carnet du joueur
@@ -646,17 +701,17 @@ function conclure(table) {
       const c = comptes.get(p.jeton);
       if (c) {
         c.mains++;
-        if (classe === 'gagne')      c.gagnees++;
-        else if (classe === 'perdu') c.perdues++;
+        if (classeGlobale === 'gagne')      c.gagnees++;
+        else if (classeGlobale === 'perdu') c.perdues++;
         Carnet.enregistrer(c);
       }
     }
 
     // Don Koala se moque, uniquement chez le joueur qui a perdu deux fois
-    if (classe === 'perdu') {
+    if (classeGlobale === 'perdu') {
       p.pertesDeSuite = (p.pertesDeSuite || 0) + 1;
       if (p.pertesDeSuite >= 2) { p.provocation = true; p.pertesDeSuite = 0; }
-    } else if (classe === 'gagne') {
+    } else if (classeGlobale === 'gagne') {
       p.pertesDeSuite = 0;
     }
   }
@@ -721,7 +776,7 @@ function battement() {
       case 'joueur':
         if (now >= table.echeance) {                // le joueur n'a pas repondu : il reste
           const p = table.places[table.indexActif];
-          if (p) p.etat = 'reste';
+          if (p) p.mains[table.mainActive].etat = 'reste';
           touche(table);
           tourSuivant(table);
         }
@@ -751,17 +806,24 @@ function etatPour(table, jeton) {
   const moiIndex = table.places.findIndex(p => p && p.jeton === jeton);
   const moi = moiIndex >= 0 ? table.places[moiIndex] : null;
   const now = Date.now();
+  const compte = comptes.get(jeton);
 
   const places = table.places.map((p, i) => {
     if (!p) return null;
+    const estMoi = i === moiIndex;
     return {
       nom: p.nom,
-      moi: i === moiIndex,
+      moi: estMoi,
       bot: p.type === 'bot',
-      mise: p.mise,
-      main: p.main,
+      humain: p.type === 'humain',
+      mains: p.mains.map(m => ({
+        cartes: m.cartes, mise: m.mise, etat: m.etat,
+        total: compter(m.cartes), resultat: m.resultat
+      })),
       etat: p.etat,
-      total: compter(p.main)
+      // le solde des autres n'est envoye que s'ils ont choisi de l'afficher
+      solde: (estMoi || p.soldeVisible) ? p.solde : null,
+      soldeVisible: !!p.soldeVisible
     };
   });
 
@@ -777,13 +839,17 @@ function etatPour(table, jeton) {
   const provocation = !!(moi && moi.provocation);
   if (moi && moi.provocation) moi.provocation = false;       // on ne la montre qu'une fois
 
+  const mainActiveMoi = moi ? moi.mains[table.mainActive] : null;
+
   return {
     version: table.version,
     table: table.id,
     nom: table.nom,
+    skin: table.skin,
     phase: table.phase,
     secondes,
     indexActif: table.indexActif,
+    mainActive: table.mainActive,
     cacheeRevelee: table.cacheeRevelee,
     banque,
     totalBanque: table.cacheeRevelee
@@ -792,13 +858,19 @@ function etatPour(table, jeton) {
     places,
     monIndex: moiIndex,
     monTour: moiIndex >= 0 && moiIndex === table.indexActif && table.phase === 'joueur',
-    monSolde: moi ? moi.solde : (comptes.get(jeton) ? comptes.get(jeton).solde : 0),
-    maMise: moi ? moi.mise : 0,
-    peutDoubler: !!(moi && moi.main.length === 2 && moi.solde >= moi.mise),
+    monSolde: moi ? moi.solde : (compte ? compte.solde : 0),
+    monSoldeVisible: !!(moi && moi.soldeVisible),
+    maMise: moi ? moi.mains.reduce((s, m) => s + m.mise, 0) : 0,
+    peutDoubler: !!(mainActiveMoi && mainActiveMoi.cartes.length === 2 && moi.solde >= mainActiveMoi.mise),
+    peutDiviser: !!(moi && moi.mains.length === 1 && mainActiveMoi &&
+      mainActiveMoi.cartes.length === 2 &&
+      mainActiveMoi.cartes[0].h === mainActiveMoi.cartes[1].h &&
+      moi.solde >= mainActiveMoi.mise),
     monResultat: moi ? moi.resultat : null,
     provocation,
     message: table.message,
-    assis: moiIndex >= 0
+    assis: moiIndex >= 0,
+    chat: table.chat.map(m => ({ id: m.id, nom: m.nom, texte: m.texte, systeme: !!m.systeme, moi: !!(m.jeton && m.jeton === jeton) }))
   };
 }
 
@@ -807,6 +879,7 @@ function resumeSalon() {
     id: t.id,
     nom: t.nom,
     mini: t.mini,
+    skin: t.skin,
     phase: t.phase,
     places: t.places.map(p => p ? { nom: p.nom, bot: p.type === 'bot' } : null),
     joueurs: t.places.filter(p => p && p.type === 'humain').length
@@ -1271,9 +1344,10 @@ const serveur = http.createServer(async (req, res) => {
 
       table.places[place] = {
         type: 'humain', jeton: compte.jetonRef, nom: compte.pseudo,
-        main: [], mise: 0,
+        mains: [neuveMain(0)],
         etat: (table.phase === 'mise' || table.phase === 'attente') ? 'attente' : 'spectateur',
-        solde: compte.solde, resultat: null, pertesDeSuite: 0, provocation: false
+        solde: compte.solde, resultat: null, pertesDeSuite: 0, provocation: false,
+        soldeVisible: !!compte.soldeVisible
       };
       compte.table = table.id;
       compte.siege = place;
@@ -1367,14 +1441,14 @@ const serveur = http.createServer(async (req, res) => {
       v = sous(v);
       if (v > p.solde + 1e-9) return repondre(res, 400, { erreur: 'solde insuffisant' });
 
-      p.mise  = v;
+      p.mains[0].mise = v;
       p.solde = sous(p.solde - v);
       majSoldeCompte(p);
       touche(table);
       return repondre(res, 200, etatPour(table, compte.jetonRef));
     }
 
-    // --- carte / rester / doubler ---
+    // --- carte / rester / doubler / diviser (split) ---
     if (route === '/api/action' && req.method === 'POST') {
       const info = siegeDe(compte);
       if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
@@ -1385,35 +1459,102 @@ const serveur = http.createServer(async (req, res) => {
       }
 
       const action = String(body.action || '');
+      const m = p.mains[table.mainActive];
 
       if (action === 'carte') {
-        p.main.push(tirer(table));
-        const t = compter(p.main);
-        if (t > 21)       { p.etat = 'saute'; touche(table); tourSuivant(table); }
-        else if (t === 21){ p.etat = 'reste'; touche(table); tourSuivant(table); }
+        m.cartes.push(tirer(table));
+        const t = compter(m.cartes);
+        if (t > 21)       { m.etat = 'saute'; touche(table); tourSuivant(table); }
+        else if (t === 21){ m.etat = 'reste'; touche(table); tourSuivant(table); }
         else              { table.echeance = Date.now() + DUREE_TOUR; touche(table); }
 
       } else if (action === 'rester') {
-        p.etat = 'reste';
+        m.etat = 'reste';
         touche(table);
         tourSuivant(table);
 
       } else if (action === 'doubler') {
-        if (p.main.length !== 2 || p.solde < p.mise) {
+        if (m.cartes.length !== 2 || p.solde < m.mise) {
           return repondre(res, 400, { erreur: 'doublement impossible' });
         }
-        p.solde = sous(p.solde - p.mise);
-        p.mise  = sous(p.mise * 2);
+        p.solde = sous(p.solde - m.mise);
+        m.mise  = sous(m.mise * 2);
         majSoldeCompte(p);
-        p.main.push(tirer(table));
-        p.etat = compter(p.main) > 21 ? 'saute' : 'reste';
+        m.cartes.push(tirer(table));
+        m.etat = compter(m.cartes) > 21 ? 'saute' : 'reste';
         touche(table);
         tourSuivant(table);
+
+      } else if (action === 'diviser') {
+        if (p.mains.length !== 1 || m.cartes.length !== 2 ||
+            m.cartes[0].h !== m.cartes[1].h || p.solde < m.mise) {
+          return repondre(res, 400, { erreur: 'partage impossible' });
+        }
+        p.solde = sous(p.solde - m.mise);
+        majSoldeCompte(p);
+        const secondeCarte = m.cartes.pop();
+        p.mains.push({ cartes: [secondeCarte], mise: m.mise, etat: 'attente', resultat: null });
+        m.cartes.push(tirer(table));
+        p.mains[1].cartes.push(tirer(table));
+        if (compter(m.cartes) === 21) m.etat = 'reste';
+        table.echeance = Date.now() + DUREE_TOUR;
+        touche(table);
 
       } else {
         return repondre(res, 400, { erreur: 'action inconnue' });
       }
 
+      return repondre(res, 200, etatPour(table, compte.jetonRef));
+    }
+
+    // --- offrir de l'argent a un joueur assis a la meme table ---
+    if (route === '/api/table-offrir' && req.method === 'POST') {
+      const info = siegeDe(compte);
+      if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
+      const { table, p } = info;
+
+      const cible = table.places[Number(body.place)];
+      if (!cible || cible.type !== 'humain' || cible === p) {
+        return repondre(res, 404, { erreur: 'destinataire introuvable' });
+      }
+      let v = Number(body.montant);
+      if (!isFinite(v) || v < 0.01) return repondre(res, 400, { erreur: 'montant trop faible' });
+      v = sous(v);
+      if (v > p.solde + 1e-9) return repondre(res, 400, { erreur: 'solde insuffisant' });
+
+      p.solde = sous(p.solde - v);
+      cible.solde = sous(cible.solde + v);
+      majSoldeCompte(p);
+      majSoldeCompte(cible);
+      table.chat.push({ id: ++table.chatId, systeme: true, texte: p.nom + ' offre ' + eur(v) + ' à ' + cible.nom + '.', t: Date.now() });
+      if (table.chat.length > CHAT_MAX) table.chat.splice(0, table.chat.length - CHAT_MAX);
+      touche(table);
+      return repondre(res, 200, etatPour(table, compte.jetonRef));
+    }
+
+    // --- afficher ou masquer son solde aux autres joueurs ---
+    if (route === '/api/table-visibilite' && req.method === 'POST') {
+      compte.soldeVisible = !!body.visible;
+      const info = siegeDe(compte);
+      if (info && info.p) {
+        info.p.soldeVisible = compte.soldeVisible;
+        touche(info.table);
+        return repondre(res, 200, etatPour(info.table, compte.jetonRef));
+      }
+      return repondre(res, 200, { ok: true, soldeVisible: compte.soldeVisible });
+    }
+
+    // --- chat de table (ephemere : voir cote client pour l'affichage) ---
+    if (route === '/api/table-chat' && req.method === 'POST') {
+      const info = siegeDe(compte);
+      if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
+      const { table, p } = info;
+      const texte = String(body.texte || '').trim().slice(0, 240);
+      if (!texte) return repondre(res, 400, { erreur: 'message vide' });
+
+      table.chat.push({ id: ++table.chatId, nom: p.nom, moi: false, jeton: p.jeton, texte, t: Date.now() });
+      if (table.chat.length > CHAT_MAX) table.chat.splice(0, table.chat.length - CHAT_MAX);
+      touche(table);
       return repondre(res, 200, etatPour(table, compte.jetonRef));
     }
 
