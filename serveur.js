@@ -92,16 +92,78 @@ function towerPeriodFor(n) { return Math.max(0.68, 1.5 - n * 0.04); }
 function towerRand(a, b) { return a + Math.random() * (b - a); }
 function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-function towerRollFactor(n, errRatio) {
-  if (n === 0) {
-    let f0 = (Math.random() < 0.63) ? towerRand(0.45, 0.99) : towerRand(1.0, 1.9);
-    if (errRatio < 0.1 && Math.random() < 0.35) f0 = Math.max(f0, towerRand(1.8, 2.6));
-    return Math.min(f0, 7);
-  }
-  const subChance = towerClamp(0.55 - n * 0.045, 0.12, 0.55);
-  let f = (Math.random() < subChance) ? towerRand(0.5, 1.0) : towerRand(1.0, 1 + 0.4 * n);
-  if (errRatio < 0.1 && Math.random() < 0.4) f = Math.max(f, towerRand(1.8, 2.6 + 0.3 * n));
-  return Math.min(f, 7);
+/* ---------- Tower Rush : les cotes (refonte) ----------
+   Avant : un lacher bien vise ne tombait jamais, et chaque etage
+   multipliait en moyenne par plus de 1, sans plafond. Un bon joueur
+   pouvait donc monter indefiniment (0,10 € -> 16 000 €, soit x160 000).
+
+   Maintenant la tour a DOUZE niveaux et un plafond dur de x100.
+   - Chaque niveau a une chance de tenir, meme avec un lacher parfait
+     (TOWER_SURVIE). Un lacher imprecis ajoute son propre risque par-dessus.
+   - Si l'etage tient, le multiplicateur cumule suit en moyenne
+     TOWER_ECHELLE (x1,13 au 1er niveau ... x100 au 12e), avec un peu de
+     hasard a chaque etage (la cote peut rester inferieure a x1).
+   - Le hasard de chaque etage est INDEPENDANT des precedents : aucune
+     strategie d'encaissement ne peut faire mieux que l'esperance du
+     premier niveau (0,85 x 1,13 = 0,96). Plus on monte, plus l'esperance
+     baisse (0,78 au 7e niveau, 0,11 au sommet).
+   - Probabilite d'atteindre le sommet depuis le depart, lacher parfait
+     a chaque fois : 0,85 x 0,82 x ... x 0,25 = 0,109 %.
+   - Etage gele : aucun risque, mais la cote reste proche de x1 (moyenne
+     0,99) et il ne compte pas comme un niveau.
+   Simulation (voir le rapport) : retour moyen ~0,90 a 0,96 par euro mise
+   selon la facon de jouer, jamais plus de x100.                        */
+const TOWER_NIVEAUX  = 12;
+const TOWER_MULT_MAX = 100;
+const TOWER_SURVIE   = [0.85, 0.82, 0.78, 0.74, 0.70, 0.66, 0.60, 0.54, 0.48, 0.42, 0.36, 0.25];
+const TOWER_ECHELLE  = [1.13, 1.36, 1.71, 2.26, 3.13, 4.5, 7.0, 10.5, 15.5, 22, 30, 100];
+
+function towerRollFactor(niveau) {
+  const k = Math.min(niveau, TOWER_NIVEAUX - 1);
+  const ratio = k === 0 ? TOWER_ECHELLE[0] : TOWER_ECHELLE[k] / TOWER_ECHELLE[k - 1];
+  const a = k === 0 ? 0.40 : 0.15;                    // hasard de moyenne 1
+  return ratio * towerRand(1 - a, 1 + a);
+}
+
+/* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l'issue :
+   'rate' (l'etage tombe a cote), 'glisse' (la tour s'effondre) ou 'pose'.
+   Exporte en bas de fichier pour la simulation des cotes. */
+function towerTirer(tour, angle) {
+  const n = tour.floors.length;
+  const niveau = tour.niveau | 0;
+  const amp = towerAmpFor(n);
+  const etaitGele = tour.frozenLeft > 0;
+  if (etaitGele) angle *= 0.2;
+
+  const errRatio = Math.abs(angle) / amp;
+  const safeT = 0.44, missT = Math.max(0.6, 0.92 - n * 0.016);
+  const edgeT = towerClamp((errRatio - safeT) / Math.max(0.001, missT - safeT), 0, 1);
+  const missChance = etaitGele ? 0 : edgeT * edgeT;
+  if (Math.random() < missChance) return { issue: 'rate', angle: angle };
+
+  // le risque propre au niveau, meme avec un lacher parfait
+  const tombe = !etaitGele && Math.random() >= TOWER_SURVIE[Math.min(niveau, TOWER_NIVEAUX - 1)];
+  if (tombe && errRatio > 0.25) return { issue: 'rate', angle: angle };
+
+  const facteur = etaitGele ? towerRand(0.92, 1.06) : towerRollFactor(niveau);
+  if (etaitGele) tour.frozenLeft--;
+  else tour.niveau = niveau + 1;
+  const parfait = !etaitGele && errRatio < 0.1 && facteur >= 1;
+
+  // pas d'arrondi ici : seul le gain final (mise x totalMult) est arrondi
+  tour.totalMult = Math.min(TOWER_MULT_MAX, tour.totalMult * facteur);
+  const nouveauLean = tour.leanSum + angle * 0.58;
+  const glisse = tombe || ((tour.frozenLeft <= 0) && Math.abs(nouveauLean) > 58);
+  tour.leanSum = nouveauLean;
+  tour.visOffset = towerClamp(tour.visOffset + towerClamp(angle * 0.34, -22, 22), -74, 74);
+  tour.floors.push({ mult: facteur, lean: tour.visOffset });
+  if (glisse) return { issue: 'glisse', angle: angle, facteur: facteur };
+
+  // etage gele une fois toutes les ~14 etages en moyenne, pour souffler un peu
+  if (!etaitGele && Math.random() < 0.07) tour.frozenLeft = 2 + (Math.random() < 0.5 ? 0 : 1);
+
+  const sommet = tour.niveau >= TOWER_NIVEAUX || tour.totalMult >= TOWER_MULT_MAX;
+  return { issue: 'pose', angle: angle, facteur: facteur, parfait: parfait, sommet: sommet };
 }
 
 function distancePeriph(palier) {
@@ -389,9 +451,636 @@ function neuveTable(id, nom, mini, skin) {
   };
 }
 
+/* ===================================================================
+   POKER — Texas Hold'em sans limite, uniquement entre vrais joueurs
+   -------------------------------------------------------------------
+   Meme principe que le blackjack : le serveur tient les cartes, les
+   tours et le chronometre ; le battement fait avancer la donne.
+   - Pas de bots, jamais. Moins de deux joueurs : la table attend.
+   - Les jetons d'un joueur, c'est son vrai solde : chaque mise est
+     debitee tout de suite, le pot est verse au(x) gagnant(s) a la fin.
+   - Aucune commission (pas de rake) : tout le pot revient aux joueurs.
+   - Les cartes privees d'un joueur ne quittent JAMAIS le serveur vers
+     un autre joueur, sauf a l'abattage si ce joueur ne s'est pas couche.
+   Tous les montants de la donne sont comptes en CENTIMES (entiers)
+   pour qu'aucun centime ne se perde en route.
+   =================================================================== */
+const POKER_PLACES          = 6;
+const POKER_PB_C            = 10;     // petite blinde : 0,10 EUR
+const POKER_GB_C            = 20;     // grosse blinde : 0,20 EUR
+const DUREE_DECOMPTE_POKER  = 10000;  // avant la premiere donne
+const DUREE_PAROLE_POKER    = 20000;  // temps pour parler
+const DUREE_RESULTAT_POKER  = 7000;   // pause entre deux donnes
+const DELAI_CARTE_POKER     = 330;    // par carte distribuee
+const PAUSE_RAMASSAGE_POKER = 900;    // les mises rejoignent le pot
+const PAUSE_FLOP_POKER      = 1500;
+const PAUSE_RUE_POKER       = 1100;   // turn / river
+const PAUSE_TAPIS_POKER     = 2000;   // on deroule sans enchere (tapis)
+const PAUSE_ABATTAGE_POKER  = 1800;
+
+function neuveTablePoker(id, nom) {
+  return {
+    id, nom, jeu: 'poker', skin: 'or', mini: POKER_GB_C / 100,
+    places: new Array(POKER_PLACES).fill(null),
+    phase: 'attente', echeance: 0,
+    bouton: -1, donne: 0, main: null, resultat: null,
+    message: '', chat: [], chatId: 0, version: 1
+  };
+}
+
+/* ---------- cartes : entier 0..51 ; rang = (c>>2)+2 ; couleur = c&3 ---------- */
+const pkRang = c => (c >> 2) + 2, pkCouleur = c => c & 3;
+function pkEval5(cs) {
+  const r = [pkRang(cs[0]), pkRang(cs[1]), pkRang(cs[2]), pkRang(cs[3]), pkRang(cs[4])].sort((a, b) => b - a);
+  const s0 = pkCouleur(cs[0]);
+  const flush = pkCouleur(cs[1]) === s0 && pkCouleur(cs[2]) === s0 && pkCouleur(cs[3]) === s0 && pkCouleur(cs[4]) === s0;
+  const cnt = {};
+  for (const x of r) cnt[x] = (cnt[x] || 0) + 1;
+  const g = Object.keys(cnt).map(Number).sort((a, b) => (cnt[b] - cnt[a]) || (b - a));
+  let sh = 0;
+  if (g.length === 5) {
+    if (r[0] - r[4] === 4) sh = r[0];
+    else if (r[0] === 14 && r[1] === 5 && r[4] === 2) sh = 5;   // roue A-2-3-4-5
+  }
+  let k;
+  if (sh && flush) k = [8, sh];
+  else if (cnt[g[0]] === 4) k = [7, g[0], g[1]];
+  else if (cnt[g[0]] === 3 && cnt[g[1]] === 2) k = [6, g[0], g[1]];
+  else if (flush) k = [5].concat(r);
+  else if (sh) k = [4, sh];
+  else if (cnt[g[0]] === 3) k = [3, g[0], g[1], g[2]];
+  else if (cnt[g[0]] === 2 && cnt[g[1]] === 2) k = [2, g[0], g[1], g[2]];
+  else if (cnt[g[0]] === 2) k = [1, g[0], g[1], g[2], g[3]];
+  else k = [0].concat(r);
+  let score = 0;
+  for (let i = 0; i < 6; i++) score = score * 16 + (k[i] || 0);
+  return { score, cat: k[0], k };
+}
+const PK_COMB = {};
+function pkCombos(n) {
+  if (PK_COMB[n]) return PK_COMB[n];
+  const out = [];
+  const rec = (start, acc) => {
+    if (acc.length === 5) { out.push(acc.slice()); return; }
+    for (let i = start; i < n; i++) { acc.push(i); rec(i + 1, acc); acc.pop(); }
+  };
+  rec(0, []);
+  return PK_COMB[n] = out;
+}
+function pkMeilleure(cards) {
+  let best = null;
+  for (const idx of pkCombos(cards.length)) {
+    const five = idx.map(i => cards[i]);
+    const e = pkEval5(five);
+    if (!best || e.score > best.score) { best = e; best.cards = five; }
+  }
+  return best;
+}
+const PK_NS = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'Valet',12:'Dame',13:'Roi',14:'As'};
+const PK_NP = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'Valets',12:'Dames',13:'Rois',14:'As'};
+const pkDe = r => r === 14 ? "d'As" : 'de ' + PK_NP[r];
+function pkNomMain(h) {
+  const k = h.k;
+  switch (h.cat) {
+    case 8: return k[1] === 14 ? 'Quinte flush royale' : 'Quinte flush hauteur ' + PK_NS[k[1]];
+    case 7: return 'Carré ' + pkDe(k[1]);
+    case 6: return 'Full aux ' + PK_NP[k[1]] + ' par les ' + PK_NP[k[2]];
+    case 5: return 'Couleur hauteur ' + PK_NS[k[1]];
+    case 4: return 'Suite hauteur ' + PK_NS[k[1]];
+    case 3: return 'Brelan ' + pkDe(k[1]);
+    case 2: return 'Double paire, ' + PK_NP[k[1]] + ' et ' + PK_NP[k[2]];
+    case 1: return 'Paire ' + pkDe(k[1]);
+    default: return 'Hauteur ' + PK_NS[k[1]];
+  }
+}
+function pkPaquet() {
+  const d = [];
+  for (let i = 0; i < 52; i++) d.push(i);
+  for (let i = 51; i > 0; i--) { const j = crypto.randomInt(i + 1); const t = d[i]; d[i] = d[j]; d[j] = t; }
+  return d;
+}
+
+/* ---------- petits outils ---------- */
+const cts = e => Math.round(Number(e) * 100);          // euros -> centimes
+const eurC = c => eur(c / 100);                          // centimes -> "1,20 EUR"
+function pkStack(table, i) { const p = table.places[i]; return p ? cts(p.solde) : 0; }
+function pkSuivant(from, pred) {
+  for (let k = 1; k <= POKER_PLACES; k++) { const i = (from + k + POKER_PLACES) % POKER_PLACES; if (pred(i)) return i; }
+  return -1;
+}
+function pkEnMain(table) {
+  const m = table.main, out = [];
+  if (!m) return out;
+  m.joueurs.forEach((j, i) => { if (j && !j.couche) out.push(i); });
+  return out;
+}
+function pkPeutParler(table) {
+  const m = table.main, out = [];
+  if (!m) return out;
+  m.joueurs.forEach((j, i) => { if (j && !j.couche && !j.tapis) out.push(i); });
+  return out;
+}
+function pkEligibles(table) {
+  const out = [];
+  table.places.forEach((p, i) => { if (p && p.type === 'humain' && cts(p.solde) >= 1) out.push(i); });
+  return out;
+}
+function pkHumains(table) { return table.places.filter(p => p && p.type === 'humain').length; }
+function pkLabel(j, txt, cls) { j.action = txt ? { txt, cls: cls || '' } : null; }
+
+/* verse de l'argent a un joueur de la donne, meme s'il a quitte la table
+   entre-temps (il ne perd jamais ce qui lui revient) */
+function pkCrediter(table, i, c) {
+  if (c <= 0) return;
+  const j = table.main.joueurs[i];
+  j.gain += c;
+  const p = table.places[i];
+  if (p && p.jeton === j.jeton) {
+    p.solde = sous((cts(p.solde) + c) / 100);
+    majSoldeCompte(p);
+    return;
+  }
+  const compte = comptes.get(j.jeton) || [...comptes.values()].find(x => x.pseudo === j.nom);
+  if (compte) {
+    compte.solde = sous((cts(compte.solde) + c) / 100);
+    const info = siegeDe(compte);
+    if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+    Carnet.enregistrer(compte);
+  }
+}
+
+/* pose un montant devant le joueur : il quitte VRAIMENT son solde */
+function pkPoser(table, i, montantC) {
+  const j = table.main.joueurs[i], p = table.places[i];
+  if (!j || !p) return 0;
+  const a = Math.max(0, Math.min(Math.round(montantC), cts(p.solde)));
+  p.solde = sous((cts(p.solde) - a) / 100);
+  majSoldeCompte(p);
+  j.mise += a; j.total += a;
+  if (cts(p.solde) === 0) j.tapis = true;
+  return a;
+}
+
+/* ---------- une nouvelle donne ---------- */
+function pkNouvelleDonne(table) {
+  const elig = pkEligibles(table);
+  if (elig.length < 2) {
+    table.main = null; table.resultat = null;
+    table.phase = 'attente';
+    dire(table, 'En attente d’un deuxième joueur.');
+    touche(table);
+    return;
+  }
+  const joueurs = new Array(POKER_PLACES).fill(null);
+  for (const i of elig) {
+    const p = table.places[i];
+    joueurs[i] = {
+      jeton: p.jeton, nom: p.nom, cartes: [], mise: 0, total: 0,
+      couche: false, tapis: false, aParle: false, bloque: false,
+      montre: false, action: null, gain: 0, nomMain: '', depart: cts(p.solde)
+    };
+  }
+  table.donne++;
+  table.resultat = null;
+  table.bouton = pkSuivant(table.bouton < 0 ? POKER_PLACES - 1 : table.bouton, i => !!joueurs[i]);
+  const duo = elig.length === 2;
+  const pb = duo ? table.bouton : pkSuivant(table.bouton, i => !!joueurs[i]);
+  const gb = pkSuivant(pb, i => !!joueurs[i]);
+  table.main = {
+    joueurs, paquet: pkPaquet(), board: [], rue: 0,
+    miseCourante: 0, relanceMin: POKER_GB_C, actif: -1, pb, gb
+  };
+  const m = table.main;
+  pkPoser(table, pb, POKER_PB_C); pkLabel(joueurs[pb], 'P. blinde');
+  pkPoser(table, gb, POKER_GB_C); pkLabel(joueurs[gb], 'G. blinde');
+  m.miseCourante = POKER_GB_C;
+  m.relanceMin = POKER_GB_C;
+
+  // deux tours de distribution, en partant de la petite blinde
+  let n = 0;
+  for (let tour = 0; tour < 2; tour++) {
+    let s = pb;
+    for (let k = 0; k < elig.length; k++) {
+      joueurs[s].cartes.push(m.paquet.pop()); n++;
+      s = pkSuivant(s, i => !!joueurs[i]);
+    }
+  }
+  table.phase = 'distribution';
+  table.echeance = Date.now() + 700 + n * DELAI_CARTE_POKER;
+  dire(table, 'Donne n°' + table.donne + ' : les cartes sont distribuées.');
+  touche(table);
+}
+
+/* ---------- qui doit parler ? ---------- */
+function pkOptions(table, i) {
+  const m = table.main, j = m.joueurs[i];
+  const stack = pkStack(table, i);
+  const aSuivre = Math.max(0, m.miseCourante - j.mise);
+  const maxTo = j.mise + stack;
+  const autres = m.joueurs.some((o, k) => o && k !== i && !o.couche && !o.tapis);
+  const minTo = m.miseCourante + m.relanceMin;
+  const peutRelancer = !j.bloque && autres && maxTo > m.miseCourante;
+  return {
+    aSuivre, maxTo, minTo: Math.min(minTo, maxTo), peutRelancer,
+    peutChecker: aSuivre === 0, montantSuivre: Math.min(aSuivre, stack)
+  };
+}
+
+function pkProchain(table, depuis) {
+  const m = table.main;
+  if (pkEnMain(table).length <= 1) return pkFinTour(table);
+  const ca = pkPeutParler(table);
+  if (ca.length === 0) return pkFinTour(table);
+  if (ca.every(i => m.joueurs[i].aParle && m.joueurs[i].mise === m.miseCourante)) return pkFinTour(table);
+  if (ca.length === 1 && m.joueurs[ca[0]].mise >= m.miseCourante) return pkFinTour(table);
+  for (let k = 0; k < POKER_PLACES; k++) {
+    const i = (depuis + k) % POKER_PLACES, j = m.joueurs[i];
+    if (j && !j.couche && !j.tapis && !(j.aParle && j.mise === m.miseCourante)) {
+      m.actif = i;
+      table.phase = 'parole';
+      table.echeance = Date.now() + DUREE_PAROLE_POKER;
+      dire(table, j.nom + ' a la parole.');
+      touche(table);
+      return;
+    }
+  }
+  pkFinTour(table);
+}
+
+function pkDemarrerEncheres(table, depuis) {
+  for (const j of table.main.joueurs) if (j) { j.aParle = false; j.bloque = false; }
+  pkProchain(table, depuis);
+}
+
+function pkFinTour(table) {
+  const m = table.main;
+  m.actif = -1;
+  const desMises = m.joueurs.some(j => j && j.mise > 0);
+  table.phase = 'ramassage';
+  table.echeance = Date.now() + (desMises ? PAUSE_RAMASSAGE_POKER : 350);
+  touche(table);
+}
+
+/* ---------- une action d'un joueur (ou du chronometre) ---------- */
+function pkAgir(table, i, d) {
+  const m = table.main, j = m.joueurs[i];
+  const o = pkOptions(table, i);
+  let type = d.type;
+  if (type === 'tapis') {
+    if (o.peutRelancer) { type = 'relancer'; d = { type, to: o.maxTo }; }
+    else type = o.peutChecker ? 'checker' : 'suivre';
+  }
+  if (type === 'checker' && !o.peutChecker) type = 'suivre';
+  if (type === 'relancer' && !o.peutRelancer) type = o.peutChecker ? 'checker' : 'suivre';
+
+  if (type === 'coucher') {
+    j.couche = true; pkLabel(j, 'Couché', 'fold');
+  } else if (type === 'checker') {
+    pkLabel(j, 'Check');
+  } else if (type === 'suivre') {
+    const a = pkPoser(table, i, o.aSuivre);
+    pkLabel(j, j.tapis ? 'Tapis' : 'Suit ' + eurC(a), j.tapis ? 'allin' : '');
+  } else if (type === 'relancer') {
+    let to = Math.round(Number(d.to));
+    if (!isFinite(to)) to = o.minTo;
+    if (to >= o.maxTo) to = o.maxTo;
+    else if (to < o.minTo) to = o.minTo;
+    const avant = m.miseCourante;
+    pkPoser(table, i, to - j.mise);
+    const inc = to - avant;
+    if (inc >= m.relanceMin) {
+      m.relanceMin = inc;
+      for (const q of m.joueurs) if (q && q !== j) { q.aParle = false; q.bloque = false; }
+    } else if (inc > 0) {
+      // relance incomplete (tapis court) : ne rouvre pas les relances
+      for (const q of m.joueurs) if (q && q !== j) { if (q.aParle) q.bloque = true; q.aParle = false; }
+    }
+    if (to > m.miseCourante) m.miseCourante = to;
+    pkLabel(j, j.tapis ? 'Tapis' : (avant === 0 ? 'Mise ' : 'Relance ') + eurC(to), j.tapis ? 'allin' : 'raise');
+  }
+  j.aParle = true;
+  touche(table);
+  pkProchain(table, (i + 1) % POKER_PLACES);
+}
+
+/* ---------- entre deux tours d'encheres ---------- */
+function pkApresRamassage(table) {
+  const m = table.main;
+  for (const j of m.joueurs) if (j) j.mise = 0;
+  m.miseCourante = 0;
+  m.relanceMin = POKER_GB_C;
+  if (pkEnMain(table).length <= 1) return pkConclure(table);
+  if (m.rue >= 3) {
+    pkReveler(table);
+    table.phase = 'abattage';
+    table.echeance = Date.now() + PAUSE_ABATTAGE_POKER;
+    dire(table, 'Abattage : les cartes sont retournées.');
+    touche(table);
+    return;
+  }
+  m.rue++;
+  const n = m.rue === 1 ? 3 : 1;
+  for (let k = 0; k < n; k++) m.board.push(m.paquet.pop());
+  for (const j of m.joueurs) if (j && !j.couche) j.action = null;
+  const encheres = pkPeutParler(table).length >= 2;
+  if (!encheres) pkReveler(table);          // tout le monde est a tapis : on montre et on deroule
+  table.phase = 'rue';
+  table.echeance = Date.now() + (encheres ? (m.rue === 1 ? PAUSE_FLOP_POKER : PAUSE_RUE_POKER) : PAUSE_TAPIS_POKER);
+  dire(table, ['', 'Le flop.', 'Le turn.', 'La river.'][m.rue]);
+  touche(table);
+}
+
+function pkReveler(table) {
+  for (const i of pkEnMain(table)) table.main.joueurs[i].montre = true;
+}
+
+/* ---------- les pots (principal + annexes), en centimes ---------- */
+function pkPots(table) {
+  const m = table.main;
+  const tous = [];
+  m.joueurs.forEach((j, i) => { if (j) tous.push(i); });
+  const cont = pkEnMain(table);
+  const levels = [...new Set(cont.map(i => m.joueurs[i].total))].sort((a, b) => a - b);
+  const pots = []; let prev = 0;
+  for (const L of levels) {
+    let amt = 0;
+    for (const i of tous) { const t = m.joueurs[i].total; amt += Math.min(t, L) - Math.min(t, prev); }
+    const elig = cont.filter(i => m.joueurs[i].total >= L);
+    if (amt > 0) pots.push({ amount: amt, elig });
+    prev = L;
+  }
+  const totalPot = tous.reduce((a, i) => a + m.joueurs[i].total, 0);
+  const reste = totalPot - pots.reduce((a, x) => a + x.amount, 0);
+  if (reste > 0 && pots.length) pots[pots.length - 1].amount += reste;
+  const fusion = [];
+  for (const pt of pots) {
+    const last = fusion[fusion.length - 1];
+    if (last && last.elig.length === pt.elig.length && last.elig.every(i => pt.elig.includes(i))) last.amount += pt.amount;
+    else fusion.push({ amount: pt.amount, elig: pt.elig.slice() });
+  }
+  return fusion;
+}
+
+/* ---------- fin de la donne : le pot va au(x) gagnant(s) ---------- */
+function pkConclure(table) {
+  const m = table.main;
+  m.actif = -1;
+  const J = m.joueurs;
+  const cont = pkEnMain(table);
+  const potTotal = J.reduce((a, j) => a + (j ? j.total : 0), 0);
+  const res = { titre: '', sous: '', lignes: [], gagnants: [], cartesGagnantes: [] };
+  const nomDe = i => J[i].nom;
+
+  if (cont.length === 0) {
+    // tout le monde est parti : chacun recupere ce qu'il avait mis
+    J.forEach((j, i) => { if (j) pkCrediter(table, i, j.total); });
+    res.titre = 'Donne annulée';
+    res.sous = 'Tout le monde a quitté la table : les mises sont rendues.';
+  } else if (cont.length === 1) {
+    const w = cont[0];
+    pkCrediter(table, w, potTotal);
+    res.gagnants = [w];
+    res.titre = nomDe(w) + ' remporte ' + eurC(potTotal);
+    res.sous = 'Tous les autres joueurs se sont couchés.';
+  } else {
+    pkReveler(table);
+    const ev = {};
+    for (const i of cont) {
+      ev[i] = pkMeilleure(J[i].cartes.concat(m.board));
+      J[i].nomMain = pkNomMain(ev[i]);
+      pkLabel(J[i], J[i].nomMain, 'hand');
+    }
+    const pots = pkPots(table);
+    const principal = [];
+    pots.forEach((pt, idx) => {
+      if (pt.elig.length === 1) {
+        const w = pt.elig[0];
+        pkCrediter(table, w, pt.amount);
+        res.lignes.push(['Mise non suivie rendue', nomDe(w) + ' · ' + eurC(pt.amount)]);
+        return;
+      }
+      let best = -1;
+      for (const i of pt.elig) best = Math.max(best, ev[i].score);
+      const ws = pt.elig.filter(i => ev[i].score === best);
+      ws.sort((a, b) => ((a - table.bouton + POKER_PLACES - 1) % POKER_PLACES) - ((b - table.bouton + POKER_PLACES - 1) % POKER_PLACES));
+      const part = Math.floor(pt.amount / ws.length);
+      let r = pt.amount - part * ws.length;
+      for (const w of ws) { pkCrediter(table, w, part + (r > 0 ? 1 : 0)); if (r > 0) r--; }
+      if (!principal.length) principal.push(...ws);
+      const nomPot = idx === 0 ? 'Pot principal' : 'Pot annexe' + (pots.length > 2 ? ' ' + idx : '');
+      res.lignes.push([nomPot + ' · ' + eurC(pt.amount), ws.map(nomDe).join(' & ') + (ws.length > 1 ? ' (partagé)' : '')]);
+    });
+    const gagnantsPrincipal = principal.length ? principal : (pots[0] ? pots[0].elig : cont);
+    res.gagnants = gagnantsPrincipal.slice();
+    const wh = ev[gagnantsPrincipal[0]];
+    res.cartesGagnantes = wh.cards.slice();
+    res.titre = gagnantsPrincipal.length > 1 ? 'Pot partagé' : nomDe(gagnantsPrincipal[0]) + ' gagne ' + eurC(J[gagnantsPrincipal[0]].gain);
+    res.sous = pkNomMain(wh);
+  }
+
+  // controle : tout le pot a bien ete reverse, au centime pres
+  const verse = J.reduce((a, j) => a + (j ? j.gain : 0), 0);
+  if (verse !== potTotal) console.log('POKER : pot ' + potTotal + ' c, verse ' + verse + ' c (table ' + table.id + ')');
+
+  // chaque participant : statistiques et sauvegarde
+  J.forEach(j => {
+    if (!j) return;
+    j.mise = 0;
+    const c = comptes.get(j.jeton);
+    if (!c) return;
+    c.mains++;
+    const net = j.gain - j.total;
+    if (net > 0) c.gagnees++; else if (net < 0) c.perdues++;
+    Carnet.enregistrer(c);
+  });
+
+  table.resultat = res;
+  table.phase = 'resultat';
+  table.echeance = Date.now() + DUREE_RESULTAT_POKER;
+  dire(table, res.titre);
+  touche(table);
+}
+
+/* ---------- un joueur quitte la table (volontairement ou non) ---------- */
+function pkQuitter(table, i) {
+  const p = table.places[i];
+  if (!p) return;
+  table.places[i] = null;
+  const c = comptes.get(p.jeton);
+  if (c) { c.table = null; c.siege = -1; Carnet.enregistrer(c); }
+  const m = table.main;
+  const enCours = m && ['distribution', 'parole', 'ramassage', 'rue', 'abattage'].includes(table.phase);
+  if (enCours && m.joueurs[i] && !m.joueurs[i].couche) {
+    const j = m.joueurs[i];
+    j.couche = true;                       // ses mises restent dans le pot
+    pkLabel(j, 'Parti', 'fold');
+    if (table.phase === 'parole') {
+      if (m.actif === i) pkProchain(table, (i + 1) % POKER_PLACES);
+      else if (pkEnMain(table).length <= 1) pkFinTour(table);
+    }
+  }
+  if (pkHumains(table) === 0) {
+    if (m && enCours) pkConclure(table);   // rend l'argent qui serait encore au milieu
+    table.main = null; table.resultat = null;
+    table.phase = 'attente';
+    table.message = '';
+    table.chat = []; table.chatId = 0;
+  }
+  touche(table);
+}
+
+/* ---------- le battement du poker ---------- */
+function battementPoker(table, now) {
+  // les absents perdent leur place (et se couchent s'ils etaient en jeu)
+  table.places.forEach((p, i) => {
+    if (!p) return;
+    const c = comptes.get(p.jeton);
+    if (!c || now - c.vu > ABSENCE_MAX) pkQuitter(table, i);
+  });
+
+  const m = table.main;
+  switch (table.phase) {
+    case 'attente':
+      if (pkEligibles(table).length >= 2) {
+        table.phase = 'decompte';
+        table.echeance = now + DUREE_DECOMPTE_POKER;
+        dire(table, 'La partie commence dans dix secondes.');
+        touche(table);
+      }
+      break;
+    case 'decompte':
+      if (pkEligibles(table).length < 2) {
+        table.phase = 'attente';
+        dire(table, 'En attente d’un deuxième joueur.');
+        touche(table);
+      } else if (now >= table.echeance) pkNouvelleDonne(table);
+      break;
+    case 'distribution':
+      if (now >= table.echeance) {
+        for (const j of m.joueurs) if (j && !j.couche && !/blinde/.test(j.action ? j.action.txt : '')) j.action = null;
+        pkDemarrerEncheres(table, (m.gb + 1) % POKER_PLACES);
+      }
+      break;
+    case 'parole':
+      if (now >= table.echeance && m.actif >= 0) {
+        const o = pkOptions(table, m.actif);
+        pkAgir(table, m.actif, { type: o.peutChecker ? 'checker' : 'coucher' });
+      }
+      break;
+    case 'ramassage':
+      if (now >= table.echeance) pkApresRamassage(table);
+      break;
+    case 'rue':
+      if (now >= table.echeance) {
+        if (pkPeutParler(table).length >= 2 && pkEnMain(table).length >= 2) {
+          pkDemarrerEncheres(table, (table.bouton + 1) % POKER_PLACES);
+        } else pkApresRamassage(table);
+      }
+      break;
+    case 'abattage':
+      if (now >= table.echeance) pkConclure(table);
+      break;
+    case 'resultat':
+      if (now >= table.echeance) pkNouvelleDonne(table);
+      break;
+  }
+}
+
+/* ---------- ce que voit UN joueur : jamais les cartes cachees des autres ---------- */
+function etatPoker(table, jeton) {
+  const now = Date.now();
+  const compte = comptes.get(jeton);
+  const moiIndex = table.places.findIndex(p => p && p.jeton === jeton);
+  const moi = moiIndex >= 0 ? table.places[moiIndex] : null;
+  const m = table.main;
+  const enJeu = m && table.phase !== 'attente' && table.phase !== 'decompte';
+
+  const places = table.places.map((p, i) => {
+    const j0 = enJeu ? m.joueurs[i] : null;
+    // la donne en cours ne concerne cette place que si c'est bien le meme joueur
+    const j = j0 && (!p || p.jeton === j0.jeton) ? j0 : null;
+    // un joueur parti en pleine donne : sa place reste "fantome" jusqu'a la fin
+    if (!p && !(j && j.jeton)) return null;
+    const estMoi = i === moiIndex;
+    let cartes = [];
+    if (j) {
+      if (estMoi || j.montre) cartes = j.cartes.slice();        // les miennes, ou abattage
+      else if (!j.couche) cartes = j.cartes.map(() => null);   // dos de cartes, rien d'autre
+    }
+    return {
+      nom: p ? p.nom : j.nom,
+      moi: estMoi,
+      humain: true,
+      parti: !p,
+      solde: p && (estMoi || p.soldeVisible) ? p.solde : null,
+      soldeVisible: !!(p && p.soldeVisible),
+      enMain: !!j,
+      cartes,
+      montre: !!(j && j.montre),
+      mise: j ? j.mise / 100 : 0,
+      total: j ? j.total / 100 : 0,
+      couche: !!(j && j.couche),
+      tapis: !!(j && j.tapis),
+      action: j ? j.action : null,
+      nomMain: j && j.montre ? j.nomMain : '',
+      gain: j && table.phase === 'resultat' ? j.gain / 100 : 0
+    };
+  });
+
+  let secondes = 0;
+  if (['decompte', 'parole', 'resultat'].includes(table.phase)) {
+    secondes = Math.max(0, Math.ceil((table.echeance - now) / 1000));
+  }
+  const monTour = !!(enJeu && table.phase === 'parole' && m.actif === moiIndex && moiIndex >= 0);
+  let options = null;
+  if (monTour) {
+    const o = pkOptions(table, moiIndex);
+    options = {
+      aSuivre: o.aSuivre / 100, montantSuivre: o.montantSuivre / 100,
+      minTo: o.minTo / 100, maxTo: o.maxTo / 100,
+      peutRelancer: o.peutRelancer, peutChecker: o.peutChecker,
+      maMise: m.joueurs[moiIndex].mise / 100
+    };
+  }
+  // une fois la donne conclue, le pot a ete verse : il n'y a plus rien au milieu
+  const potTotal = enJeu && table.phase !== 'resultat' ? m.joueurs.reduce((a, j) => a + (j ? j.total : 0), 0) : 0;
+  const misesDevant = enJeu ? m.joueurs.reduce((a, j) => a + (j ? j.mise : 0), 0) : 0;
+
+  return {
+    jeu: 'poker',
+    version: table.version,
+    table: table.id,
+    nom: table.nom,
+    skin: table.skin,
+    phase: table.phase,
+    secondes,
+    dureeParole: DUREE_PAROLE_POKER / 1000,
+    pb: POKER_PB_C / 100, gb: POKER_GB_C / 100,
+    donne: table.donne,
+    bouton: enJeu ? table.bouton : -1,
+    actif: enJeu ? m.actif : -1,
+    rue: enJeu ? m.rue : 0,
+    board: enJeu ? m.board.slice() : [],
+    miseCourante: enJeu ? m.miseCourante / 100 : 0,
+    pot: (potTotal - misesDevant) / 100,
+    potTotal: potTotal / 100,
+    places,
+    monIndex: moiIndex,
+    monTour,
+    options,
+    monSolde: moi ? moi.solde : (compte ? compte.solde : 0),
+    monSoldeVisible: !!(moi && moi.soldeVisible),
+    resultat: table.phase === 'resultat' ? table.resultat : null,
+    message: table.message,
+    assis: moiIndex >= 0,
+    chat: chatPour(table, jeton)
+  };
+}
+
 const tables = [
   neuveTable('majorelle', 'Jardin Majorelle', 0.01, 'vert'),
-  neuveTable('palmeraie', 'Palmeraie Royale', 0.01, 'or')
+  neuveTable('palmeraie', 'Palmeraie Royale', 0.01, 'or'),
+  neuveTablePoker('poker', 'Médina d’Or')
 ];
 function trouverTable(id) { return tables.find(t => t.id === id) || null; }
 
@@ -737,6 +1426,7 @@ function battement() {
   const now = Date.now();
 
   for (const table of tables) {
+    if (table.jeu === 'poker') { battementPoker(table, now); continue; }
     // on libere les places des joueurs qui ne donnent plus de nouvelles
     let depart = false;
     table.places.forEach((p, i) => {
@@ -802,7 +1492,20 @@ setInterval(battement, 200);
 /* ===================================================================
    CE QUE VOIT UN JOUEUR
    =================================================================== */
+function chatPour(table, jeton) {
+  return table.chat.map(m => ({
+    id: m.id, nom: m.nom, texte: m.texte, systeme: !!m.systeme, t: m.t || 0,
+    moi: !!(m.jeton && m.jeton === jeton),
+    cadeau: m.cadeau ? {
+      de: m.cadeau.de, a: m.cadeau.a, montant: m.cadeau.montant,
+      pourMoi: m.cadeau.aJeton === jeton,     // c'est moi qui reçois
+      deMoi:   m.cadeau.deJeton === jeton     // c'est moi qui offre
+    } : null
+  }));
+}
+
 function etatPour(table, jeton) {
+  if (table.jeu === 'poker') return etatPoker(table, jeton);
   const moiIndex = table.places.findIndex(p => p && p.jeton === jeton);
   const moi = moiIndex >= 0 ? table.places[moiIndex] : null;
   const now = Date.now();
@@ -870,15 +1573,7 @@ function etatPour(table, jeton) {
     provocation,
     message: table.message,
     assis: moiIndex >= 0,
-    chat: table.chat.map(m => ({
-      id: m.id, nom: m.nom, texte: m.texte, systeme: !!m.systeme, t: m.t || 0,
-      moi: !!(m.jeton && m.jeton === jeton),
-      cadeau: m.cadeau ? {
-        de: m.cadeau.de, a: m.cadeau.a, montant: m.cadeau.montant,
-        pourMoi: m.cadeau.aJeton === jeton,     // c'est moi qui reçois
-        deMoi:   m.cadeau.deJeton === jeton     // c'est moi qui offre
-      } : null
-    }))
+    chat: chatPour(table, jeton)
   };
 }
 
@@ -886,8 +1581,11 @@ function resumeSalon() {
   return tables.map(t => ({
     id: t.id,
     nom: t.nom,
+    jeu: t.jeu || 'blackjack',
     mini: t.mini,
     skin: t.skin,
+    pb: t.jeu === 'poker' ? POKER_PB_C / 100 : undefined,
+    gb: t.jeu === 'poker' ? POKER_GB_C / 100 : undefined,
     phase: t.phase,
     places: t.places.map(p => p ? { nom: p.nom, bot: p.type === 'bot' } : null),
     joueurs: t.places.filter(p => p && p.type === 'humain').length
@@ -1110,6 +1808,26 @@ function majGroupeCoursePeriph(compte, patch) {
   if (g && g.membres[compte.jetonRef]) Object.assign(g.membres[compte.jetonRef], patch, { maj: Date.now() });
 }
 
+/* ce que la page d'un joueur voit des AUTRES joueurs reels de sa course.
+   "age" = depuis combien de millisecondes la position annoncee a ete
+   mesuree sur la page de ce joueur (trajet aller compris). */
+function autresMembresPeriph(compte) {
+  if (!compte.periphMulti) return [];
+  const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
+  if (!g) return [];
+  const maintenant = Date.now();
+  return Object.keys(g.membres)
+    .filter(j => j !== compte.jetonRef)
+    .map(j => {
+      const m = g.membres[j];
+      const d = typeof m.d === 'number' ? Math.max(m.d, distancePeriph(m.palier)) : distancePeriph(m.palier);
+      const mesure = m.mesure || m.maj || maintenant;
+      return { pseudo: m.pseudo, couleur: m.couleur, voiture: m.voiture, palier: m.palier, fraction: m.fraction,
+               d: d, v: m.statut === 'course' ? (m.v || 0) : 0, age: Math.max(0, maintenant - mesure),
+               x: m.x || 0, maj: m.maj || 0, statut: m.statut };
+    });
+}
+
 function formerGroupePeriph() {
   if (groupeEnFormationPeriph) return;
   if (filePeriphMulti.length < 2) return;
@@ -1147,7 +1865,7 @@ function demarrerCoursePeriphMulti(jetons) {
     compte.periphMulti = { groupeId: id, couleur: entree.couleurAffectee };
     membres[j] = {
       pseudo: compte.pseudo, couleur: entree.couleurAffectee,
-      palier: 0, fraction: 0, statut: 'course', maj: Date.now(),
+      palier: 0, fraction: 0, d: 0, v: 0, statut: 'course', maj: Date.now(),
       voiture: voiture
     };
   });
@@ -1345,6 +2063,22 @@ const serveur = http.createServer(async (req, res) => {
       // on quitte l'ancienne table le cas echeant
       quitterTable(compte);
 
+      if (table.jeu === 'poker') {
+        // une place vraiment libre (pas celle d'un joueur parti en pleine donne)
+        const fantome = i => !!(table.main && table.phase !== 'attente' && table.phase !== 'decompte' &&
+                                table.main.joueurs[i]);
+        const place = table.places.findIndex((p, i) => !p && !fantome(i));
+        if (place < 0) return repondre(res, 409, { erreur: 'table complete' });
+        table.places[place] = {
+          type: 'humain', jeton: compte.jetonRef, nom: compte.pseudo,
+          solde: compte.solde, soldeVisible: !!compte.soldeVisible
+        };
+        compte.table = table.id;
+        compte.siege = place;
+        touche(table);
+        return repondre(res, 200, etatPour(table, compte.jetonRef));
+      }
+
       // on chasse un bot si besoin pour faire de la place
       let place = table.places.findIndex(p => !p);
       if (place < 0) place = table.places.findIndex(p => p && p.type === 'bot');
@@ -1441,6 +2175,7 @@ const serveur = http.createServer(async (req, res) => {
       const info = siegeDe(compte);
       if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
       const { table, p } = info;
+      if (table.jeu === 'poker') return repondre(res, 409, { erreur: 'pas au poker' });
       if (table.phase !== 'mise') return repondre(res, 409, { erreur: 'trop tard' });
       if (p.etat !== 'attente')   return repondre(res, 409, { erreur: 'spectateur' });
 
@@ -1462,6 +2197,26 @@ const serveur = http.createServer(async (req, res) => {
       if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
       const { table, p } = info;
       const monIndex = table.places.indexOf(p);
+
+      if (table.jeu === 'poker') {
+        const m = table.main;
+        if (table.phase !== 'parole' || !m || m.actif !== monIndex) {
+          return repondre(res, 409, { erreur: 'pas votre tour' });
+        }
+        const action = String(body.action || '');
+        if (!['coucher', 'checker', 'suivre', 'relancer', 'tapis'].includes(action)) {
+          return repondre(res, 400, { erreur: 'action inconnue' });
+        }
+        let to;
+        if (action === 'relancer') {
+          const v = Number(body.montant);          // montant TOTAL de la mise apres relance, en euros
+          if (!isFinite(v) || v <= 0) return repondre(res, 400, { erreur: 'montant invalide' });
+          to = cts(v);
+        }
+        pkAgir(table, monIndex, { type: action, to });
+        return repondre(res, 200, etatPour(table, compte.jetonRef));
+      }
+
       if (table.phase !== 'joueur' || table.indexActif !== monIndex) {
         return repondre(res, 409, { erreur: 'pas votre tour' });
       }
@@ -1845,8 +2600,15 @@ const serveur = http.createServer(async (req, res) => {
 
     // --- on rejoint la file d'attente ---
     if (route === '/api/periph-multi-rejoindre' && req.method === 'POST') {
-      if (compte.periph) return repondre(res, 409, { erreur: 'Terminez votre course en cours.' });
-      if (compte.periphMulti) return repondre(res, 409, { erreur: 'Vous êtes déjà en course.' });
+      /* on ne peut appuyer sur "Multijoueur" que depuis l'accueil du jeu : une
+         course encore ouverte ici a donc ete abandonnee (page rechargee, onglet
+         ferme en pleine course). Elle est perdue, exactement comme en solo
+         (/api/periph-demarrer), au lieu de bloquer le multijoueur pour toujours. */
+      if (compte.periphMulti) {
+        majGroupeCoursePeriph(compte, { statut: 'crash' });
+        compte.periphMulti = null;
+      }
+      if (compte.periph) { compte.periph = null; Carnet.enregistrer(compte); }
       if (filePeriphMulti.some(e => e.jeton === compte.jetonRef)) {
         return repondre(res, 200, { ok: true });
       }
@@ -1878,6 +2640,10 @@ const serveur = http.createServer(async (req, res) => {
       if (compte.periphMulti && groupesCoursePeriph.has(compte.periphMulti.groupeId)) {
         return repondre(res, 200, {
           statut: 'parti',
+          /* depuis combien de temps la course est partie ici : chaque page cale
+             son "3, 2, 1, GO" sur ce meme instant, au lieu de partir quand son
+             propre sondage (toutes les 700 ms, plus le reseau) s'en apercoit */
+          ecoule: Date.now() - groupesCoursePeriph.get(compte.periphMulti.groupeId).creeLe,
           groupeId: compte.periphMulti.groupeId,
           couleur: compte.periphMulti.couleur,
           voiture: compte.periph ? compte.periph.voiture : compte.periphMulti.couleur,
@@ -1909,25 +2675,38 @@ const serveur = http.createServer(async (req, res) => {
       if (!compte.periphMulti) return repondre(res, 409, { erreur: 'pas en course' });
       const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
       if (g && g.membres[compte.jetonRef] && g.membres[compte.jetonRef].statut === 'course') {
-        g.membres[compte.jetonRef].fraction = Math.max(0, Math.min(1, Number(body.fraction) || 0));
-        g.membres[compte.jetonRef].x = Math.max(-7, Math.min(7, Number(body.x) || 0));
-        g.membres[compte.jetonRef].maj = Date.now();
+        const m = g.membres[compte.jetonRef];
+        m.fraction = Math.max(0, Math.min(1, Number(body.fraction) || 0));
+        m.x = Math.max(-7, Math.min(7, Number(body.x) || 0));
+        /* position absolue (metres depuis la Porte Dauphine) et vitesse (km/h) :
+           c'est ce que les autres pages dessinent. Avant, seule la fraction du
+           troncon etait envoyee, et elle etait recombinee ici avec le palier du
+           serveur, qui retarde sur celui de la page : la voiture sautait.
+           Ca ne sert qu'a l'affichage, jamais a un gain ; on borne quand meme
+           a ce qui est physiquement possible depuis le depart. */
+        if (body.d !== undefined) {
+          const course = compte.periph;
+          const vmax = course && course.voiture === VOITURE_PREMIUM_INDICE ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+          const possible = course ? (Date.now() - course.depart) / 1000 * vmax + 30 : Infinity;
+          m.d = Math.max(0, Math.min(distancePeriph(ECHELLE_PERIPH.length), possible, Number(body.d) || 0));
+          m.v = Math.max(0, Math.min(300, Number(body.v) || 0));
+          /* l'instant de la mesure : a son arrivee ici, moins le trajet aller
+             annonce par la page (la moitie de son aller-retour mesure). Les
+             autres pages savent ainsi exactement de quand date la position,
+             et la prolongent du bon temps (voir majVoitureReelle). La porte
+             franchie (/api/periph-porte) touche "maj" mais pas ceci. */
+          const trajet = Math.max(0, Math.min(1500, Number(body.lat) || 0));
+          m.mesure = Date.now() - trajet;
+        }
+        m.maj = Date.now();
       }
-      return repondre(res, 200, { ok: true });
+      // on renvoie tout de suite la position des autres : un seul aller-retour par echange
+      return repondre(res, 200, { ok: true, membres: autresMembresPeriph(compte), t: Date.now() });
     }
 
     // --- on recupere la progression des autres joueurs reels de la course ---
     if (route === '/api/periph-multi-course') {
-      if (!compte.periphMulti) return repondre(res, 200, { membres: [] });
-      const g = groupesCoursePeriph.get(compte.periphMulti.groupeId);
-      if (!g) return repondre(res, 200, { membres: [] });
-      const membres = Object.keys(g.membres)
-        .filter(j => j !== compte.jetonRef)
-        .map(j => {
-          const m = g.membres[j];
-          return { pseudo: m.pseudo, couleur: m.couleur, voiture: m.voiture, palier: m.palier, fraction: m.fraction, x: m.x || 0, maj: m.maj || 0, statut: m.statut };
-        });
-      return repondre(res, 200, { membres: membres });
+      return repondre(res, 200, { membres: autresMembresPeriph(compte), t: Date.now() });
     }
 
     /* ===============================================================
@@ -1951,7 +2730,7 @@ const serveur = http.createServer(async (req, res) => {
 
       compte.solde = sous(compte.solde - mise);
       compte.tower = {
-        mise: mise, floors: [], leanSum: 0, visOffset: 0, frozenLeft: 0,
+        mise: mise, floors: [], leanSum: 0, visOffset: 0, frozenLeft: 0, niveau: 0,
         totalMult: 1, swingStart: Date.now()
       };
       compte.tours = (compte.tours | 0) + 1;
@@ -1974,56 +2753,48 @@ const serveur = http.createServer(async (req, res) => {
       const n = tour.floors.length;
       const amp = towerAmpFor(n), period = towerPeriodFor(n);
       const ecoule = Math.max(0, Date.now() - tour.swingStart) / 1000;
-      let angle = amp * Math.sin(2 * Math.PI * ecoule / period);
-      const etaitGele = tour.frozenLeft > 0;
-      if (etaitGele) angle *= 0.2;
+      const r = towerTirer(tour, amp * Math.sin(2 * Math.PI * ecoule / period));
 
-      const errRatio = Math.abs(angle) / amp;
-      const safeT = 0.44, missT = Math.max(0.6, 0.92 - n * 0.016);
-      const edgeT = towerClamp((errRatio - safeT) / Math.max(0.001, missT - safeT), 0, 1);
-      const missChance = etaitGele ? 0 : edgeT * edgeT;
-      const rate = Math.random() < missChance;
-
-      if (rate) {
+      if (r.issue === 'rate') {
         const perdu = tour.mise;
         compte.tower = null;
         Carnet.enregistrer(compte);
         return repondre(res, 200, {
-          ok: true, rate: true, angle: angle, perdu: perdu, solde: compte.solde
+          ok: true, rate: true, angle: r.angle, perdu: perdu, solde: compte.solde
         });
       }
 
-      const facteur = etaitGele ? towerRand(1.4, 2.0) : towerRollFactor(n, errRatio);
-      if (etaitGele) tour.frozenLeft--;
-      const parfait = !etaitGele && errRatio < 0.1 && facteur >= 1.6;
-
-      tour.totalMult = tour.totalMult * facteur; // pas d'arrondi ici : seul le gain final (mise x totalMult) est arrondi
-      const nouveauLean = tour.leanSum + angle * 0.58;
-      const glisse = (tour.frozenLeft <= 0) && Math.abs(nouveauLean) > 58;
-      tour.leanSum = nouveauLean;
-      tour.visOffset = towerClamp(tour.visOffset + towerClamp(angle * 0.34, -22, 22), -74, 74);
-      tour.floors.push({ mult: facteur, lean: tour.visOffset });
-
-      if (glisse) {
+      if (r.issue === 'glisse') {
         const perdu = tour.mise;
-        const totalAvantChute = tour.totalMult;
         compte.tower = null;
         Carnet.enregistrer(compte);
         return repondre(res, 200, {
-          ok: true, rate: false, glisse: true, facteur: facteur, lean: tour.visOffset,
-          totalMult: totalAvantChute, perdu: perdu, solde: compte.solde
+          ok: true, rate: false, glisse: true, facteur: r.facteur, lean: tour.visOffset,
+          totalMult: tour.totalMult, perdu: perdu, solde: compte.solde
         });
       }
 
-      // etage gele une fois toutes les ~14 etages en moyenne, pour souffler un peu
-      if (!etaitGele && Math.random() < 0.07) tour.frozenLeft = 2 + (Math.random() < 0.5 ? 0 : 1);
+      // le sommet (12e niveau, ou le plafond x100) : on encaisse d'office
+      if (r.sommet) {
+        const gain = sous(tour.mise * tour.totalMult);
+        compte.solde = sous(compte.solde + gain);
+        compte.tower = null;
+        const info = siegeDe(compte);
+        if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, {
+          ok: true, rate: false, glisse: false, facteur: r.facteur, parfait: r.parfait,
+          lean: tour.visOffset, totalMult: tour.totalMult, sommet: true, gain: gain,
+          niveau: tour.niveau, niveaux: TOWER_NIVEAUX, solde: compte.solde
+        });
+      }
 
       tour.swingStart = Date.now();
       Carnet.enregistrer(compte);
       return repondre(res, 200, {
-        ok: true, rate: false, glisse: false, facteur: facteur, parfait: parfait,
+        ok: true, rate: false, glisse: false, facteur: r.facteur, parfait: r.parfait,
         lean: tour.visOffset, totalMult: tour.totalMult, solde: compte.solde,
-        gele: tour.frozenLeft > 0,
+        gele: tour.frozenLeft > 0, niveau: tour.niveau, niveaux: TOWER_NIVEAUX,
         swingStart: tour.swingStart, amp: towerAmpFor(n + 1), period: towerPeriodFor(n + 1)
       });
     }
@@ -2040,7 +2811,7 @@ const serveur = http.createServer(async (req, res) => {
       if (!tour) return repondre(res, 409, { erreur: 'Aucune tour en cours.' });
       if (tour.floors.length < 1) return repondre(res, 400, { erreur: 'Posez au moins un étage avant d’encaisser.' });
 
-      const gain = sous(tour.mise * tour.totalMult);
+      const gain = sous(tour.mise * Math.min(TOWER_MULT_MAX, tour.totalMult));   // plafond dur x100
       compte.solde = sous(compte.solde + gain);
       compte.tower = null;
 
@@ -2193,6 +2964,12 @@ function quitterTable(compte) {
   compte.siege = -1;
   if (!table) return;
 
+  if (table.jeu === 'poker') {
+    const k = table.places.findIndex(p => p && p.jeton === compte.jetonRef);
+    if (k >= 0) pkQuitter(table, k);
+    return;
+  }
+
   const i = table.places.findIndex(p => p && p.jeton === compte.jetonRef);
   if (i >= 0) {
     table.places[i] = null;
@@ -2204,7 +2981,12 @@ function quitterTable(compte) {
   }
 }
 
+/* pour la simulation des cotes de Tower Rush (node -e "require('./serveur.js')") :
+   rien n'est exporte d'autre, et le site demarre exactement comme avant */
+module.exports = { towerTirer, towerAmpFor, towerPeriodFor, TOWER_NIVEAUX, TOWER_MULT_MAX, TOWER_SURVIE, TOWER_ECHELLE };
+
 Carnet.demarrer().then(() => {
+  if (require.main !== module) return;
   serveur.listen(PORT, () => {
     console.log('Casino Messina — le salon est ouvert sur le port ' + PORT);
   });
