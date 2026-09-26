@@ -14127,10 +14127,42 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     return ['interpolate', ['exponential', 1.6], ['zoom'], 12, ['*', 0.9 * f, cls], 16, ['*', 6 * f, cls], 19, ['*', 34 * f, cls]];
   }
   var ROUTES = ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service']]];
+
+  /* ---- les couleurs de Paris (memes teintes que les facades du periph) ----
+     La carte ne dit pas "haussmannien" ou "tour" : on le devine a la hauteur.
+     Dans chaque famille, 7 teintes voisines tirees d'apres la hauteur exacte,
+     pour que deux immeubles cote a cote n'aient presque jamais la meme. */
+  var H_BAT = ['coalesce', ['get', 'render_height'], 12];
+  var B_BAT = ['coalesce', ['get', 'render_min_height'], 0];
+  var PAVILLONS = ['#e2d6bd', '#d8c2a0', '#c99a78', '#e6dcc8', '#b98a6c', '#d9ccb0', '#cfb892'];   // villas d'Auteuil, Boulogne : enduit, meuliere, brique
+  var PIERRE    = ['#e4dac2', '#dccfb3', '#e9e0cb', '#d6cbb1', '#bf8c6e', '#e0d2b5', '#cfc3a6'];   // pierre de taille haussmannienne (+ brique des annees 30)
+  var BETON     = ['#b9c0c4', '#a9b4bb', '#c4c6c2', '#98a6b1', '#b3b8b5', '#a4afb8', '#c9ccc9'];   // immeubles modernes
+  var VERRE     = ['#7f97a8', '#8fa3b1', '#6f8797', '#9aabb6', '#86969f', '#7b8f9c', '#93a5ad'];   // tours du Front de Seine
+  function teintes(l) { var m = ['match', ['var', 'v']]; for (var i = 1; i < l.length; i++) m.push(i, l[i]); m.push(l[0]); return m; }
+  var COULEUR_BAT = ['let', 'h', H_BAT, 'b', B_BAT,
+    ['let', 'v', ['%', ['floor', ['*', ['+', ['var', 'h'], ['var', 'b']], 13.7]], 7],
+      ['case',
+        ['>=', ['var', 'b'], 25], '#7d6652',                                           // morceaux perches en hauteur (Tour Eiffel)
+        ['all', ['>=', ['var', 'h'], 49.5], ['<', ['var', 'h'], 50.5]], '#ddd2b8',     // l'Arc de Triomphe fait 50 m pile
+        ['<', ['var', 'h'], 6], '#bdb3a2',                                             // garages, annexes
+        ['<', ['var', 'h'], 13], teintes(PAVILLONS),
+        ['<', ['var', 'h'], 32], teintes(PIERRE),
+        ['<', ['var', 'h'], 70], teintes(BETON),
+        teintes(VERRE)]]];
+  /* un batiment qui a des "morceaux" detailles est dessine par ses morceaux,
+     pas par sa grosse boite englobante (c'est ce qui faisait l'Arc en cube) */
+  var PAS_ENGLOBANT = ['!=', ['get', 'hide_3d'], true];
+  /* le toit : zinc gris-bleu sur les haussmanniens, tuile ou ardoise sur les maisons */
+  var TOITS = ['all', PAS_ENGLOBANT, ['has', 'render_height'],
+    ['>=', ['get', 'render_height'], 6], ['<', ['get', 'render_height'], 32], ['<', B_BAT, 1]];
+  var COULEUR_TOIT = ['let', 'h', H_BAT, ['let', 'v', ['%', ['floor', ['*', ['var', 'h'], 13.7]], 7],
+    ['case', ['<', ['var', 'h'], 13], ['match', ['var', 'v'], [0, 2, 4, 6], '#9f6a55', '#7d8288'],
+      ['match', ['var', 'v'], [1, 4], '#9aa2a8', '#8a949c']]]];
+
   var STYLE = {
     version: 8, glyphs: POLICES,
     sources: { omt: { type: 'vector', url: TUILES } },
-    light: { anchor: 'map', position: [1.4, 200, 40], color: '#ffffff', intensity: 0.5 },
+    light: { anchor: 'map', position: [1.4, 200, 40], color: '#fff6e8', intensity: 0.42 },
     layers: [
       { id: 'fond', type: 'background', paint: { 'background-color': '#8a8d90' } },
       { id: 'verdure', type: 'fill', source: 'omt', 'source-layer': 'landcover',
@@ -14146,11 +14178,16 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       { id: 'lignes', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 16.5,
         filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary', 'trunk']]],
         paint: { 'line-color': '#e9e9e9', 'line-opacity': 0.55, 'line-width': 1, 'line-dasharray': [3, 4] } },
-      { id: 'rz-bat', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 13,
-        paint: { 'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 10], 0, '#b8babd', 40, '#cfd1d3'],
-                 'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 12],
-                 'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+      { id: 'rz-bat', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 13, filter: PAS_ENGLOBANT,
+        paint: { 'fill-extrusion-color': COULEUR_BAT,
+                 'fill-extrusion-height': H_BAT,
+                 'fill-extrusion-base': B_BAT,
                  'fill-extrusion-vertical-gradient': true } },
+      { id: 'rz-toits', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14.5, filter: TOITS,
+        paint: { 'fill-extrusion-color': COULEUR_TOIT,
+                 'fill-extrusion-base': H_BAT,
+                 'fill-extrusion-height': ['+', H_BAT, ['case', ['<', H_BAT, 13], 1.6, 2.6]],
+                 'fill-extrusion-vertical-gradient': false } },
       { id: 'noms', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 15.5,
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11.5, 'text-letter-spacing': 0.04 },
         paint: { 'text-color': '#f1f1f1', 'text-halo-color': '#2b2d31', 'text-halo-width': 1.4 } }
@@ -14187,6 +14224,10 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       c.addLayer({ id: 'rz-trajet', type: 'line', source: 'rz-trajet', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['match', ['get', 'type'], 'metro', '#e0212e', 'apercu', '#ffffff', '#e6c56c'],
                  'line-width': ['case', ['==', ['get', 'type'], 'apercu'], 5, 3], 'line-dasharray': [1.2, 1.2] } }, 'rz-bat');
+      c.addSource('rz-monuments', { type: 'geojson', data: { type: 'FeatureCollection', features: tourEiffel().concat(arcDeTriomphe()) } });
+      c.addLayer({ id: 'rz-monuments', type: 'fill-extrusion', source: 'rz-monuments', minzoom: 13,
+        paint: { 'fill-extrusion-color': ['get', 'couleur'], 'fill-extrusion-base': ['get', 'bas'], 'fill-extrusion-height': ['get', 'haut'],
+                 'fill-extrusion-vertical-gradient': true } });
       c.addSource('rz-bases', { type: 'geojson', data: vide() });
       c.addLayer({ id: 'rz-bases', type: 'fill-extrusion', source: 'rz-bases',
         paint: { 'fill-extrusion-color': ['get', 'couleur'], 'fill-extrusion-height': ['get', 'haut'], 'fill-extrusion-base': 0,
@@ -14215,6 +14256,74 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     S.carte.getSource('rz-batb').setData({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [cercle(b, 105, 56)] } });
   }
 
+  /* ---------------- les monuments, refaits a la main ----------------
+     La carte gratuite ne donne que des blocs : une Tour Eiffel blanche,
+     un Arc de Triomphe en cube. On les reconstruit ici, piece par piece,
+     aux vraies dimensions, un peu plus larges que les blocs d'origine
+     pour les recouvrir. Mesures en metres, dans le repere du monument :
+     "a" suit l'axe (Champ-de-Mars, Champs-Elysees), "p" le travers. */
+  function morceau(centre, cap, a0, a1, p0, p1, bas, haut, couleur) {
+    var r = cap * Math.PI / 180, ua = [Math.sin(r), Math.cos(r)], up = [Math.cos(r), -Math.sin(r)];
+    var coins = [[a0, p0], [a1, p0], [a1, p1], [a0, p1], [a0, p0]].map(function (q) {
+      return decale(centre, ua[0] * q[0] + up[0] * q[1], ua[1] * q[0] + up[1] * q[1]);
+    });
+    return { type: 'Feature', properties: { bas: bas, haut: haut, couleur: couleur }, geometry: { type: 'Polygon', coordinates: [coins] } };
+  }
+  function tourEiffel() {
+    var C = [2.294481, 48.858370], CAP = 134.5, f = [];
+    var BRONZE = '#7d6652', FONCE = '#67533f', CLAIR = '#8e7760';
+    function carre(demi, bas, haut, coul) { f.push(morceau(C, CAP, -demi, demi, -demi, demi, bas, haut, coul)); }
+    function quatre(centre, demi, bas, haut, coul) {
+      [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) {
+        f.push(morceau(C, CAP, s[0] * centre - demi, s[0] * centre + demi, s[1] * centre - demi, s[1] * centre + demi, bas, haut, coul));
+      });
+    }
+    // les quatre piliers, qui se rapprochent en montant jusqu'au 1er etage
+    for (var i = 0; i < 7; i++) {
+      var t = i / 7, z0 = 57.6 * t, z1 = 57.6 * (i + 1) / 7, k = Math.pow(t, 0.8);
+      quatre(47 - 20 * k, 15.5 - 7 * k, z0, z1, BRONZE);
+    }
+    // les grands arcs decoratifs entre les piliers (en escalier, 9 marches)
+    for (var n = 0; n < 9; n++) {
+      var x0 = -26 + n * 52 / 9, x1 = x0 + 52 / 9, xm = (x0 + x1) / 2;
+      var dessous = 18 + 21 * Math.sqrt(Math.max(0, 1 - Math.pow(xm / 26, 2)));
+      f.push(morceau(C, CAP, 29, 32, x0, x1, dessous, 57.6, FONCE));
+      f.push(morceau(C, CAP, -32, -29, x0, x1, dessous, 57.6, FONCE));
+      f.push(morceau(C, CAP, x0, x1, 29, 32, dessous, 57.6, FONCE));
+      f.push(morceau(C, CAP, x0, x1, -32, -29, dessous, 57.6, FONCE));
+    }
+    carre(36, 57.6, 64, FONCE);                                    // 1er etage
+    for (var j = 0; j < 5; j++) {                                  // les piliers reprennent jusqu'au 2e
+      var u = j / 5; quatre(25 - 10 * u, 9 - 3 * u, 64 + 51.7 * u, 64 + 51.7 * (j + 1) / 5, BRONZE);
+    }
+    carre(21, 115.7, 122, FONCE);                                  // 2e etage
+    for (var m = 0; m < 10; m++) {                                 // la grande fleche
+      var w = m / 10; carre(17 - 10.5 * Math.pow(w, 0.75), 122 + 154 * w, 122 + 154 * (m + 1) / 10, m % 2 ? CLAIR : BRONZE);
+    }
+    carre(9, 276, 283, FONCE);                                     // 3e etage
+    carre(5, 283, 300, CLAIR);                                     // le campanile
+    carre(2.2, 300, 312, '#c9c2b8');                               // les antennes
+    carre(1, 312, 330, '#b8332b');
+    return f;
+  }
+  function arcDeTriomphe() {
+    var C = [2.295028, 48.873792], CAP = 115.4, f = [];
+    var PIERRE_ARC = '#ded3b9', FRISE = '#cabd9d', CORNICHE = '#e9e0cb';
+    var A = 11.6, P = 23.1;                                        // 22 m x 45 m (+ un peu pour recouvrir le bloc)
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (s) {  // les quatre piles, percees par les petits arcs
+      var a0 = s[0] > 0 ? 4.2 : -A, a1 = s[0] > 0 ? A : -4.2, p0 = s[1] > 0 ? 7.3 : -P, p1 = s[1] > 0 ? P : -7.3;
+      f.push(morceau(C, CAP, a0, a1, p0, p1, 0, 29.2, PIERRE_ARC));
+    });
+    f.push(morceau(C, CAP, -4.2, 4.2, 7.3, P, 18.7, 29.2, PIERRE_ARC));    // au-dessus des petits arcs
+    f.push(morceau(C, CAP, -4.2, 4.2, -P, -7.3, 18.7, 29.2, PIERRE_ARC));
+    f.push(morceau(C, CAP, -A, A, -P, P, 29.2, 36, PIERRE_ARC));          // au-dessus de la grande voute
+    f.push(morceau(C, CAP, -A, A, -P, P, 36, 40, FRISE));                 // la frise sculptee
+    f.push(morceau(C, CAP, -A - 0.8, A + 0.8, -P - 0.8, P + 0.8, 40, 41.6, CORNICHE));
+    f.push(morceau(C, CAP, -A + 0.3, A - 0.3, -P + 0.3, P - 0.3, 41.6, 50, PIERRE_ARC));   // l'attique
+    f.push(morceau(C, CAP, -A + 0.3, A - 0.3, -P + 0.3, P - 0.3, 50, 50.6, '#bfb499'));   // la terrasse
+    return f;
+  }
+
   function formeBase(b) {
     if (b.forme && b.forme.length >= 3) { var f = b.forme.slice(); f.push(f[0]); return f; }
     var p = [b.lon, b.lat];
@@ -14227,7 +14336,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   function majCouches() {
     if (!S.pret || !S.vue) return;
     var bases = S.vue.bases.map(function (b) {
-      return { type: 'Feature', properties: { id: b.id, couleur: couleurBase(b), haut: (b.haut || 18) + 0.8 }, geometry: { type: 'Polygon', coordinates: [formeBase(b)] } };
+      return { type: 'Feature', properties: { id: b.id, couleur: couleurBase(b), haut: (b.haut || 18) + 3.4 }, geometry: { type: 'Polygon', coordinates: [formeBase(b)] } };
     });
     S.carte.getSource('rz-bases').setData({ type: 'FeatureCollection', features: bases });
     var bo = S.vue.bases.filter(function (b) { return b.bouclier; }).map(function (b) {
