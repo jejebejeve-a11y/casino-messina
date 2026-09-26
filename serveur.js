@@ -1963,6 +1963,212 @@ function battementPeriphMulti() {
 setInterval(battementPeriphMulti, 200);
 
 /* ===================================================================
+   LE BOIS DE BOULOGNE - la sortie a droite de la Porte Dauphine
+   -------------------------------------------------------------------
+   Pendant le periph, avant la Porte Maillot, on peut tourner a droite.
+   La mise du periph passe alors dans la poursuite de Toledo (ni gagnee,
+   ni perdue a ce moment-la). Seuls de vrais joueurs y vont : jusqu'a 4,
+   reunis pendant un decompte de 15 s. Toledo part au bout du decompte,
+   les policiers 3 s apres lui.
+   Le trajet de Toledo est tire ici avec une graine (planToledo) et
+   recalcule a l'identique par chaque page : il est au meme endroit sur
+   tous les ecrans. Ses points de vie, eux, ne sont comptes qu'ici :
+   chaque coup annonce par une page est verifie contre ce trajet.
+   S'il tombe avant la sortie du bois : cent fois la mise pour chaque
+   policier encore en course. Sinon, la mise est perdue.
+   =================================================================== */
+const BOIS_VIE           = 600;
+const BOIS_MULT          = 100;
+const BOIS_ATTENTE       = 15000;
+const BOIS_MAX           = 4;
+const BOIS_DEPART_POLICE = 3000;      // les policiers partent 3 s apres Toledo
+const BOIS_SORTIE_MIN    = 460;       // metres depuis la Porte Dauphine
+const BOIS_DEGAT_CHOC    = 20;
+const BOIS_DEGAT_BALLE   = 50;
+const BOIS_BALLES        = 5;
+const BOIS_VITESSE_MAX   = 270 / 3.6; // metres par seconde, turbo compris
+
+function planToledo(graine){
+  let s=graine>>>0;
+  const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
+  const PAS=50, VOIE=3.5, DIST=2300;
+  const voieX=k=>(k-1.5)*VOIE;
+  const objets=[], bananes=[];
+  for(let d=170; d<DIST-140; d+=160+r()*110)
+    objets.push({d:d, x:voieX(Math.floor(r()*4)), genre:r()<0.5?'pistolet':'turbo'});
+  for(let d=230; d<DIST-60; d+=70+r()*80){
+    const x=voieX(Math.floor(r()*4))+(r()-0.5)*0.8;
+    if(!objets.some(o=>o.d-d<16&&d-o.d<16)) bananes.push({d:d, x:x});
+  }
+  const D=[], X=[], V=[], bombes=[];
+  let voie=Math.floor(r()*4), d=25, v=60, x=voieX(voie);
+  let tEv=0, vCible=150, tVoie=1500, tBombe=7500+r()*2000, freinage=false;
+  let k=0, tFin=0;
+  while(k<8000){
+    const t=k*PAS;
+    if(t>=tEv){
+      const a=r();
+      freinage=false;
+      if(t<5000){ vCible=160+t/5000*40; tEv=t+500; }
+      else if(a<0.22){ vCible=236+r()*14; tEv=t+1100+r()*900; }
+      else if(a<0.40){ vCible=105+r()*25; tEv=t+650+r()*650; freinage=true; }
+      else { vCible=192+r()*14; tEv=t+1300+r()*1700; }
+    }
+    if(t>=tVoie){
+      let n=Math.floor(r()*3); if(n>=voie) n++;
+      voie=n; tVoie=t+(freinage?500:800)+r()*(freinage?500:1500);
+    }
+    const dv=vCible-v, pasV=(dv>0?48:95)*PAS/1000;
+    v=dv>0?Math.min(vCible,v+pasV):Math.max(vCible,v-pasV);
+    const xc=voieX(voie), dx=xc-x, pasX=8*PAS/1000;
+    x=dx>0?Math.min(xc,x+pasX):Math.max(xc,x-pasX);
+    D.push(d); X.push(x); V.push(v);
+    if(t>=tBombe&&t>6000){ bombes.push({t:t, d:d-0.6, x:x}); tBombe=t+2400+r()*3000; }
+    if(d>=DIST){ tFin=t; break; }
+    d+=v/3.6*PAS/1000;
+    k++;
+  }
+  if(!tFin) tFin=k*PAS;
+  return {PAS, D, X, V, bombes, objets, bananes, tFin, DIST};
+}
+function etatToledo(p,t){
+  if(t<=0) return {d:p.D[0], x:p.X[0], v:0};
+  const f=t/p.PAS, i=Math.floor(f);
+  if(i>=p.D.length-1){ const n=p.D.length-1; return {d:p.D[n], x:p.X[n], v:p.V[n]}; }
+  const a=f-i;
+  return {d:p.D[i]+(p.D[i+1]-p.D[i])*a, x:p.X[i]+(p.X[i+1]-p.X[i])*a, v:p.V[i]+(p.V[i+1]-p.V[i])*a};
+}
+
+const fileBois = [];                    // jetons en attente, dans l'ordre d'arrivee
+const formationsBois = [];              // {echeance, jetons:[...]}
+const groupesBois = new Map();          // id -> {graine, plan, depart, vie, statut, pris, membres}
+let   compteurGroupeBois = 1;
+
+function groupeBoisDe(compte) {
+  return compte.bois && compte.bois.groupeId ? groupesBois.get(compte.bois.groupeId) || null : null;
+}
+function formationBoisDe(jeton) {
+  return formationsBois.find(f => f.jetons.indexOf(jeton) >= 0) || null;
+}
+/* un joueur quitte le bois en route (autre jeu, page fermee) : sa mise est perdue */
+function abandonnerBois(compte) {
+  if (!compte.bois) return;
+  const g = groupeBoisDe(compte);
+  if (g && !compte.bois.fini && g.membres[compte.jetonRef]) g.membres[compte.jetonRef].statut = 'crash';
+  formationsBois.forEach(f => { const i = f.jetons.indexOf(compte.jetonRef); if (i >= 0) f.jetons.splice(i, 1); });
+  compte.bois = null;
+  Carnet.enregistrer(compte);
+}
+
+function demarrerGroupeBois(jetons) {
+  const id = 'b' + (compteurGroupeBois++);
+  const graine = crypto.randomInt(1, 2147483647);
+  const membres = {};
+  let slot = 0;
+  jetons.forEach(j => {
+    const c = comptes.get(j);
+    if (!c || !c.bois || c.bois.groupeId) return;
+    c.bois.groupeId = id;
+    c.bois.slot = slot;
+    c.bois.balles = 0;
+    membres[j] = { pseudo: c.pseudo, slot: slot, voiture: c.bois.voiture, d: 0, x: (slot - 1.5) * 3.5, v: 0,
+                   mesure: Date.now(), maj: Date.now(), statut: 'course', dernierChoc: 0, dernierTir: 0, gain: 0 };
+    slot++;
+  });
+  if (!slot) return;
+  groupesBois.set(id, { graine, plan: planToledo(graine), depart: Date.now(), vie: BOIS_VIE,
+                        statut: 'course', pris: [], membres });
+}
+
+/* Toledo est tombe : cent fois la mise pour chaque policier encore en course */
+function gagnerBois(g) {
+  if (g.statut !== 'course') return;
+  g.statut = 'gagne';
+  Object.keys(g.membres).forEach(j => {
+    const m = g.membres[j];
+    if (m.statut !== 'course') return;
+    const c = comptes.get(j);
+    if (!c || !c.bois) return;
+    const gain = sous(c.bois.mise * BOIS_MULT);
+    c.solde = sous(c.solde + gain);
+    m.gain = gain;
+    m.statut = 'gagne';
+    c.bois.fini = true;
+    const info = siegeDe(c);
+    if (info && info.p) { info.p.solde = c.solde; touche(info.table); }
+    Carnet.enregistrer(c);
+  });
+}
+/* Toledo est sorti du bois : la mise des policiers restants est perdue */
+function perdreBois(g) {
+  if (g.statut !== 'course') return;
+  g.statut = 'perdu';
+  Object.keys(g.membres).forEach(j => {
+    const m = g.membres[j];
+    if (m.statut === 'course') m.statut = 'perdu';
+    const c = comptes.get(j);
+    if (c && c.bois && c.bois.groupeId) { c.bois.fini = true; Carnet.enregistrer(c); }
+  });
+}
+
+function battementBois() {
+  const now = Date.now();
+  // les joueurs de la file qui ne donnent plus de nouvelles perdent leur place (et leur mise)
+  for (let i = fileBois.length - 1; i >= 0; i--) {
+    const c = comptes.get(fileBois[i]);
+    if (!c || !c.bois || now - c.vu > ABSENCE_MAX) {
+      if (c) abandonnerBois(c);
+      fileBois.splice(i, 1);
+    }
+  }
+  for (let i = formationsBois.length - 1; i >= 0; i--) {
+    const f = formationsBois[i];
+    f.jetons = f.jetons.filter(j => fileBois.indexOf(j) >= 0);
+    if (!f.jetons.length) { formationsBois.splice(i, 1); continue; }
+    if (now >= f.echeance) {
+      f.jetons.forEach(j => { const k = fileBois.indexOf(j); if (k >= 0) fileBois.splice(k, 1); });
+      demarrerGroupeBois(f.jetons);
+      formationsBois.splice(i, 1);
+    }
+  }
+  groupesBois.forEach((g, id) => {
+    if (g.statut === 'course' && now - g.depart > g.plan.tFin + 400) perdreBois(g);
+    // un policier qui ne donne plus signe de vie pendant la course est hors course
+    Object.keys(g.membres).forEach(j => {
+      const m = g.membres[j];
+      if (m.statut === 'course' && now - m.maj > ABSENCE_MAX) {
+        m.statut = 'crash';
+        const c = comptes.get(j);
+        if (c && c.bois) { c.bois = null; Carnet.enregistrer(c); }
+      }
+    });
+    if (g.statut === 'course' && !Object.values(g.membres).some(m => m.statut === 'course')) g.statut = 'perdu';
+    if (now - g.depart > g.plan.tFin + 60000) groupesBois.delete(id);
+  });
+}
+setInterval(battementBois, 200);
+
+/* la position d'un policier, prolongee jusqu'a maintenant avec sa vitesse */
+function dBoisEstimee(m, now) {
+  return m.d + (m.v || 0) / 3.6 * Math.max(0, Math.min(2000, now - (m.mesure || now))) / 1000;
+}
+function autresMembresBois(compte, g) {
+  const now = Date.now();
+  return Object.keys(g.membres).filter(j => j !== compte.jetonRef).map(j => {
+    const m = g.membres[j];
+    return { slot: m.slot, pseudo: m.pseudo, voiture: m.voiture, d: m.d, x: m.x,
+             v: m.statut === 'course' ? m.v : 0, age: Math.max(0, now - (m.mesure || now)), statut: m.statut };
+  });
+}
+function etatBoisPour(compte, g) {
+  const m = g.membres[compte.jetonRef];
+  return { membres: autresMembresBois(compte, g), vie: g.vie, statut: g.statut,
+           moi: m ? m.statut : 'crash', gain: m ? m.gain : 0, pris: g.pris,
+           balles: compte.bois ? compte.bois.balles : 0, ecoule: Date.now() - g.depart, solde: compte.solde };
+}
+
+/* ===================================================================
    LE PONT DE CRISTAL - solo et multijoueur
    -------------------------------------------------------------------
    Le serveur tire seul, au depart, quelle(s) vitre(s) tient/tiennent
@@ -2198,68 +2404,70 @@ function listeJoueursAvecPresence(liste) {
   return joueurs;
 }
 
+/* Codes de verification email - stockes en memoire avec expiration.
+   (une seule liste pour tout le serveur, et un seul nettoyage par minute) */
+const codesVerification = new Map();  // pseudo -> { code, email, expire }
+
+async function envoyerEmailVerification(email, pseudo, code) {
+  console.log('[EMAIL] DEBUT - email:', email, 'pseudo:', pseudo);
+
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPassword = process.env.GMAIL_PASSWORD;
+
+  console.log('[EMAIL] GMAIL_USER existe:', !!gmailUser, 'valeur:', gmailUser);
+  console.log('[EMAIL] GMAIL_PASSWORD existe:', !!gmailPassword);
+
+  if (!gmailUser || !gmailPassword) {
+    console.log('[EMAIL] ERREUR: Variables d\'env GMAIL manquantes');
+    return true;
+  }
+
+  try {
+    console.log('[EMAIL] Creation transporter...');
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailPassword
+      }
+    });
+    console.log('[EMAIL] Transporter cree OK');
+
+    const mailOptions = {
+      from: gmailUser,
+      to: email,
+      subject: 'Verifiez votre compte Casino Messina',
+      html: `
+        <h2>Bienvenue sur Casino Messina !</h2>
+        <p>Votre code de verification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
+        <p>Veuillez entrer ce code pour activer votre compte.</p>
+        <p>Ce code expire dans 10 minutes.</p>
+      `
+    };
+
+    console.log('[EMAIL] Appel transporter.sendMail...');
+    const result = await transporter.sendMail(mailOptions);
+    console.log('[EMAIL] SUCCESS! messageId:', result.messageId);
+    return true;
+  } catch (e) {
+    console.log('[EMAIL] CATCH EXCEPTION:', e.message);
+    console.log('[EMAIL] Stack trace:', e.stack);
+    return false;
+  }
+}
+
+/* Nettoyage periodique des codes expires */
+setInterval(() => {
+  const now = Date.now();
+  for (const [pseudo, data] of codesVerification.entries()) {
+    if (data.expire < now) codesVerification.delete(pseudo);
+  }
+}, 60000);  // toutes les minutes
+
+
 const serveur = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const route = url.pathname;
-
-  /* Codes de verification email - stockes en memoire avec expiration */
-  const codesVerification = new Map();  // pseudo -> { code, email, expire }
-
-  async function envoyerEmailVerification(email, pseudo, code) {
-    console.log('[EMAIL] DEBUT - email:', email, 'pseudo:', pseudo);
-
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPassword = process.env.GMAIL_PASSWORD;
-
-    console.log('[EMAIL] GMAIL_USER existe:', !!gmailUser, 'valeur:', gmailUser);
-    console.log('[EMAIL] GMAIL_PASSWORD existe:', !!gmailPassword);
-
-    if (!gmailUser || !gmailPassword) {
-      console.log('[EMAIL] ERREUR: Variables d\'env GMAIL manquantes');
-      return true;
-    }
-
-    try {
-      console.log('[EMAIL] Creation transporter...');
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailUser,
-          pass: gmailPassword
-        }
-      });
-      console.log('[EMAIL] Transporter cree OK');
-
-      const mailOptions = {
-        from: gmailUser,
-        to: email,
-        subject: 'Verifiez votre compte Casino Messina',
-        html: `
-          <h2>Bienvenue sur Casino Messina !</h2>
-          <p>Votre code de verification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
-          <p>Veuillez entrer ce code pour activer votre compte.</p>
-          <p>Ce code expire dans 10 minutes.</p>
-        `
-      };
-
-      console.log('[EMAIL] Appel transporter.sendMail...');
-      const result = await transporter.sendMail(mailOptions);
-      console.log('[EMAIL] SUCCESS! messageId:', result.messageId);
-      return true;
-    } catch (e) {
-      console.log('[EMAIL] CATCH EXCEPTION:', e.message);
-      console.log('[EMAIL] Stack trace:', e.stack);
-      return false;
-    }
-  }
-
-  /* Nettoyage periodique des codes expires */
-  setInterval(() => {
-    const now = Date.now();
-    for (const [pseudo, data] of codesVerification.entries()) {
-      if (data.expire < now) codesVerification.delete(pseudo);
-    }
-  }, 60000);  // toutes les minutes
 
   /* ---------------- API ---------------- */
   if (route.startsWith('/api/')) {
@@ -2820,6 +3028,7 @@ const serveur = http.createServer(async (req, res) => {
         return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       }
       // une course abandonnee en route est simplement perdue : on repart proprement
+      if (compte.bois) abandonnerBois(compte);
       const voiture = demarrerCourseInterne(compte, mise, body.voiture);
 
       return repondre(res, 200, {
@@ -2945,6 +3154,7 @@ const serveur = http.createServer(async (req, res) => {
         compte.periphMulti = null;
       }
       if (compte.periph) { compte.periph = null; Carnet.enregistrer(compte); }
+      if (compte.bois) abandonnerBois(compte);
       if (filePeriphMulti.some(e => e.jeton === compte.jetonRef)) {
         return repondre(res, 200, { ok: true });
       }
@@ -3043,6 +3253,126 @@ const serveur = http.createServer(async (req, res) => {
     // --- on recupere la progression des autres joueurs reels de la course ---
     if (route === '/api/periph-multi-course') {
       return repondre(res, 200, { membres: autresMembresPeriph(compte), t: Date.now() });
+    }
+
+    /* ===============================================================
+       LE BOIS DE BOULOGNE (sortie a droite de la Porte Dauphine)
+       =============================================================== */
+
+    // --- on tourne a droite : la mise du periph passe dans la poursuite ---
+    if (route === '/api/bois-sortir' && req.method === 'POST') {
+      const course = compte.periph;
+      if (!course) return repondre(res, 409, { erreur: 'Aucune course en cours.' });
+      if (course.palier !== 0) return repondre(res, 409, { erreur: 'La sortie du bois est passee.' });
+      const vitesseMax = course.voiture === VOITURE_PREMIUM_INDICE ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+      if ((Date.now() - course.depart) / 1000 < BOIS_SORTIE_MIN / vitesseMax * MARGE_TEMPS) {
+        return repondre(res, 400, { erreur: 'Course invalide.' });
+      }
+      if (compte.bois) abandonnerBois(compte);
+      compte.bois = { mise: course.mise, voiture: course.voiture, groupeId: null, slot: 0, balles: 0 };
+      compte.periph = null;
+      majGroupeCoursePeriph(compte, { statut: 'bois' });
+      compte.periphMulti = null;
+      fileBois.push(compte.jetonRef);
+      let f = formationsBois.find(x => x.jetons.length < BOIS_MAX);
+      if (!f) { f = { echeance: Date.now() + BOIS_ATTENTE, jetons: [] }; formationsBois.push(f); }
+      f.jetons.push(compte.jetonRef);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, secondes: Math.ceil((f.echeance - Date.now()) / 1000) });
+    }
+
+    // --- le decompte, puis le depart (appele en boucle) ---
+    if (route === '/api/bois-etat') {
+      const g = groupeBoisDe(compte);
+      if (g) {
+        return repondre(res, 200, Object.assign({ statut: 'parti', graine: g.graine,
+          slot: compte.bois.slot, depuis: BOIS_DEPART_POLICE,
+          equipe: Object.values(g.membres).map(m => ({ slot: m.slot, pseudo: m.pseudo, voiture: m.voiture })) },
+          etatBoisPour(compte, g), { statut: 'parti' }));
+      }
+      const f = formationBoisDe(compte.jetonRef);
+      if (f && compte.bois) {
+        return repondre(res, 200, { statut: 'compteADebours',
+          secondes: Math.max(0, Math.ceil((f.echeance - Date.now()) / 1000)),
+          joueurs: f.jetons.map(j => { const c = comptes.get(j); return c ? c.pseudo : '?'; }) });
+      }
+      return repondre(res, 200, { statut: 'aucune' });
+    }
+
+    // --- on annonce sa position ; on recoit celle des autres et la vie de Toledo ---
+    if (route === '/api/bois-progres' && req.method === 'POST') {
+      const g = groupeBoisDe(compte);
+      if (!g) return repondre(res, 409, { erreur: 'pas en course' });
+      const m = g.membres[compte.jetonRef];
+      if (m && m.statut === 'course') {
+        const now = Date.now();
+        const possible = Math.max(0, now - g.depart - BOIS_DEPART_POLICE) / 1000 * BOIS_VITESSE_MAX + 30;
+        m.d = Math.max(0, Math.min(possible, Number(body.d) || 0));
+        m.x = Math.max(-7, Math.min(7, Number(body.x) || 0));
+        m.v = Math.max(0, Math.min(270, Number(body.v) || 0));
+        m.mesure = now - Math.max(0, Math.min(1500, Number(body.lat) || 0));
+        m.maj = now;
+      }
+      return repondre(res, 200, etatBoisPour(compte, g));
+    }
+
+    // --- on ramasse une caisse : le serveur dit ce qu'il y a dedans ---
+    if (route === '/api/bois-ramasser' && req.method === 'POST') {
+      const g = groupeBoisDe(compte);
+      if (!g || g.statut !== 'course') return repondre(res, 409, { erreur: 'pas en course' });
+      const m = g.membres[compte.jetonRef];
+      const i = Number(body.i) | 0;
+      const o = g.plan.objets[i];
+      if (!m || m.statut !== 'course' || !o) return repondre(res, 400, { erreur: 'objet inconnu' });
+      if (g.pris.indexOf(i) >= 0) return repondre(res, 200, { ok: false, pris: g.pris });
+      const d = Number(body.d) || 0, x = Number(body.x) || 0;
+      if (Math.abs(d - o.d) > 10 || Math.abs(x - o.x) > 2.8 || Math.abs(d - dBoisEstimee(m, Date.now())) > 45) {
+        return repondre(res, 200, { ok: false, pris: g.pris });
+      }
+      g.pris.push(i);
+      if (o.genre === 'pistolet') compte.bois.balles = BOIS_BALLES;
+      compte.bois.objet = o.genre;
+      return repondre(res, 200, { ok: true, genre: o.genre, balles: compte.bois.balles, pris: g.pris });
+    }
+
+    // --- un coup sur Toledo (choc ou balle) : verifie contre son trajet ---
+    if (route === '/api/bois-coup' && req.method === 'POST') {
+      const g = groupeBoisDe(compte);
+      if (!g) return repondre(res, 409, { erreur: 'pas en course' });
+      const m = g.membres[compte.jetonRef];
+      const now = Date.now();
+      let touche = false;
+      if (g.statut === 'course' && m && m.statut === 'course') {
+        const ecoule = now - g.depart;
+        const tc = Number(body.tc) || 0;
+        const d = Number(body.d) || 0, x = Number(body.x) || 0;
+        const plausible = tc >= ecoule - 1500 && tc <= ecoule + 400 && tc >= BOIS_DEPART_POLICE
+          && Math.abs(d - dBoisEstimee(m, now)) < 40;
+        const T = etatToledo(g.plan, tc);
+        if (body.type === 'balle') {
+          if (compte.bois.balles > 0 && now - m.dernierTir > 180) {
+            compte.bois.balles--; m.dernierTir = now;
+            const devant = (T.d + 2.3) - (d + 3);
+            if (plausible && devant > -1 && devant < 62 && Math.abs(x - T.x) < 1.7) {
+              g.vie = Math.max(0, g.vie - BOIS_DEGAT_BALLE); touche = true;
+            }
+          }
+        } else if (now - m.dernierChoc > 550) {
+          if (plausible && Math.abs((d + 1.5) - (T.d + 2.3)) < 5.8 && Math.abs(x - T.x) < 2.7) {
+            m.dernierChoc = now;
+            g.vie = Math.max(0, g.vie - BOIS_DEGAT_CHOC); touche = true;
+          }
+        }
+        if (g.vie <= 0) gagnerBois(g);
+      }
+      return repondre(res, 200, Object.assign({ ok: true, touche }, etatBoisPour(compte, g)));
+    }
+
+    // --- la voiture de police est detruite : hors course, la mise est perdue ---
+    if (route === '/api/bois-perdu' && req.method === 'POST') {
+      const k = fileBois.indexOf(compte.jetonRef); if (k >= 0) fileBois.splice(k, 1);
+      abandonnerBois(compte);
+      return repondre(res, 200, { ok: true, solde: compte.solde });
     }
 
     /* ===============================================================
@@ -3561,6 +3891,7 @@ function ouvrirSession(fiche) {
     penalty: null,                       // aucune serie de penaltys en cours
     periph:  null,                       // aucune course de periph en cours
     periphMulti: null,                   // pas dans un groupe de course multijoueur
+    bois: null,                          // pas dans la poursuite du bois de Boulogne
     table: null, siege: -1, tableRoulette: false, vu: Date.now()
   };
   comptes.set(jeton, compte);
