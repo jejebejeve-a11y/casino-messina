@@ -9,11 +9,12 @@
    Personne ne peut bloquer personne.
    =================================================================== */
 
-const http   = require('http');
-const fs     = require('fs');
-const path   = require('path');
-const crypto = require('crypto');
-const https  = require('https');
+const http       = require('http');
+const fs         = require('fs');
+const path       = require('path');
+const crypto     = require('crypto');
+const https      = require('https');
+const nodemailer = require('nodemailer');
 
 const PORT    = process.env.PORT || 3000;
 const DOSSIER = __dirname;
@@ -2205,57 +2206,38 @@ const serveur = http.createServer(async (req, res) => {
   const codesVerification = new Map();  // pseudo -> { code, email, expire }
 
   async function envoyerEmailVerification(email, pseudo, code) {
-    const apiKey = process.env.SENDGRID_API_KEY;
-    if (!apiKey) {
-      console.log('SENDGRID_API_KEY non configuree, email non envoye');
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPassword = process.env.GMAIL_PASSWORD;
+
+    if (!gmailUser || !gmailPassword) {
+      console.log('GMAIL_USER ou GMAIL_PASSWORD non configurees, email non envoye');
       return true;  // on laisse passer quand meme
     }
 
-    const message = {
-      personalizations: [{
-        to: [{ email: email }]
-      }],
-      from: { email: 'noreply@casinomessina.com', name: 'Casino Messina' },
-      subject: 'Verifiez votre compte Casino Messina',
-      html: `
-        <h2>Bienvenue sur Casino Messina !</h2>
-        <p>Votre code de verification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
-        <p>Veuillez entrer ce code pour activer votre compte.</p>
-        <p>Ce code expire dans 10 minutes.</p>
-      `
-    };
-
     try {
-      const response = await new Promise((resolve, reject) => {
-        const options = {
-          hostname: 'api.sendgrid.com',
-          port: 443,
-          path: '/v3/mail/send',
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + apiKey,
-            'Content-Type': 'application/json'
-          }
-        };
-
-        const req = https.request(options, (res) => {
-          let body = '';
-          res.on('data', (chunk) => { body += chunk; });
-          res.on('end', () => { resolve({ status: res.statusCode, body }); });
-        });
-
-        req.on('error', reject);
-        req.write(JSON.stringify(message));
-        req.end();
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser,
+          pass: gmailPassword
+        }
       });
 
-      if (response.status >= 200 && response.status < 300) {
-        console.log('Email de verification envoye a', email);
-        return true;
-      } else {
-        console.log('SendGrid erreur:', response.status, response.body);
-        return false;
-      }
+      const mailOptions = {
+        from: gmailUser,
+        to: email,
+        subject: 'Verifiez votre compte Casino Messina',
+        html: `
+          <h2>Bienvenue sur Casino Messina !</h2>
+          <p>Votre code de verification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
+          <p>Veuillez entrer ce code pour activer votre compte.</p>
+          <p>Ce code expire dans 10 minutes.</p>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log('Email de verification envoye a', email);
+      return true;
     } catch (e) {
       console.log('Erreur envoi email:', e.message);
       return false;
