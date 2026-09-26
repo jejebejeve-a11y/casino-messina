@@ -1977,14 +1977,14 @@ setInterval(battementPeriphMulti, 200);
    S'il tombe avant la sortie du bois : cent fois la mise pour chaque
    policier encore en course. Sinon, la mise est perdue.
    =================================================================== */
-const BOIS_VIE           = 600;
+const BOIS_VIE           = 600;       // seul ; +300 par joueur en plus
 const BOIS_MULT          = 100;
 const BOIS_ATTENTE       = 15000;
 const BOIS_MAX           = 4;
 const BOIS_DEPART_POLICE = 3000;      // les policiers partent 3 s apres Toledo
 const BOIS_SORTIE_MIN    = 460;       // metres depuis la Porte Dauphine
-const BOIS_DEGAT_CHOC    = 20;
-const BOIS_DEGAT_BALLE   = 50;
+const BOIS_DEGAT_CHOC    = 15;
+const BOIS_DEGAT_BALLE   = 40;
 const BOIS_BALLES        = 5;
 const BOIS_VITESSE_MAX   = 270 / 3.6; // metres par seconde, turbo compris
 
@@ -1995,36 +1995,36 @@ function planToledo(graine){
   const PAS=50, VOIE=3.5, DIST=2300;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
-  for(let d=170; d<DIST-140; d+=160+r()*110)
+  for(let d=260; d<DIST-160; d+=380+r()*140)
     objets.push({d:d, x:voieX(Math.floor(r()*4)), genre:r()<0.5?'pistolet':'turbo'});
-  for(let d=230; d<DIST-60; d+=70+r()*80){
+  for(let d=320; d<DIST-80; d+=230+r()*100){
     const x=voieX(Math.floor(r()*4))+(r()-0.5)*0.8;
-    if(!objets.some(o=>o.d-d<16&&d-o.d<16)) bananes.push({d:d, x:x});
+    if(!objets.some(o=>o.d-d<20&&d-o.d<20)) bananes.push({d:d, x:x});
   }
   const D=[], X=[], V=[], bombes=[];
-  let voie=Math.floor(r()*4), d=25, v=60, x=voieX(voie);
-  let tEv=0, vCible=150, tVoie=1500, tBombe=7500+r()*2000, freinage=false;
+  let voie=Math.floor(r()*4), d=25, v=0, x=voieX(voie);
+  let tEv=0, vCible=0, tVoie=2500, tBombe=12000+r()*3000, freinage=false;
   let k=0, tFin=0;
-  while(k<8000){
+  while(k<12000){
     const t=k*PAS;
-    if(t>=tEv){
-      const a=r();
+    if(t<9000){ vCible=t/9000*135; freinage=false; }
+    else if(t>=tEv){
+      const a=r(), base=150+40*Math.min(1,(t-9000)/30000);
       freinage=false;
-      if(t<5000){ vCible=160+t/5000*40; tEv=t+500; }
-      else if(a<0.22){ vCible=236+r()*14; tEv=t+1100+r()*900; }
-      else if(a<0.40){ vCible=105+r()*25; tEv=t+650+r()*650; freinage=true; }
-      else { vCible=192+r()*14; tEv=t+1300+r()*1700; }
+      if(a<0.18){ vCible=base+50+r()*10; tEv=t+1000+r()*600; }                  // il accélère d'un coup
+      else if(a<0.36){ vCible=base-50+r()*10; tEv=t+700+r()*600; freinage=true; } // il ralentit
+      else { vCible=base-8+r()*16; tEv=t+1500+r()*1500; }                        // croisière
     }
     if(t>=tVoie){
       let n=Math.floor(r()*3); if(n>=voie) n++;
-      voie=n; tVoie=t+(freinage?500:800)+r()*(freinage?500:1500);
+      voie=n; tVoie=t+(freinage?700:1200)+r()*(freinage?500:1800);
     }
-    const dv=vCible-v, pasV=(dv>0?48:95)*PAS/1000;
+    const dv=vCible-v, pasV=(dv>0?45:80)*PAS/1000;
     v=dv>0?Math.min(vCible,v+pasV):Math.max(vCible,v-pasV);
-    const xc=voieX(voie), dx=xc-x, pasX=8*PAS/1000;
+    const xc=voieX(voie), dx=xc-x, pasX=6*PAS/1000;
     x=dx>0?Math.min(xc,x+pasX):Math.max(xc,x-pasX);
     D.push(d); X.push(x); V.push(v);
-    if(t>=tBombe&&t>6000){ bombes.push({t:t, d:d-0.6, x:x}); tBombe=t+2400+r()*3000; }
+    if(t>=tBombe){ bombes.push({t:t, d:d-0.6, x:x}); tBombe=t+4500+r()*3000; }
     if(d>=DIST){ tFin=t; break; }
     d+=v/3.6*PAS/1000;
     k++;
@@ -2032,12 +2032,21 @@ function planToledo(graine){
   if(!tFin) tFin=k*PAS;
   return {PAS, D, X, V, bombes, objets, bananes, tFin, DIST};
 }
-function etatToledo(p,t){
-  if(t<=0) return {d:p.D[0], x:p.X[0], v:0};
-  const f=t/p.PAS, i=Math.floor(f);
-  if(i>=p.D.length-1){ const n=p.D.length-1; return {d:p.D[n], x:p.X[n], v:p.V[n]}; }
-  const a=f-i;
-  return {d:p.D[i]+(p.D[i+1]-p.D[i])*a, x:p.X[i]+(p.X[i+1]-p.X[i])*a, v:p.V[i]+(p.V[i+1]-p.V[i])*a};
+/* position de Toledo à l'instant t, avec ses grosses accélérations (quand on
+   l'abîme trop) : chacune le fait avancer plus vite pendant quelques secondes */
+function etatToledo(p,t,boosts){
+  let e;
+  if(t<=0) e={d:p.D[0], x:p.X[0], v:0};
+  else {
+    const f=t/p.PAS, i=Math.floor(f);
+    if(i>=p.D.length-1){ const n=p.D.length-1; e={d:p.D[n]+(t-n*p.PAS)*p.V[n]/3600, x:p.X[n], v:p.V[n]}; }
+    else { const a=f-i; e={d:p.D[i]+(p.D[i+1]-p.D[i])*a, x:p.X[i]+(p.X[i+1]-p.X[i])*a, v:p.V[i]+(p.V[i+1]-p.V[i])*a}; }
+  }
+  if(boosts) for(const b of boosts){
+    const dt=Math.max(0,Math.min(b.dur,t-b.t));
+    if(dt>0){ e.d+=b.dv/3.6*dt/1000; if(t-b.t<b.dur) e.v+=b.dv; }
+  }
+  return e;
 }
 
 const fileBois = [];                    // jetons en attente, dans l'ordre d'arrivee
@@ -2077,8 +2086,10 @@ function demarrerGroupeBois(jetons) {
     slot++;
   });
   if (!slot) return;
-  groupesBois.set(id, { graine, plan: planToledo(graine), depart: Date.now(), vie: BOIS_VIE,
-                        statut: 'course', pris: [], membres });
+  /* plus il y a de policiers, plus Toledo est solide */
+  const vieMax = BOIS_VIE + 300 * (slot - 1);
+  groupesBois.set(id, { graine, plan: planToledo(graine), depart: Date.now(), vie: vieMax, vieMax,
+                        seuil: vieMax * 0.75, boosts: [], statut: 'course', pris: [], membres });
 }
 
 /* Toledo est tombe : cent fois la mise pour chaque policier encore en course */
@@ -2133,7 +2144,7 @@ function battementBois() {
     }
   }
   groupesBois.forEach((g, id) => {
-    if (g.statut === 'course' && now - g.depart > g.plan.tFin + 400) perdreBois(g);
+    if (g.statut === 'course' && etatToledo(g.plan, now - g.depart - 400, g.boosts).d >= g.plan.DIST) perdreBois(g);
     // un policier qui ne donne plus signe de vie pendant la course est hors course
     Object.keys(g.membres).forEach(j => {
       const m = g.membres[j];
@@ -2144,7 +2155,7 @@ function battementBois() {
       }
     });
     if (g.statut === 'course' && !Object.values(g.membres).some(m => m.statut === 'course')) g.statut = 'perdu';
-    if (now - g.depart > g.plan.tFin + 60000) groupesBois.delete(id);
+    if (g.statut !== 'course' && now - g.depart > g.plan.tFin + 60000) groupesBois.delete(id);
   });
 }
 setInterval(battementBois, 200);
@@ -2163,7 +2174,7 @@ function autresMembresBois(compte, g) {
 }
 function etatBoisPour(compte, g) {
   const m = g.membres[compte.jetonRef];
-  return { membres: autresMembresBois(compte, g), vie: g.vie, statut: g.statut,
+  return { membres: autresMembresBois(compte, g), vie: g.vie, vieMax: g.vieMax, boosts: g.boosts, statut: g.statut,
            moi: m ? m.statut : 'crash', gain: m ? m.gain : 0, pris: g.pris,
            balles: compte.bois ? compte.bois.balles : 0, ecoule: Date.now() - g.depart, solde: compte.solde };
 }
@@ -2418,14 +2429,16 @@ async function envoyerEmailVerification(email, pseudo, code) {
   console.log('[EMAIL] GMAIL_PASSWORD existe:', !!gmailPassword);
 
   if (!gmailUser || !gmailPassword) {
-    console.log('[EMAIL] ERREUR: Variables d\'env GMAIL manquantes');
-    return true;
+    console.log('[EMAIL] Variables GMAIL manquantes : pas d\'email envoye');
+    return false;
   }
 
   try {
     console.log('[EMAIL] Creation transporter...');
     const transporter = nodemailer.createTransport({
       service: 'gmail',
+      /* sur l'hebergement gratuit, la connexion est bloquee : on n'attend pas des minutes */
+      connectionTimeout: 7000, greetingTimeout: 7000, socketTimeout: 9000,
       auth: {
         user: gmailUser,
         pass: gmailPassword
@@ -2511,7 +2524,12 @@ const serveur = http.createServer(async (req, res) => {
       });
 
       // Envoyer l\'email
-      await envoyerEmailVerification(email, pseudo, code);
+      const envoye = await envoyerEmailVerification(email, pseudo, code);
+      /* l'email n'a pas pu partir (envoi bloque par l'hebergeur) : on ne bloque
+         pas le joueur, la page valide elle-meme l'inscription tout de suite */
+      if (!envoye) {
+        return repondre(res, 200, { pseudo: pseudo, sansEmail: true, code: code });
+      }
 
       return repondre(res, 200, {
         message: 'Code de verification envoye. Verifiez votre email.',
@@ -3348,7 +3366,7 @@ const serveur = http.createServer(async (req, res) => {
         const d = Number(body.d) || 0, x = Number(body.x) || 0;
         const plausible = tc >= ecoule - 1500 && tc <= ecoule + 400 && tc >= BOIS_DEPART_POLICE
           && Math.abs(d - dBoisEstimee(m, now)) < 40;
-        const T = etatToledo(g.plan, tc);
+        const T = etatToledo(g.plan, tc, g.boosts);
         if (body.type === 'balle') {
           if (compte.bois.balles > 0 && now - m.dernierTir > 180) {
             compte.bois.balles--; m.dernierTir = now;
@@ -3357,11 +3375,16 @@ const serveur = http.createServer(async (req, res) => {
               g.vie = Math.max(0, g.vie - BOIS_DEGAT_BALLE); touche = true;
             }
           }
-        } else if (now - m.dernierChoc > 550) {
+        } else if (now - m.dernierChoc > 450) {
           if (plausible && Math.abs((d + 1.5) - (T.d + 2.3)) < 5.8 && Math.abs(x - T.x) < 2.7) {
             m.dernierChoc = now;
             g.vie = Math.max(0, g.vie - BOIS_DEGAT_CHOC); touche = true;
           }
+        }
+        /* chaque quart de vie perdu : il remet un gros coup d'accélérateur */
+        while (g.vie > 0 && g.vie <= g.seuil && g.seuil > 0) {
+          g.boosts.push({ t: ecoule + 150, dur: 2600, dv: 75 });
+          g.seuil -= g.vieMax / 4;
         }
         if (g.vie <= 0) gagnerBois(g);
       }

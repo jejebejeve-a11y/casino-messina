@@ -3536,6 +3536,16 @@ async function inscrireAvecEmail(pseudo, email, motDePasse) {
   // Succès : afficher le formulaire de vérification
   err.textContent = '';
 
+  /* l'email n'a pas pu partir (l'hébergeur bloque l'envoi) : le serveur nous
+     donne le code, on valide l'inscription tout de suite, sans attendre */
+  if (r.sansEmail && r.code) {
+    window.pseudoEnVerification = pseudo;
+    window.motDePasseEnVerification = motDePasse;
+    $('verCode').value = r.code;
+    verifierEmail();
+    return;
+  }
+
   // Sauvegarder les données pour la vérification
   window.pseudoEnVerification = pseudo;
   window.motDePasseEnVerification = motDePasse;
@@ -10004,8 +10014,8 @@ function majVoiture(v,dt){
   else{gaz=J.touches.gaz;dir=(J.touches.d?1:0)-(J.touches.g?1:0);}
 
   const vmaxEff=v.vmax+(v.turboT>0?BOIS_TURBO:0);
-  if(gaz&&J.phase!=='depart') v.v=Math.min(vmaxEff,v.v+(v.accel||(v.premium?ACCEL_PREMIUM:ACCEL))*dt);
   if(v.v>vmaxEff) v.v=Math.max(vmaxEff,v.v-50*dt);
+  if(gaz&&J.phase!=='depart') v.v=Math.min(vmaxEff,v.v+(v.accel||(v.premium?ACCEL_PREMIUM:ACCEL))*dt);
   else if(v.freins) v.v=Math.max(0,v.v-DECEL_PREMIUM*dt);
 
   const agilite=mel(11,4.2,Math.min(v.v/v.vmax,1));
@@ -10251,36 +10261,36 @@ function planToledo(graine){
   const PAS=50, VOIE=3.5, DIST=2300;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
-  for(let d=170; d<DIST-140; d+=160+r()*110)
+  for(let d=260; d<DIST-160; d+=380+r()*140)
     objets.push({d:d, x:voieX(Math.floor(r()*4)), genre:r()<0.5?'pistolet':'turbo'});
-  for(let d=230; d<DIST-60; d+=70+r()*80){
+  for(let d=320; d<DIST-80; d+=230+r()*100){
     const x=voieX(Math.floor(r()*4))+(r()-0.5)*0.8;
-    if(!objets.some(o=>o.d-d<16&&d-o.d<16)) bananes.push({d:d, x:x});
+    if(!objets.some(o=>o.d-d<20&&d-o.d<20)) bananes.push({d:d, x:x});
   }
   const D=[], X=[], V=[], bombes=[];
-  let voie=Math.floor(r()*4), d=25, v=60, x=voieX(voie);
-  let tEv=0, vCible=150, tVoie=1500, tBombe=7500+r()*2000, freinage=false;
+  let voie=Math.floor(r()*4), d=25, v=0, x=voieX(voie);
+  let tEv=0, vCible=0, tVoie=2500, tBombe=12000+r()*3000, freinage=false;
   let k=0, tFin=0;
-  while(k<8000){
+  while(k<12000){
     const t=k*PAS;
-    if(t>=tEv){
-      const a=r();
+    if(t<9000){ vCible=t/9000*135; freinage=false; }
+    else if(t>=tEv){
+      const a=r(), base=150+40*Math.min(1,(t-9000)/30000);
       freinage=false;
-      if(t<5000){ vCible=160+t/5000*40; tEv=t+500; }
-      else if(a<0.22){ vCible=236+r()*14; tEv=t+1100+r()*900; }
-      else if(a<0.40){ vCible=105+r()*25; tEv=t+650+r()*650; freinage=true; }
-      else { vCible=192+r()*14; tEv=t+1300+r()*1700; }
+      if(a<0.18){ vCible=base+50+r()*10; tEv=t+1000+r()*600; }                  // il accélère d'un coup
+      else if(a<0.36){ vCible=base-50+r()*10; tEv=t+700+r()*600; freinage=true; } // il ralentit
+      else { vCible=base-8+r()*16; tEv=t+1500+r()*1500; }                        // croisière
     }
     if(t>=tVoie){
       let n=Math.floor(r()*3); if(n>=voie) n++;
-      voie=n; tVoie=t+(freinage?500:800)+r()*(freinage?500:1500);
+      voie=n; tVoie=t+(freinage?700:1200)+r()*(freinage?500:1800);
     }
-    const dv=vCible-v, pasV=(dv>0?48:95)*PAS/1000;
+    const dv=vCible-v, pasV=(dv>0?45:80)*PAS/1000;
     v=dv>0?Math.min(vCible,v+pasV):Math.max(vCible,v-pasV);
-    const xc=voieX(voie), dx=xc-x, pasX=8*PAS/1000;
+    const xc=voieX(voie), dx=xc-x, pasX=6*PAS/1000;
     x=dx>0?Math.min(xc,x+pasX):Math.max(xc,x-pasX);
     D.push(d); X.push(x); V.push(v);
-    if(t>=tBombe&&t>6000){ bombes.push({t:t, d:d-0.6, x:x}); tBombe=t+2400+r()*3000; }
+    if(t>=tBombe){ bombes.push({t:t, d:d-0.6, x:x}); tBombe=t+4500+r()*3000; }
     if(d>=DIST){ tFin=t; break; }
     d+=v/3.6*PAS/1000;
     k++;
@@ -10288,12 +10298,21 @@ function planToledo(graine){
   if(!tFin) tFin=k*PAS;
   return {PAS, D, X, V, bombes, objets, bananes, tFin, DIST};
 }
-function etatToledo(p,t){
-  if(t<=0) return {d:p.D[0], x:p.X[0], v:0};
-  const f=t/p.PAS, i=Math.floor(f);
-  if(i>=p.D.length-1){ const n=p.D.length-1; return {d:p.D[n], x:p.X[n], v:p.V[n]}; }
-  const a=f-i;
-  return {d:p.D[i]+(p.D[i+1]-p.D[i])*a, x:p.X[i]+(p.X[i+1]-p.X[i])*a, v:p.V[i]+(p.V[i+1]-p.V[i])*a};
+/* position de Toledo à l'instant t, avec ses grosses accélérations (quand on
+   l'abîme trop) : chacune le fait avancer plus vite pendant quelques secondes */
+function etatToledo(p,t,boosts){
+  let e;
+  if(t<=0) e={d:p.D[0], x:p.X[0], v:0};
+  else {
+    const f=t/p.PAS, i=Math.floor(f);
+    if(i>=p.D.length-1){ const n=p.D.length-1; e={d:p.D[n]+(t-n*p.PAS)*p.V[n]/3600, x:p.X[n], v:p.V[n]}; }
+    else { const a=f-i; e={d:p.D[i]+(p.D[i+1]-p.D[i])*a, x:p.X[i]+(p.X[i+1]-p.X[i])*a, v:p.V[i]+(p.V[i+1]-p.V[i])*a}; }
+  }
+  if(boosts) for(const b of boosts){
+    const dt=Math.max(0,Math.min(b.dur,t-b.t));
+    if(dt>0){ e.d+=b.dv/3.6*dt/1000; if(t-b.t<b.dur) e.v+=b.dv; }
+  }
+  return e;
 }
 
 /* ---------- la Mini Cooper de Toledo : le sprite du jeu, en plus gros ---------- */
@@ -10442,7 +10461,8 @@ function demarrerBois(rep,demi){
   genererDecor();
   const B=J.boisEtat={plan:planToledo(Number(rep.graine)||1), slot:rep.slot|0,
     depart:performance.now()-(Math.max(0,Number(rep.ecoule)||0)+demi),
-    vie:typeof rep.vie==='number'?rep.vie:BOIS_VIE, fini:false, gagne:false, pris:[], explosees:{},
+    vie:typeof rep.vie==='number'?rep.vie:BOIS_VIE, vieMax:Number(rep.vieMax)||BOIS_VIE,
+    boosts:Array.isArray(rep.boosts)?rep.boosts.slice():[], fini:false, gagne:false, pris:[], explosees:{},
     dernierChoc:0, envoi:false, demiRtt:demi, T:null, rot:0, flash:0, demande:null};
   J.voitures=[];
   (rep.equipe||[]).slice().sort((a,b)=>a.slot-b.slot).forEach(mm=>{
@@ -10494,6 +10514,10 @@ function arreterBoucleBois(){ const B=J.boisEtat; if(B&&B.timer){ clearInterval(
 function appliquerEtatBois(rep,demi){
   const B=J.boisEtat; if(!B||!rep) return;
   if(typeof rep.vie==='number'&&rep.vie<B.vie){ B.vie=rep.vie; }
+  if(Array.isArray(rep.boosts)&&rep.boosts.length>B.boosts.length){
+    B.boosts=rep.boosts.slice();
+    if(B.T){ popup(B.T.x,B.T.d+6,'IL ACCÉLÈRE !','#ff9a6a'); Son.note(180,.6,.18,'sawtooth',420); }
+  }
   if(Array.isArray(rep.pris)) rep.pris.forEach(i=>{ if(B.pris.indexOf(i)<0) B.pris.push(i); });
   if(Array.isArray(rep.membres)) rep.membres.forEach(mm=>{
     const v=J.voitures.find(c=>c.estReel&&c.i===mm.slot); if(!v) return;
@@ -10521,7 +10545,7 @@ function coupBois(type,t){
   const m=J.moi, B=J.boisEtat;
   envoyer('bois-coup',{type,tc:Math.round(t),d:m.d,x:m.x}).then(rep=>{
     if(!rep||J.boisEtat!==B) return;
-    if(rep.touche&&B.T){ popup(B.T.x,B.T.d+4.5,type==='balle'?'-50':'-20','#ffcf6a'); B.flash=.2; }
+    if(rep.touche&&B.T){ popup(B.T.x,B.T.d+4.5,type==='balle'?'-40':'-15','#ffcf6a'); B.flash=.2; }
     appliquerEtatBois(rep,0);
   });
 }
@@ -10553,15 +10577,15 @@ function utiliserObjetBois(v){
   v.balles--;
   Son.note(1500,.07,.22,'square',160); Son.bruit(.12,4000,600,.25);
   J.secouement=Math.max(J.secouement,5);
-  const T=B.T||etatToledo(B.plan,t), devant=(T.d+2.3)-(v.d+3);
+  const T=B.T||etatToledo(B.plan,t,B.boosts), devant=(T.d+2.3)-(v.d+3);
   const vise=devant>-1&&devant<62&&Math.abs(T.x-v.x)<1.7;
   J.traceurs.push({x:v.x,d0:v.d+3.2,d1:vise?T.d+1:v.d+62,t:0});
   coupBois('balle',t);
   if(v.balles<=0) v.objet=null;
 }
 function glisser(v){
-  v.vie-=22; v.v*=.45; v.rot=(Math.random()<.5?-1:1)*2.6; v.vx=(Math.random()<.5?-1:1)*5;
-  if(v===J.moi){ J.secouement=16; popup(v.x,v.d+3,'-22','#ffd36a'); }
+  v.vie-=15; v.v*=.72; v.rot=(Math.random()<.5?-1:1)*1.8; v.vx=(Math.random()<.5?-1:1)*4;
+  if(v===J.moi){ J.secouement=14; popup(v.x,v.d+3,'-15','#ffd36a'); }
   if(v.vie<=0) eliminer(v,'banane');
 }
 
@@ -10570,7 +10594,7 @@ function majBois(dt){
   const B=J.boisEtat; if(!B) return;
   const maintenant=performance.now();
   const t=B.gagne?B.tStop:maintenant-B.depart;
-  const T=etatToledo(B.plan,t), Tp=etatToledo(B.plan,t-60);
+  const T=etatToledo(B.plan,t,B.boosts), Tp=etatToledo(B.plan,t-60,B.boosts);
   B.T=T;
   B.rot=mel(B.rot,-((T.x-Tp.x)/0.06)*.05,1-Math.pow(0.002,dt));
   B.flash=Math.max(0,B.flash-dt);
@@ -10584,7 +10608,7 @@ function majBois(dt){
       if(m.d+1.5<T.d+2.3) m.v=Math.min(m.v,T.v*.97);
       etincelles((m.x+T.x)/2,(m.d+T.d)/2+1.5,5);
       J.secouement=Math.max(J.secouement,12);
-      if(maintenant-B.dernierChoc>600){
+      if(maintenant-B.dernierChoc>500){
         B.dernierChoc=maintenant; Son.choc(); coupBois('choc',t);
         if(m.d+1.5<T.d+2.3&&m.v-T.v>40){ m.vie-=6; }
       } else Son.frot();
@@ -10599,8 +10623,8 @@ function majBois(dt){
       if(Math.abs(v.d+1.5-b.d)<2.2&&Math.abs(v.x-b.x)<1.5){
         B.explosees[i]=true; Son.boum(); J.effets.push({genre:'boum',d:b.d,x:b.x,t:0,duree:.75});
         if(v===m){
-          v.vie-=30; v.v*=.35; v.rot=(Math.random()<.5?-1:1)*1.4; v.vx=(v.x<b.x?-1:1)*6;
-          J.secouement=24; popup(v.x,v.d+3,'-30','#ff8a6a');
+          v.vie-=25; v.v*=.6; v.rot=(Math.random()<.5?-1:1)*1.2; v.vx=(v.x<b.x?-1:1)*5;
+          J.secouement=22; popup(v.x,v.d+3,'-25','#ff8a6a');
           if(v.vie<=0) eliminer(v,'bombe');
         }
       }});
@@ -10613,7 +10637,7 @@ function majBois(dt){
   if(m&&m.turboT>0) m.turboT-=dt;
   J.popups.forEach(p=>p.t+=dt); J.popups=J.popups.filter(p=>p.t<1.1);
   J.traceurs.forEach(p=>p.t+=dt); J.traceurs=J.traceurs.filter(p=>p.t<.16);
-  if(B.vie<BOIS_VIE*.35&&Math.random()<.5)
+  if(B.vie<B.vieMax*.3&&Math.random()<.5)
     J.effets.push({genre:'fumeeleg',d:T.d+.5,x:T.x+(Math.random()-.5),t:0,duree:.9});
   majSonBois();
 }
@@ -10644,11 +10668,11 @@ function dessinerBois(cam){
     const s=Math.max(22,1.6*PXM);
     ctx.save(); ctx.translate(ecranX(b.x)-s/2,y-s/2); iconeBombe(ctx,s); ctx.restore();
   });
-  if(B.T&&t<B.plan.tFin+800){
+  if(B.T&&B.T.d<DIST_BOIS+40){
     const sp=miniSprite(), y=ecranY(B.T.d,cam);
     if(y>-sp._Lm*PXM-40&&y<H+300){
       ombreAuSol(B.T.x,B.T.d,sp._Wm*1.05,sp._Lm*1.02,1.6,cam);
-      blitSprite(sp,ecranX(B.T.x),y,sp._Lm,sp._Wm,B.rot,1,{vie:B.vie,vieMax:BOIS_VIE,i:9});
+      blitSprite(sp,ecranX(B.T.x),y,sp._Lm,sp._Wm,B.rot,1,{vie:B.vie,vieMax:B.vieMax,i:9});
       if(B.flash>0){
         ctx.save(); ctx.globalAlpha=B.flash*2.5; ctx.fillStyle='rgba(255,70,50,.55)';
         ctx.beginPath(); ctx.ellipse(ecranX(B.T.x),y-sp._Lm*PXM/2,sp._Wm*PXM*.7,sp._Lm*PXM*.6,0,0,TAU); ctx.fill();
@@ -10776,12 +10800,12 @@ function gyrophares(){
 function etiquetteToledo(){
   const B=J.boisEtat; if(!B||!B.T) return;
   const t=B.gagne?B.tStop:performance.now()-B.depart;
-  if(t>B.plan.tFin+800) return;
+  if(B.T.d>DIST_BOIS+40) return;
   const cam=J.camera, sp=miniSprite(), y=ecranY(B.T.d,cam);
   if(y>-sp._Lm*PXM-40&&y<H+300){
     const yy=y-sp._Lm*PXM-14, bw=Math.max(60,sp._Wm*PXM*1.3), bx=ecranX(B.T.x)-bw/2;
     ctx.fillStyle='rgba(10,12,16,.7)'; ctx.fillRect(bx-2,yy-2,bw+4,10);
-    ctx.fillStyle=B.vie>BOIS_VIE*.4?'#f0956a':'#d8413c'; ctx.fillRect(bx,yy,bw*B.vie/BOIS_VIE,6);
+    ctx.fillStyle=B.vie>B.vieMax*.4?'#f0956a':'#d8413c'; ctx.fillRect(bx,yy,bw*B.vie/B.vieMax,6);
     ctx.fillStyle='#f2f4ef'; ctx.font='700 '+Math.max(15,Math.round(1.1*PXM))+'px "Barlow Condensed", sans-serif';
     ctx.textAlign='center'; ctx.fillText('TOLEDO',ecranX(B.T.x),yy-6); ctx.textAlign='start';
   } else if(y<=-sp._Lm*PXM-40){
@@ -11881,7 +11905,7 @@ function majATH(){
   if(J.bois&&J.boisEtat){
     const B=J.boisEtat, T=B.T||{d:0};
     $('pxTVie').textContent=Math.round(B.vie)+' PV';
-    $('pxTJauge').style.width=Math.max(0,B.vie/BOIS_VIE*100)+'%';
+    $('pxTJauge').style.width=Math.max(0,B.vie/B.vieMax*100)+'%';
     $('pxTDist').textContent=B.gagne?'Arrêté !':(T.d>=m.d?'à '+Math.round(T.d-m.d)+' m devant':'derrière vous');
     tout=`<div class="rang"><b style="background:#7b838d"></b><span class="nm">Toledo</span>`
       +`<span class="pt">Mini Cooper</span><span class="ds">${T.d>=1000?(T.d/1000).toFixed(1).replace('.',',')+'km':Math.round(T.d)+'m'}</span></div>`+html;
@@ -12217,7 +12241,7 @@ function finirPartie(issue,cause){
   }
   $('pxFTitre').textContent=titre; $('pxFTexte').textContent=texte;
   const lignes=[['Mise',euro(J.mise)],
-    J.bois&&J.boisEtat?['Toledo',Math.round(J.boisEtat.vie)+' PV sur '+BOIS_VIE]:['Portes franchies',J.palier+' sur '+PALIERS.length],
+    J.bois&&J.boisEtat?['Toledo',Math.round(J.boisEtat.vie)+' PV sur '+J.boisEtat.vieMax]:['Portes franchies',J.palier+' sur '+PALIERS.length],
     ['Vitesse atteinte',Math.round(J.moi.v)+' km/h']];
   $('pxFLignes').innerHTML=lignes.map(([a,b])=>
     `<div class="fl"><span class="a">${a}</span><span class="b">${b}</span></div>`).join('')
