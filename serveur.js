@@ -2207,8 +2207,8 @@ const serveur = http.createServer(async (req, res) => {
   async function envoyerEmailVerification(email, pseudo, code) {
     const apiKey = process.env.SENDGRID_API_KEY;
     if (!apiKey) {
-      console.log(‘SENDGRID_API_KEY non configurée, email non envoyé’);
-      return true;  // on laisse passer quand même
+      console.log(‘SENDGRID_API_KEY non configuree, email non envoye’);
+      return true;  // on laisse passer quand meme
     }
 
     const message = {
@@ -2216,10 +2216,10 @@ const serveur = http.createServer(async (req, res) => {
         to: [{ email: email }]
       }],
       from: { email: ‘noreply@casinomessina.com’, name: ‘Casino Messina’ },
-      subject: ‘Vérifiez votre compte Casino Messina’,
+      subject: ‘Verifiez votre compte Casino Messina’,
       html: `
         <h2>Bienvenue sur Casino Messina !</h2>
-        <p>Votre code de vérification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
+        <p>Votre code de verification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
         <p>Veuillez entrer ce code pour activer votre compte.</p>
         <p>Ce code expire dans 10 minutes.</p>
       `
