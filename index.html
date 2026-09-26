@@ -14388,7 +14388,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
 
   /* quel genre d'immeuble ? on le devine a la hauteur, et une "graine" tiree de l'identifiant
      fait que deux voisins n'ont presque jamais la meme facade */
-  var H_BAT = ['coalesce', ['get', 'render_height'], 12];
+  var H_BAT = ['coalesce', ['get', 'render_height'], 19];
   var B_BAT = ['coalesce', ['get', 'render_min_height'], 0];
   var GRAINE = ['%', ['floor', ['abs', ['+', ['*', H_BAT, 13.7], ['*', ['to-number', ['coalesce', ['id'], 0], 0], 0.7071]]]], 20];
   var FAMILLE = ['let', 'h', H_BAT, 'b', B_BAT, 'g', GRAINE,
@@ -14406,13 +14406,25 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       ['<', ['var', 'h'], 13], ['match', ['%', ['var', 'g'], 3], 0, 'tuile-0', 1, 'tuile-1', 'tuile-2'],
       ['<', ['var', 'h'], 32], ['match', ['var', 'g'], [2, 3, 4, 5], 'plat-0', ['match', ['%', ['var', 'g'], 3], 0, 'zinc-0', 1, 'zinc-1', 'zinc-2']],
       'plat-0']];
-  /* de loin (zoom < 15) : de simples couleurs, les memes que de pres */
-  var COULEUR_LOIN = ['let', 'h', H_BAT, 'b', B_BAT,
-    ['case', ['>=', ['var', 'b'], 25], '#6e5845', ['<', ['var', 'h'], 13], '#d8c7a8', ['<', ['var', 'h'], 32], '#e3d8c2', ['<', ['var', 'h'], 70], '#c8c8c1', '#8ea3b1']];
-  var COULEUR_TOIT_LOIN = ['case', ['<', H_BAT, 13], '#9a5a44', ['<', H_BAT, 32], '#a9b2ba', '#a6a59e'];
+  /* de loin (zoom < 15) : vu de dessus, Paris c'est surtout du zinc gris-beige, avec de rares
+     toits en tuile (seulement les vraies petites maisons, pas celles sans donnee de hauteur) */
+  var A_DONNEE_H = ['has', 'render_height'];
+  var COULEUR_LOIN = ['let', 'h', H_BAT, 'b', B_BAT, 'g', GRAINE,
+    ['case',
+      ['>=', ['var', 'b'], 25], '#6e5845',                                                  // morceaux perches (Tour Eiffel)
+      ['all', A_DONNEE_H, ['<', ['var', 'h'], 11]], ['match', ['%', ['var', 'g'], 3], 0, '#dcc7a4', 1, '#d4bd98', '#e2cca6'],   // vraies petites maisons
+      ['>=', ['var', 'h'], 70], ['match', ['%', ['var', 'g'], 2], 0, '#93a8b5', '#88a0ad'], // tours de verre
+      ['match', ['%', ['var', 'g'], 4], 0, '#ddd3ba', 1, '#e3dac3', 2, '#d7cdb4', '#e0d6bd']]]; // l'immense majorite : facade claire
+  var COULEUR_TOIT_LOIN = ['let', 'h', H_BAT, 'g', GRAINE,
+    ['case',
+      ['>=', ['var', 'h'], 32], ['match', ['%', ['var', 'g'], 3], 0, '#9ea9b2', 1, '#a5aeb6', '#95a1aa'],                      // toit plat des immeubles hauts
+      ['all', A_DONNEE_H, ['<', ['var', 'h'], 11]], ['match', ['%', ['var', 'g'], 3], 0, '#a9583f', 1, '#9a4d37', '#8f4a34'],  // vraies petites maisons : tuile
+      ['match', ['%', ['var', 'g'], 4], 0, '#aab3bb', 1, '#9ea9b2', 2, '#b5bdc3', '#a3adb5']]];                                // l'immense majorite : zinc
   /* un batiment qui a des "morceaux" detailles est dessine par ses morceaux, pas par sa boite englobante */
   var PAS_ENGLOBANT = ['!=', ['get', 'hide_3d'], true];
-  var AVEC_TOIT = ['all', PAS_ENGLOBANT, ['>=', H_BAT, 4], ['<', B_BAT, 25],
+  /* le petit surplomb de toit ne se rajoute que sur les batiments courants (<32m) : sur les tours,
+     un chapeau ajoute par-dessus ferait des saillies qui traversent les tours voisines */
+  var AVEC_TOIT = ['all', PAS_ENGLOBANT, ['>=', H_BAT, 4], ['<', H_BAT, 32],
     ['!', ['all', ['>=', H_BAT, 49.5], ['<', H_BAT, 50.5]]]];
   var HAUT_TOIT = ['+', H_BAT, ['case', ['<', H_BAT, 13], 1.8, ['<', H_BAT, 32], 3.2, 0.7]];
 
