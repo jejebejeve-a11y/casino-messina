@@ -2206,15 +2206,21 @@ const serveur = http.createServer(async (req, res) => {
   const codesVerification = new Map();  // pseudo -> { code, email, expire }
 
   async function envoyerEmailVerification(email, pseudo, code) {
+    console.log('[EMAIL] DEBUT - email:', email, 'pseudo:', pseudo);
+
     const gmailUser = process.env.GMAIL_USER;
     const gmailPassword = process.env.GMAIL_PASSWORD;
 
+    console.log('[EMAIL] GMAIL_USER existe:', !!gmailUser, 'valeur:', gmailUser);
+    console.log('[EMAIL] GMAIL_PASSWORD existe:', !!gmailPassword);
+
     if (!gmailUser || !gmailPassword) {
-      console.log('GMAIL_USER ou GMAIL_PASSWORD non configurees, email non envoye');
-      return true;  // on laisse passer quand meme
+      console.log('[EMAIL] ERREUR: Variables d\'env GMAIL manquantes');
+      return true;
     }
 
     try {
+      console.log('[EMAIL] Creation transporter...');
       const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -2222,6 +2228,7 @@ const serveur = http.createServer(async (req, res) => {
           pass: gmailPassword
         }
       });
+      console.log('[EMAIL] Transporter cree OK');
 
       const mailOptions = {
         from: gmailUser,
@@ -2235,11 +2242,13 @@ const serveur = http.createServer(async (req, res) => {
         `
       };
 
-      await transporter.sendMail(mailOptions);
-      console.log('Email de verification envoye a', email);
+      console.log('[EMAIL] Appel transporter.sendMail...');
+      const result = await transporter.sendMail(mailOptions);
+      console.log('[EMAIL] SUCCESS! messageId:', result.messageId);
       return true;
     } catch (e) {
-      console.log('Erreur envoi email:', e.message);
+      console.log('[EMAIL] CATCH EXCEPTION:', e.message);
+      console.log('[EMAIL] Stack trace:', e.stack);
       return false;
     }
   }
