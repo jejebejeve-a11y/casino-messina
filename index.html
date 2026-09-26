@@ -740,12 +740,29 @@ body{
 .pastille-ligne{width:8px;height:8px;border-radius:50%;background:#5b5f66;flex-shrink:0}
 .pastille-ligne.en-ligne{background:#57c26a;box-shadow:0 0 6px #57c26a}
 .tag-banni{color:#ff8080;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1px solid rgba(255,128,128,.4);border-radius:5px;padding:1px 5px}
+.ligne-admin{
+  flex:0 0 100%;order:3;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+}
 .btn-bannir{
-  flex:0 0 100%;order:3;margin-top:2px;padding:7px 10px;border-radius:8px;border:1px solid rgba(200,60,60,.5);
+  padding:7px 10px;border-radius:8px;border:1px solid rgba(200,60,60,.5);
   background:rgba(140,20,20,.25);color:#ffb3b3;font-size:11.5px;font-weight:700;cursor:pointer;
 }
 .btn-bannir.est-banni{border-color:rgba(212,175,55,.4);background:rgba(212,175,55,.12);color:#e9c869}
 .btn-bannir:disabled{opacity:.4;pointer-events:none}
+.btn-supprimer{
+  padding:7px 10px;border-radius:8px;border:1px solid rgba(120,120,120,.5);
+  background:rgba(60,60,60,.3);color:#ddd;font-size:11.5px;font-weight:700;cursor:pointer;
+}
+.btn-supprimer:disabled{opacity:.4;pointer-events:none}
+.ch-solde{
+  width:110px;padding:6px 8px;border-radius:8px;border:1px solid rgba(212,175,55,.35);
+  background:rgba(0,0,0,.3);color:#e9e4da;font-size:11.5px;
+}
+.btn-solde{
+  padding:7px 10px;border-radius:8px;border:1px solid rgba(212,175,55,.5);
+  background:rgba(212,175,55,.12);color:#e9c869;font-size:11.5px;font-weight:700;cursor:pointer;
+}
+.btn-solde:disabled{opacity:.4;pointer-events:none}
 
 /* ---------- PERSONNAGE ---------- */
 #ecranPersonnage{align-items:center;justify-content:center;padding:24px;
@@ -3658,8 +3675,14 @@ function afficherListeJoueurs(joueurs, admin) {
   bloc.innerHTML = joueurs.map(j => `
     <div class="ligne-joueur">
       <span class="nm"><span class="pastille-ligne ${j.enLigne ? 'en-ligne' : ''}"></span>${j.pseudo}${j.banni ? ' <b class="tag-banni">banni</b>' : ''}</span>
-      <span class="pt">Créé le ${dateCourte(j.creeLe)}<br>Vu ${tempsEcoule(j.vuLe)}</span>
-      ${admin ? `<button type="button" class="btn-bannir${j.banni ? ' est-banni' : ''}" data-pseudo="${j.pseudoBas}" data-action="${j.banni ? 'debannir' : 'bannir'}">${j.banni ? 'Débannir' : 'Bannir'}</button>` : ''}
+      <span class="pt">Créé le ${dateCourte(j.creeLe)}<br>Vu ${tempsEcoule(j.vuLe)}${admin ? '<br>Solde : ' + Number(j.solde || 0).toFixed(2) + ' €' : ''}</span>
+      ${admin ? `
+        <div class="ligne-admin">
+          <button type="button" class="btn-bannir${j.banni ? ' est-banni' : ''}" data-pseudo="${j.pseudoBas}" data-action="${j.banni ? 'debannir' : 'bannir'}">${j.banni ? 'Débannir' : 'Bannir'}</button>
+          <button type="button" class="btn-supprimer" data-pseudo="${j.pseudoBas}" data-nom="${j.pseudo}">Supprimer</button>
+          <input type="number" step="0.01" min="0" class="ch-solde" data-pseudo="${j.pseudoBas}" placeholder="Nouveau solde">
+          <button type="button" class="btn-solde" data-pseudo="${j.pseudoBas}">Modifier solde</button>
+        </div>` : ''}
     </div>`).join('');
   if (admin) {
     bloc.querySelectorAll('.btn-bannir').forEach(b => {
@@ -3672,6 +3695,33 @@ function afficherListeJoueurs(joueurs, admin) {
         });
         if (!rep || rep.erreur) { alert((rep && rep.erreur) || 'Le casino ne répond pas.'); b.disabled = false; return; }
         $('pfCodeValider').click();   // recharge la liste avec les statuts à jour
+      };
+    });
+    bloc.querySelectorAll('.btn-supprimer').forEach(b => {
+      b.onclick = async () => {
+        if (!confirm('Supprimer définitivement le compte "' + b.dataset.nom + '" ? Cette action est irréversible.')) return;
+        b.disabled = true;
+        const rep = await envoyer('supprimer-compte', {
+          code: $('pfCodeChamp').value.trim(),
+          pseudo: b.dataset.pseudo
+        });
+        if (!rep || rep.erreur) { alert((rep && rep.erreur) || 'Le casino ne répond pas.'); b.disabled = false; return; }
+        $('pfCodeValider').click();
+      };
+    });
+    bloc.querySelectorAll('.btn-solde').forEach(b => {
+      b.onclick = async () => {
+        const champSolde = bloc.querySelector('.ch-solde[data-pseudo="' + b.dataset.pseudo + '"]');
+        const val = champSolde ? champSolde.value.trim() : '';
+        if (val === '') { alert('Entre un montant.'); return; }
+        b.disabled = true;
+        const rep = await envoyer('modifier-solde', {
+          code: $('pfCodeChamp').value.trim(),
+          pseudo: b.dataset.pseudo,
+          solde: Number(val)
+        });
+        if (!rep || rep.erreur) { alert((rep && rep.erreur) || 'Le casino ne répond pas.'); b.disabled = false; return; }
+        $('pfCodeValider').click();
       };
     });
   }

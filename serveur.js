@@ -344,6 +344,43 @@ const Carnet = {
     }
   },
 
+  // Change directement le solde d'une fiche (utilise par le code admin pour
+  // retirer l'argent gagne en trichant, sans avoir a bannir le compte).
+  async definirSolde(pseudoBas, solde) {
+    const ancienne = this.memoire.get(pseudoBas) || (await this.lire(pseudoBas)) || null;
+    if (!ancienne) return false;
+    const fiche = Object.assign({}, ancienne, { solde: solde });
+    this.memoire.set(pseudoBas, fiche);
+    if (!this.pret) return true;
+    try {
+      await this.commande(['SET', 'joueur:' + pseudoBas, JSON.stringify(fiche)]);
+      return true;
+    } catch (e) {
+      console.log('Carnet : modification du solde non enregistree (' + e.message + ')');
+      return true;
+    }
+  },
+
+  // Supprime completement un compte (fiche + entree d'index). Utilise par
+  // le code admin pour effacer les faux comptes crees par un bot.
+  async supprimer(pseudoBas) {
+    this.memoire.delete(pseudoBas);
+    this.indexMemoire.delete(pseudoBas);
+    if (!this.pret) return true;
+    try {
+      await this.commande(['DEL', 'joueur:' + pseudoBas]);
+      const r = await this.commande(['GET', 'index:joueurs']);
+      let index = {};
+      if (r && r.result) { try { index = JSON.parse(r.result); } catch (e) { index = {}; } }
+      delete index[pseudoBas];
+      await this.commande(['SET', 'index:joueurs', JSON.stringify(index)]);
+      return true;
+    } catch (e) {
+      console.log('Carnet : suppression non enregistree (' + e.message + ')');
+      return true;
+    }
+  },
+
   // Tient un seul index { pseudoBas: {pseudo, creeLe, vuLe} } pour pouvoir
   // lister tous les joueurs deja crees (le code reserve au proprietaire
   // s'en sert). On ne le touche qu'a la creation du compte et a la
@@ -2153,7 +2190,7 @@ function listeJoueursAvecPresence(liste) {
         break;
       }
     }
-    return { pseudo: j.pseudo, creeLe: j.creeLe || null, vuLe: vuLe, enLigne: enLigne };
+    return { pseudo: j.pseudo, pseudoBas: j.pseudoBas, creeLe: j.creeLe || null, vuLe: vuLe, enLigne: enLigne };
   });
   joueurs.sort((a, b) => new Date(b.vuLe || 0) - new Date(a.vuLe || 0));
   return joueurs;
@@ -3214,6 +3251,7 @@ const serveur = http.createServer(async (req, res) => {
         for (const j of joueurs) {
           const fiche = await Carnet.lire(j.pseudoBas);
           j.banni = !!(fiche && fiche.banni);
+          j.solde = fiche ? Number(fiche.solde || 0) : 0;
         }
         return repondre(res, 200, { ok: true, genre: 'admin', joueurs });
       }
@@ -3259,6 +3297,70 @@ const serveur = http.createServer(async (req, res) => {
       }
 
       return repondre(res, 200, { ok: true, pseudo: fiche.pseudo, banni });
+    }
+
+    // --- supprimer completement un compte (meme code que bannir) ---
+    if (route === '/api/supprimer-compte' && req.method === 'POST') {
+      const maintenantSup = Date.now();
+      if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
+      compte.codeEchecs = compte.codeEchecs.filter(t => maintenantSup - t < 60000);
+      if (compte.codeEchecs.length >= 5) {
+        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+      }
+      const codeNormS = String(body.code || '').trim().toLowerCase()
+        .replace(/\s+/g, '').replace(/[''’]/g, '');
+      if (codeNormS !== 'exclusionfdp') {
+        compte.codeEchecs.push(maintenantSup);
+        return repondre(res, 403, { erreur: 'Code invalide.' });
+      }
+
+      const cibleSup = String(body.pseudo || '').trim().toLowerCase();
+      if (!cibleSup) return repondre(res, 400, { erreur: 'Pseudo manquant.' });
+      const ficheSup = await Carnet.lire(cibleSup);
+      if (!ficheSup) return repondre(res, 404, { erreur: 'Compte introuvable.' });
+
+      // si ce compte a une session ouverte, on le vire d'abord de partout
+      for (const c of comptes.values()) {
+        if (c.pseudoBas === cibleSup) {
+          c.banni = true;
+          quitterTable(c); quitterTableRoulette(c); retirerDeLaFilePeriph(c.jetonRef);
+          c.periph = null; c.periphMulti = null;
+          if (c.pontMulti) abandonnerPontMulti(c);
+        }
+      }
+      await Carnet.supprimer(cibleSup);
+      return repondre(res, 200, { ok: true, pseudo: ficheSup.pseudo });
+    }
+
+    // --- changer le solde d'un compte (meme code que bannir) ---
+    if (route === '/api/modifier-solde' && req.method === 'POST') {
+      const maintenantSol = Date.now();
+      if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
+      compte.codeEchecs = compte.codeEchecs.filter(t => maintenantSol - t < 60000);
+      if (compte.codeEchecs.length >= 5) {
+        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+      }
+      const codeNormO = String(body.code || '').trim().toLowerCase()
+        .replace(/\s+/g, '').replace(/[''’]/g, '');
+      if (codeNormO !== 'exclusionfdp') {
+        compte.codeEchecs.push(maintenantSol);
+        return repondre(res, 403, { erreur: 'Code invalide.' });
+      }
+
+      const cibleSol = String(body.pseudo || '').trim().toLowerCase();
+      if (!cibleSol) return repondre(res, 400, { erreur: 'Pseudo manquant.' });
+      const nouveauSolde = Number(body.solde);
+      if (!Number.isFinite(nouveauSolde) || nouveauSolde < 0) {
+        return repondre(res, 400, { erreur: 'Montant invalide.' });
+      }
+      const ficheSol = await Carnet.lire(cibleSol);
+      if (!ficheSol) return repondre(res, 404, { erreur: 'Compte introuvable.' });
+
+      await Carnet.definirSolde(cibleSol, nouveauSolde);
+      for (const c of comptes.values()) {
+        if (c.pseudoBas === cibleSol) c.solde = nouveauSolde;
+      }
+      return repondre(res, 200, { ok: true, pseudo: ficheSol.pseudo, solde: nouveauSolde });
     }
 
     // --- ma fiche (écran profil) ---
