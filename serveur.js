@@ -4244,6 +4244,43 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, pseudo: ficheSol.pseudo, solde: nouveauSolde });
     }
 
+    // --- razzia : supprimer la base d'un joueur pour qu'il la repose ailleurs
+    // (meme code que bannir) ---
+    if (route === '/api/razzia-supprimer-base' && req.method === 'POST') {
+      const maintenantRz = Date.now();
+      if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
+      compte.codeEchecs = compte.codeEchecs.filter(t => maintenantRz - t < 60000);
+      if (compte.codeEchecs.length >= 5) {
+        return repondre(res, 429, { erreur: 'Trop d\'essais. Reessayez dans une minute.' });
+      }
+      const codeNormRz = String(body.code || '').trim().toLowerCase()
+        .replace(/\s+/g, '').replace(/[''']/g, '');
+      if (codeNormRz !== 'exclusionfdp') {
+        compte.codeEchecs.push(maintenantRz);
+        return repondre(res, 403, { erreur: 'Code invalide.' });
+      }
+      if (!rzCharge) return repondre(res, 503, { erreur: 'La carte se prépare, réessaie dans quelques secondes.' });
+
+      const cibleRz = String(body.pseudo || '').trim().toLowerCase();
+      if (!cibleRz) return repondre(res, 400, { erreur: 'Pseudo manquant.' });
+      const j = RZJ[cibleRz];
+      if (!j || !j.base) return repondre(res, 404, { erreur: 'Ce joueur n\'a pas de base posée.' });
+
+      // annule tout groupe en route qui lui appartient ou qui vise sa base
+      for (const id of Object.keys(RZG)) {
+        const g = RZG[id];
+        if (g.proprio === cibleRz || (g.cible && g.cible.type === 'base' && g.cible.pseudo === cibleRz)) {
+          delete RZG[id];
+        }
+      }
+      j.base = null;
+      j.bouclier = true;
+      j.bouclierRetireLe = 0;
+      j.feuJusqua = 0;
+      rzSauver();
+      return repondre(res, 200, { ok: true, pseudo: j.pseudo });
+    }
+
     // --- ma fiche (ecran profil) ---
     /* ================= RAZZIA ================= */
     if (route.startsWith('/api/razzia-')) {
