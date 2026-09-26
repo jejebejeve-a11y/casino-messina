@@ -1,6 +1,6 @@
 'use strict';
 /* ===================================================================
-   CASINO MESSINA — serveur de jeu
+   CASINO MESSINA - serveur de jeu
    -------------------------------------------------------------------
    Aucune bibliotheque a installer : uniquement Node.
    Le serveur tient les cartes, les tours et le chronometre.
@@ -24,18 +24,18 @@ const DUREE_TOUR      = 15000;  // temps pour jouer son tour
 const DUREE_RESULTAT  = 6000;   // affichage du resultat avant la manche suivante
 const DELAI_CARTE     = 560;    // entre deux cartes distribuees
 const DELAI_BANQUE    = 950;    // entre deux cartes de la banque
-const DELAI_BOT       = 1300;   // temps de reflexion d'un bot
+const DELAI_BOT       = 1300;   // temps de reflexion d\'un bot
 const CHAT_MAX        = 60;     // messages de chat conserves par table
 const ABSENCE_MAX     = 15000;  // sans nouvelles, un joueur perd sa place
 const SOLDE_DEPART    = 22;
 
 /* ---------- le penalty ----------
-   L'echelle des gains : un but = on monte d'un cran.
-   Le joueur peut encaisser quand il veut ; s'il rate, il perd sa mise.
+   L\'echelle des gains : un but = on monte d\'un cran.
+   Le joueur peut encaisser quand il veut ; s\'il rate, il perd sa mise.
    Le tirage se fait ICI, sur le serveur : impossible de tricher
    en bidouillant la page.                                          */
 const ECHELLE_PENALTY  = [2, 4, 8, 16, 32, 64, 100];
-const CHANCE_BUT       = 4700;   // sur 10000, soit 47 % de buts (53 % d'arrets)
+const CHANCE_BUT       = 4700;   // sur 10000, soit 47 % de buts (53 % d\'arrets)
 const MISE_MINI_PENALTY = 0.10;
 const ZONES_PENALTY    = 15;     // la cage est decoupee en 5 x 3
 const DEFAITES_SECRET  = 2;      // apres deux echecs, la tete du gardien compte
@@ -44,8 +44,8 @@ const DEFAITES_SECRET  = 2;      // apres deux echecs, la tete du gardien compte
    Douze portes de la Porte Dauphine a Saint-Denis. A chaque porte
    franchie la somme monte ; au bout du parcours elle vaut cinquante
    fois la mise. Le joueur peut encaisser a chaque porte.
-   La course se joue dans la page, mais l'argent se compte ICI :
-   la mise part au depart, le gain n'est verse que par ce fichier, et
+   La course se joue dans la page, mais l\'argent se compte ICI :
+   la mise part au depart, le gain n\'est verse que par ce fichier, et
    le serveur refuse une porte annoncee trop tot pour la distance.   */
 const ECHELLE_PERIPH   = [1.4, 2, 2.7, 3.8, 5.3, 7.5, 10.4, 14.6, 20.4, 28.5, 39.8, 50];
 const LONGUEURS_PERIPH = [900, 300, 300, 550, 650, 650, 800, 800, 850, 800, 650, 550];
@@ -56,7 +56,7 @@ const NOMS_PERIPH      = ['Porte Maillot','Porte des Ternes','Porte de Villiers'
 const MISE_MINI_PERIPH = 0.10;
 const MISE_MAXI_PERIPH = 100;
 const VITESSE_MAX_PERIPH = 150 / 3.6;   // metres par seconde
-const MARGE_TEMPS      = 0.80;          // on tolere un peu de retard d'horloge
+const MARGE_TEMPS      = 0.80;          // on tolere un peu de retard d\'horloge
 
 /* la voiture de la boutique : plus rapide, avec des vrais freins */
 const PRIX_VOITURE_PREMIUM     = 1200;
@@ -64,26 +64,26 @@ const VOITURE_PREMIUM_INDICE   = 4;
 const VITESSE_MAX_PERIPH_PREMIUM = 300 / 3.6;   // metres par seconde
 
 /* ---------- le periph en multijoueur ----------
-   Une file d'attente toute simple : des qu'un deuxieme joueur reel la
+   Une file d\'attente toute simple : des qu\'un deuxieme joueur reel la
    rejoint, un compte a rebours de dix secondes demarre pour tout le
-   monde. S'il redescend a moins de deux avant la fin, on annule, sans
+   monde. S\'il redescend a moins de deux avant la fin, on annule, sans
    frais pour personne. Au top depart, chacun est debite et sa course
    demarre exactement comme en solo (meme fonction interne). Un petit
    groupe de course garde ensuite, pendant la course, la progression
-   annoncee par chacun : ca ne sert qu'a dessiner la voiture des autres
-   joueurs, jamais a calculer un gain (ca, c'est toujours les routes
+   annoncee par chacun : ca ne sert qu\'a dessiner la voiture des autres
+   joueurs, jamais a calculer un gain (ca, c\'est toujours les routes
    /api/periph-porte, /api/periph-encaisser, /api/periph-perdu, inchangees). */
 const DUREE_ATTENTE_PERIPH_MULTI = 10000;
 const EXPIRATION_COURSE_MULTI    = 5 * 60000;   // filet de securite
 
 /* ---------- Tower Rush ----------
    Un etage se balance sous la grue ; le joueur appuie pour le lacher.
-   Comme pour le periph, la balancoire s'anime dans la page pour que ce
-   soit fluide, mais le moment exact du lacher n'est jamais cru sur
-   parole : ce fichier garde l'heure a laquelle CHAQUE balancement a
+   Comme pour le periph, la balancoire s\'anime dans la page pour que ce
+   soit fluide, mais le moment exact du lacher n\'est jamais cru sur
+   parole : ce fichier garde l\'heure a laquelle CHAQUE balancement a
    commence (compte.tower.swingStart) et recalcule lui-meme, a la
    milliseconde pres, ou en etait le balancement quand la demande est
-   arrivee. La precision, le multiplicateur et le risque d'effondrement
+   arrivee. La precision, le multiplicateur et le risque d\'effondrement
    sont donc entierement decides ici, jamais par la page. */
 const MISE_MINI_TOWER = 0.10;
 const MISE_MAXI_TOWER = 500;
@@ -101,14 +101,14 @@ function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
    Maintenant la tour a DOUZE niveaux et un plafond dur de x100.
    - Chaque niveau a une chance de tenir, meme avec un lacher parfait
      (TOWER_SURVIE). Un lacher imprecis ajoute son propre risque par-dessus.
-   - Si l'etage tient, le multiplicateur cumule suit en moyenne
+   - Si l\'etage tient, le multiplicateur cumule suit en moyenne
      TOWER_ECHELLE (x1,13 au 1er niveau ... x100 au 12e), avec un peu de
      hasard a chaque etage (la cote peut rester inferieure a x1).
    - Le hasard de chaque etage est INDEPENDANT des precedents : aucune
-     strategie d'encaissement ne peut faire mieux que l'esperance du
-     premier niveau (0,85 x 1,13 = 0,96). Plus on monte, plus l'esperance
+     strategie d\'encaissement ne peut faire mieux que l\'esperance du
+     premier niveau (0,85 x 1,13 = 0,96). Plus on monte, plus l\'esperance
      baisse (0,78 au 7e niveau, 0,11 au sommet).
-   - Probabilite d'atteindre le sommet depuis le depart, lacher parfait
+   - Probabilite d\'atteindre le sommet depuis le depart, lacher parfait
      a chaque fois : 0,85 x 0,82 x ... x 0,25 = 0,109 %.
    - Etage gele : aucun risque, mais la cote reste proche de x1 (moyenne
      0,99) et il ne compte pas comme un niveau.
@@ -126,8 +126,8 @@ function towerRollFactor(niveau) {
   return ratio * towerRand(1 - a, 1 + a);
 }
 
-/* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l'issue :
-   'rate' (l'etage tombe a cote), 'glisse' (la tour s'effondre) ou 'pose'.
+/* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l\'issue :
+   'rate' (l\'etage tombe a cote), 'glisse' (la tour s\'effondre) ou 'pose'.
    Exporte en bas de fichier pour la simulation des cotes. */
 function towerTirer(tour, angle) {
   const n = tour.floors.length;
@@ -151,7 +151,7 @@ function towerTirer(tour, angle) {
   else tour.niveau = niveau + 1;
   const parfait = !etaitGele && errRatio < 0.1 && facteur >= 1;
 
-  // pas d'arrondi ici : seul le gain final (mise x totalMult) est arrondi
+  // pas d\'arrondi ici : seul le gain final (mise x totalMult) est arrondi
   tour.totalMult = Math.min(TOWER_MULT_MAX, tour.totalMult * facteur);
   const nouveauLean = tour.leanSum + angle * 0.58;
   const glisse = tombe || ((tour.frozenLeft <= 0) && Math.abs(nouveauLean) > 58);
@@ -215,27 +215,27 @@ function sous(n) { return Math.round(n * 100) / 100; }
 /* ===================================================================
    LE CARNET DES JOUEURS
    -------------------------------------------------------------------
-   Les comptes sont rangés dans une base Upstash, jointe par simple
-   requête web, pour qu'ils survivent quand l'hébergeur éteint et
-   rallume le site. Aucune bibliothèque à installer.
-   Si aucune base n'est configurée, le site fonctionne quand même :
-   les comptes sont simplement gardés en mémoire jusqu'au prochain
-   redémarrage. Le jeu n'est jamais bloqué par la base.
+   Les comptes sont ranges dans une base Upstash, jointe par simple
+   requete web, pour qu\'ils survivent quand l\'hebergeur eteint et
+   rallume le site. Aucune bibliotheque a installer.
+   Si aucune base n\'est configuree, le site fonctionne quand meme :
+   les comptes sont simplement gardes en memoire jusqu\'au prochain
+   redemarrage. Le jeu n\'est jamais bloque par la base.
    =================================================================== */
 const Carnet = {
   url: null,
   token: null,
   pret: false,
   memoire: new Map(),        // repli, et copie de travail
-  indexMemoire: new Map(),   // repli pour l'index de tous les joueurs
+  indexMemoire: new Map(),   // repli pour l\'index de tous les joueurs
 
   async demarrer() {
     const url   = String(process.env.UPSTASH_REDIS_REST_URL   || '').replace(/\/+$/, '');
     const token = String(process.env.UPSTASH_REDIS_REST_TOKEN || '');
 
     if (!url || !token) {
-      console.log('Carnet : aucune base configurée.');
-      console.log('Le jeu tourne, mais les comptes seront perdus au redémarrage.');
+      console.log('Carnet : aucune base configuree.');
+      console.log('Le jeu tourne, mais les comptes seront perdus au redemarrage.');
       return;
     }
     this.url = url;
@@ -244,13 +244,13 @@ const Carnet = {
       const r = await this.commande(['PING']);
       if (r && r.result) {
         this.pret = true;
-        console.log('Carnet : base connectée, les comptes sont conservés.');
+        console.log('Carnet : base connectee, les comptes sont conserves.');
       } else {
-        console.log('Carnet : la base a répondu quelque chose d’inattendu.');
+        console.log('Carnet : la base a repondu quelque chose d\'inattendu.');
       }
     } catch (e) {
-      console.log('Carnet : connexion à la base impossible (' + e.message + ').');
-      console.log('Le jeu tourne quand même, mais les comptes ne seront pas conservés.');
+      console.log('Carnet : connexion a la base impossible (' + e.message + ').');
+      console.log('Le jeu tourne quand meme, mais les comptes ne seront pas conserves.');
     }
   },
 
@@ -287,17 +287,17 @@ const Carnet = {
     this.memoire.set(fiche.pseudoBas, fiche);
     if (!this.pret) return true;
     try {
-      // SETNX n'écrit que si le pseudo est encore libre
+      // SETNX n\'ecrit que si le pseudo est encore libre
       const r = await this.commande(['SETNX', 'joueur:' + fiche.pseudoBas, JSON.stringify(fiche)]);
       return !!(r && Number(r.result) === 1);
     } catch (e) {
-      console.log('Carnet : création impossible (' + e.message + ')');
-      return true;                                // on laisse quand même jouer
+      console.log('Carnet : creation impossible (' + e.message + ')');
+      return true;                                // on laisse quand meme jouer
     }
   },
 
-  // Enregistre l'avancement. N'interrompt jamais la partie : si la base
-  // ne répond pas, on note l'échec et le jeu continue.
+  // Enregistre l\'avancement. N\'interrompt jamais la partie : si la base
+  // ne repond pas, on note l\'echec et le jeu continue.
   enregistrer(compte) {
     const ancienne = this.memoire.get(compte.pseudoBas) || {};
     const fiche = Object.assign({}, ancienne, {
@@ -328,7 +328,7 @@ const Carnet = {
 
   // Banni / debanni un compte par son pseudo (en minuscules). Utilise par
   // le code reserve au bannissement : ecrit directement dans la fiche
-  // stockee, sans passer par enregistrer() qui a besoin d'un compte en
+  // stockee, sans passer par enregistrer() qui a besoin d\'un compte en
   // ligne avec toutes ses stats.
   async definirBanni(pseudoBas, banni) {
     const ancienne = this.memoire.get(pseudoBas) || (await this.lire(pseudoBas)) || null;
@@ -345,8 +345,8 @@ const Carnet = {
     }
   },
 
-  // Change directement le solde d'une fiche (utilise par le code admin pour
-  // retirer l'argent gagne en trichant, sans avoir a bannir le compte).
+  // Change directement le solde d\'une fiche (utilise par le code admin pour
+  // retirer l\'argent gagne en trichant, sans avoir a bannir le compte).
   async definirSolde(pseudoBas, solde) {
     const ancienne = this.memoire.get(pseudoBas) || (await this.lire(pseudoBas)) || null;
     if (!ancienne) return false;
@@ -362,7 +362,7 @@ const Carnet = {
     }
   },
 
-  // Supprime completement un compte (fiche + entree d'index). Utilise par
+  // Supprime completement un compte (fiche + entree d\'index). Utilise par
   // le code admin pour effacer les faux comptes crees par un bot.
   async supprimer(pseudoBas) {
     this.memoire.delete(pseudoBas);
@@ -384,7 +384,7 @@ const Carnet = {
 
   // Tient un seul index { pseudoBas: {pseudo, creeLe, vuLe} } pour pouvoir
   // lister tous les joueurs deja crees (le code reserve au proprietaire
-  // s'en sert). On ne le touche qu'a la creation du compte et a la
+  // s\'en sert). On ne le touche qu\'a la creation du compte et a la
   // connexion, jamais a chaque appel : inutile de solliciter la base pour ca.
   async indexerJoueur(pseudoBas, pseudo) {
     const maintenant = new Date().toISOString();
@@ -401,16 +401,16 @@ const Carnet = {
       index[pseudoBas] = { pseudo, creeLe: ancienne.creeLe || maintenant, vuLe: maintenant };
       await this.commande(['SET', 'index:joueurs', JSON.stringify(index)]);
     } catch (e) {
-      console.log('Carnet : mise à jour de l’index impossible (' + e.message + ')');
+      console.log('Carnet : mise a jour de l\'index impossible (' + e.message + ')');
       const ancienne = this.indexMemoire.get(pseudoBas) || {};
       this.indexMemoire.set(pseudoBas, { pseudo, creeLe: ancienne.creeLe || maintenant, vuLe: maintenant });
     }
   },
 
-  // Certains comptes ont ete crees avant que cet index existe (ou n'ont
+  // Certains comptes ont ete crees avant que cet index existe (ou n\'ont
   // jamais reserve pour se reconnecter depuis) : on les retrouve tous en
-  // listant les fiches "joueur:*" directement, et on reconstruit l'index
-  // en entier a partir d'elles pour que la date "vu" reste juste (la
+  // listant les fiches "joueur:*" directement, et on reconstruit l\'index
+  // en entier a partir d\'elles pour que la date "vu" reste juste (la
   // fiche, elle, est mise a jour a chaque partie jouee).
   async reconcilierIndex() {
     if (!this.pret) return;
@@ -435,7 +435,7 @@ const Carnet = {
       }
       await this.commande(['SET', 'index:joueurs', JSON.stringify(index)]);
     } catch (e) {
-      console.log('Carnet : reconciliation de l’index impossible (' + e.message + ')');
+      console.log('Carnet : reconciliation de l\'index impossible (' + e.message + ')');
     }
   },
 
@@ -450,13 +450,13 @@ const Carnet = {
       if (r && r.result) { try { index = JSON.parse(r.result); } catch (e) { index = {}; } }
       return Object.keys(index).map(pseudoBas => Object.assign({ pseudoBas }, index[pseudoBas]));
     } catch (e) {
-      console.log('Carnet : lecture de l’index impossible (' + e.message + ')');
+      console.log('Carnet : lecture de l\'index impossible (' + e.message + ')');
       return Array.from(this.indexMemoire.entries()).map(([pseudoBas, v]) => Object.assign({ pseudoBas }, v));
     }
   }
 };
 
-/* ---------- mots de passe : jamais stockés en clair ---------- */
+/* ---------- mots de passe : jamais stockes en clair ---------- */
 function empreinte(motDePasse, sel) {
   return new Promise((resolve, reject) => {
     crypto.scrypt(motDePasse, sel, 32, (err, cle) => err ? reject(err) : resolve(cle.toString('hex')));
@@ -509,18 +509,18 @@ function neuveTable(id, nom, mini, skin) {
 }
 
 /* ===================================================================
-   POKER — Texas Hold'em sans limite, uniquement entre vrais joueurs
+   POKER - Texas Hold\'em sans limite, uniquement entre vrais joueurs
    -------------------------------------------------------------------
    Meme principe que le blackjack : le serveur tient les cartes, les
    tours et le chronometre ; le battement fait avancer la donne.
    - Pas de bots, jamais. Moins de deux joueurs : la table attend.
-   - Les jetons d'un joueur, c'est son vrai solde : chaque mise est
+   - Les jetons d\'un joueur, c\'est son vrai solde : chaque mise est
      debitee tout de suite, le pot est verse au(x) gagnant(s) a la fin.
    - Aucune commission (pas de rake) : tout le pot revient aux joueurs.
-   - Les cartes privees d'un joueur ne quittent JAMAIS le serveur vers
-     un autre joueur, sauf a l'abattage si ce joueur ne s'est pas couche.
+   - Les cartes privees d\'un joueur ne quittent JAMAIS le serveur vers
+     un autre joueur, sauf a l\'abattage si ce joueur ne s\'est pas couche.
    Tous les montants de la donne sont comptes en CENTIMES (entiers)
-   pour qu'aucun centime ne se perde en route.
+   pour qu\'aucun centime ne se perde en route.
    =================================================================== */
 const POKER_PLACES          = 6;
 const POKER_PB_C            = 10;     // petite blinde : 0,10 EUR
@@ -595,12 +595,12 @@ function pkMeilleure(cards) {
 }
 const PK_NS = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'Valet',12:'Dame',13:'Roi',14:'As'};
 const PK_NP = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'Valets',12:'Dames',13:'Rois',14:'As'};
-const pkDe = r => r === 14 ? "d'As" : 'de ' + PK_NP[r];
+const pkDe = r => r === 14 ? "d\'As" : 'de ' + PK_NP[r];
 function pkNomMain(h) {
   const k = h.k;
   switch (h.cat) {
     case 8: return k[1] === 14 ? 'Quinte flush royale' : 'Quinte flush hauteur ' + PK_NS[k[1]];
-    case 7: return 'Carré ' + pkDe(k[1]);
+    case 7: return 'Carre ' + pkDe(k[1]);
     case 6: return 'Full aux ' + PK_NP[k[1]] + ' par les ' + PK_NP[k[2]];
     case 5: return 'Couleur hauteur ' + PK_NS[k[1]];
     case 4: return 'Suite hauteur ' + PK_NS[k[1]];
@@ -645,7 +645,7 @@ function pkEligibles(table) {
 function pkHumains(table) { return table.places.filter(p => p && p.type === 'humain').length; }
 function pkLabel(j, txt, cls) { j.action = txt ? { txt, cls: cls || '' } : null; }
 
-/* verse de l'argent a un joueur de la donne, meme s'il a quitte la table
+/* verse de l\'argent a un joueur de la donne, meme s\'il a quitte la table
    entre-temps (il ne perd jamais ce qui lui revient) */
 function pkCrediter(table, i, c) {
   if (c <= 0) return;
@@ -684,7 +684,7 @@ function pkNouvelleDonne(table) {
   if (elig.length < 2) {
     table.main = null; table.resultat = null;
     table.phase = 'attente';
-    dire(table, 'En attente d’un deuxième joueur.');
+    dire(table, 'En attente d\'un deuxieme joueur.');
     touche(table);
     return;
   }
@@ -724,7 +724,7 @@ function pkNouvelleDonne(table) {
   }
   table.phase = 'distribution';
   table.echeance = Date.now() + 700 + n * DELAI_CARTE_POKER;
-  dire(table, 'Donne n°' + table.donne + ' : les cartes sont distribuées.');
+  dire(table, 'Donne n°' + table.donne + ' : les cartes sont distribuees.');
   touche(table);
 }
 
@@ -778,7 +778,7 @@ function pkFinTour(table) {
   touche(table);
 }
 
-/* ---------- une action d'un joueur (ou du chronometre) ---------- */
+/* ---------- une action d\'un joueur (ou du chronometre) ---------- */
 function pkAgir(table, i, d) {
   const m = table.main, j = m.joueurs[i];
   const o = pkOptions(table, i);
@@ -791,7 +791,7 @@ function pkAgir(table, i, d) {
   if (type === 'relancer' && !o.peutRelancer) type = o.peutChecker ? 'checker' : 'suivre';
 
   if (type === 'coucher') {
-    j.couche = true; pkLabel(j, 'Couché', 'fold');
+    j.couche = true; pkLabel(j, 'Couche', 'fold');
   } else if (type === 'checker') {
     pkLabel(j, 'Check');
   } else if (type === 'suivre') {
@@ -820,7 +820,7 @@ function pkAgir(table, i, d) {
   pkProchain(table, (i + 1) % POKER_PLACES);
 }
 
-/* ---------- entre deux tours d'encheres ---------- */
+/* ---------- entre deux tours d\'encheres ---------- */
 function pkApresRamassage(table) {
   const m = table.main;
   for (const j of m.joueurs) if (j) j.mise = 0;
@@ -831,7 +831,7 @@ function pkApresRamassage(table) {
     pkReveler(table);
     table.phase = 'abattage';
     table.echeance = Date.now() + PAUSE_ABATTAGE_POKER;
-    dire(table, 'Abattage : les cartes sont retournées.');
+    dire(table, 'Abattage : les cartes sont retournees.');
     touche(table);
     return;
   }
@@ -889,16 +889,16 @@ function pkConclure(table) {
   const nomDe = i => J[i].nom;
 
   if (cont.length === 0) {
-    // tout le monde est parti : chacun recupere ce qu'il avait mis
+    // tout le monde est parti : chacun recupere ce qu\'il avait mis
     J.forEach((j, i) => { if (j) pkCrediter(table, i, j.total); });
-    res.titre = 'Donne annulée';
-    res.sous = 'Tout le monde a quitté la table : les mises sont rendues.';
+    res.titre = 'Donne annulee';
+    res.sous = 'Tout le monde a quitte la table : les mises sont rendues.';
   } else if (cont.length === 1) {
     const w = cont[0];
     pkCrediter(table, w, potTotal);
     res.gagnants = [w];
     res.titre = nomDe(w) + ' remporte ' + eurC(potTotal);
-    res.sous = 'Tous les autres joueurs se sont couchés.';
+    res.sous = 'Tous les autres joueurs se sont couches.';
   } else {
     pkReveler(table);
     const ev = {};
@@ -925,13 +925,13 @@ function pkConclure(table) {
       for (const w of ws) { pkCrediter(table, w, part + (r > 0 ? 1 : 0)); if (r > 0) r--; }
       if (!principal.length) principal.push(...ws);
       const nomPot = idx === 0 ? 'Pot principal' : 'Pot annexe' + (pots.length > 2 ? ' ' + idx : '');
-      res.lignes.push([nomPot + ' · ' + eurC(pt.amount), ws.map(nomDe).join(' & ') + (ws.length > 1 ? ' (partagé)' : '')]);
+      res.lignes.push([nomPot + ' · ' + eurC(pt.amount), ws.map(nomDe).join(' & ') + (ws.length > 1 ? ' (partage)' : '')]);
     });
     const gagnantsPrincipal = principal.length ? principal : (pots[0] ? pots[0].elig : cont);
     res.gagnants = gagnantsPrincipal.slice();
     const wh = ev[gagnantsPrincipal[0]];
     res.cartesGagnantes = wh.cards.slice();
-    res.titre = gagnantsPrincipal.length > 1 ? 'Pot partagé' : nomDe(gagnantsPrincipal[0]) + ' gagne ' + eurC(J[gagnantsPrincipal[0]].gain);
+    res.titre = gagnantsPrincipal.length > 1 ? 'Pot partage' : nomDe(gagnantsPrincipal[0]) + ' gagne ' + eurC(J[gagnantsPrincipal[0]].gain);
     res.sous = pkNomMain(wh);
   }
 
@@ -977,7 +977,7 @@ function pkQuitter(table, i) {
     }
   }
   if (pkHumains(table) === 0) {
-    if (m && enCours) pkConclure(table);   // rend l'argent qui serait encore au milieu
+    if (m && enCours) pkConclure(table);   // rend l\'argent qui serait encore au milieu
     table.main = null; table.resultat = null;
     table.phase = 'attente';
     table.message = '';
@@ -988,7 +988,7 @@ function pkQuitter(table, i) {
 
 /* ---------- le battement du poker ---------- */
 function battementPoker(table, now) {
-  // les absents perdent leur place (et se couchent s'ils etaient en jeu)
+  // les absents perdent leur place (et se couchent s\'ils etaient en jeu)
   table.places.forEach((p, i) => {
     if (!p) return;
     const c = comptes.get(p.jeton);
@@ -1008,7 +1008,7 @@ function battementPoker(table, now) {
     case 'decompte':
       if (pkEligibles(table).length < 2) {
         table.phase = 'attente';
-        dire(table, 'En attente d’un deuxième joueur.');
+        dire(table, 'En attente d\'un deuxieme joueur.');
         touche(table);
       } else if (now >= table.echeance) pkNouvelleDonne(table);
       break;
@@ -1054,15 +1054,15 @@ function etatPoker(table, jeton) {
 
   const places = table.places.map((p, i) => {
     const j0 = enJeu ? m.joueurs[i] : null;
-    // la donne en cours ne concerne cette place que si c'est bien le meme joueur
+    // la donne en cours ne concerne cette place que si c\'est bien le meme joueur
     const j = j0 && (!p || p.jeton === j0.jeton) ? j0 : null;
-    // un joueur parti en pleine donne : sa place reste "fantome" jusqu'a la fin
+    // un joueur parti en pleine donne : sa place reste "fantome" jusqu\'a la fin
     if (!p && !(j && j.jeton)) return null;
     const estMoi = i === moiIndex;
     let cartes = [];
     if (j) {
       if (estMoi || j.montre) cartes = j.cartes.slice();        // les miennes, ou abattage
-      else if (!j.couche) cartes = j.cartes.map(() => null);   // dos de cartes, rien d'autre
+      else if (!j.couche) cartes = j.cartes.map(() => null);   // dos de cartes, rien d\'autre
     }
     return {
       nom: p ? p.nom : j.nom,
@@ -1099,7 +1099,7 @@ function etatPoker(table, jeton) {
       maMise: m.joueurs[moiIndex].mise / 100
     };
   }
-  // une fois la donne conclue, le pot a ete verse : il n'y a plus rien au milieu
+  // une fois la donne conclue, le pot a ete verse : il n\'y a plus rien au milieu
   const potTotal = enJeu && table.phase !== 'resultat' ? m.joueurs.reduce((a, j) => a + (j ? j.total : 0), 0) : 0;
   const misesDevant = enJeu ? m.joueurs.reduce((a, j) => a + (j ? j.mise : 0), 0) : 0;
 
@@ -1137,7 +1137,7 @@ function etatPoker(table, jeton) {
 const tables = [
   neuveTable('majorelle', 'Jardin Majorelle', 0.01, 'vert'),
   neuveTable('palmeraie', 'Palmeraie Royale', 0.01, 'or'),
-  neuveTablePoker('poker', 'Martin’s Poker')
+  neuveTablePoker('poker', 'Martin\'s Poker')
 ];
 function trouverTable(id) { return tables.find(t => t.id === id) || null; }
 
@@ -1188,7 +1188,7 @@ function retirerBotsSiPlusPersonne(table) {
 }
 
 /* ===================================================================
-   DEROULEMENT D'UNE MANCHE
+   DEROULEMENT D\'UNE MANCHE
    =================================================================== */
 function nouvelleManche(table) {
   table.banque = [];
@@ -1235,7 +1235,7 @@ function nouvelleManche(table) {
 }
 
 function demarrerDistribution(table) {
-  // mise automatique pour les humains qui n'ont rien pose
+  // mise automatique pour les humains qui n\'ont rien pose
   for (const p of table.places) {
     if (p && p.type === 'humain' && p.etat === 'attente' && p.mains[0].mise === 0) {
       const auto = Math.min(1, p.solde);
@@ -1252,7 +1252,7 @@ function demarrerDistribution(table) {
   const actifs = [];
   table.places.forEach((p, i) => { if (p && p.mains[0].mise > 0) actifs.push(i); });
 
-  if (actifs.length === 0) {                 // personne n'a mise : on relance
+  if (actifs.length === 0) {                 // personne n\'a mise : on relance
     table.phase = 'resultat';
     table.echeance = Date.now() + 1200;
     dire(table, 'Pas de mise. On recommence.');
@@ -1302,20 +1302,20 @@ function demarrerTourDe(table, p) {
   if (p.type === 'bot') {
     table.phase = 'bot';
     table.echeance = Date.now() + DELAI_BOT;
-    dire(table, p.nom + ' réfléchit…');
+    dire(table, p.nom + ' reflechit...');
   } else {
     table.phase = 'joueur';
     table.echeance = Date.now() + DUREE_TOUR;
     dire(table, p.mains.length > 1
-      ? 'À vous de décider (main ' + (table.mainActive + 1) + ').'
-      : 'À vous de décider.');
+      ? 'A vous de decider (main ' + (table.mainActive + 1) + ').'
+      : 'A vous de decider.');
   }
   touche(table);
 }
 
 /* ---------- avance au prochain joueur/main a jouer. Gere le fait
-   qu'une place partagee (split) a deux mains a jouer l'une apres
-   l'autre avant de passer a la place suivante. ---------- */
+   qu\'une place partagee (split) a deux mains a jouer l\'une apres
+   l\'autre avant de passer a la place suivante. ---------- */
 function tourSuivant(table) {
   // la place courante a-t-elle une deuxieme main encore a jouer ?
   const courant = table.indexActif >= 0 ? table.places[table.indexActif] : null;
@@ -1400,7 +1400,7 @@ function conclure(table) {
       let texte = '', classe = '', delta = 0;
 
       if (tm > 21) {
-        texte = 'dépasse 21, la banque encaisse ' + eur(m.mise);
+        texte = 'depasse 21, la banque encaisse ' + eur(m.mise);
         classe = 'perdu';
         delta = -m.mise;
       } else if (bjMoi && !bjBanque) {
@@ -1423,7 +1423,7 @@ function conclure(table) {
         classe = 'perdu';
         delta = -m.mise;
       } else {
-        texte = 'égalité à ' + tm + ', mise rendue';
+        texte = 'egalite a ' + tm + ', mise rendue';
         classe = '';
         delta = 0;
       }
@@ -1477,7 +1477,7 @@ function majSoldeCompte(p) {
 }
 
 /* ===================================================================
-   LE BATTEMENT DE CŒUR — c'est lui qui empeche tout blocage
+   LE BATTEMENT DE CŒUR - c\'est lui qui empeche tout blocage
    =================================================================== */
 function battement() {
   const now = Date.now();
@@ -1521,7 +1521,7 @@ function battement() {
         break;
 
       case 'joueur':
-        if (now >= table.echeance) {                // le joueur n'a pas repondu : il reste
+        if (now >= table.echeance) {                // le joueur n\'a pas repondu : il reste
           const p = table.places[table.indexActif];
           if (p) p.mains[table.mainActive].etat = 'reste';
           touche(table);
@@ -1555,8 +1555,8 @@ function chatPour(table, jeton) {
     moi: !!(m.jeton && m.jeton === jeton),
     cadeau: m.cadeau ? {
       de: m.cadeau.de, a: m.cadeau.a, montant: m.cadeau.montant,
-      pourMoi: m.cadeau.aJeton === jeton,     // c'est moi qui reçois
-      deMoi:   m.cadeau.deJeton === jeton     // c'est moi qui offre
+      pourMoi: m.cadeau.aJeton === jeton,     // c\'est moi qui recois
+      deMoi:   m.cadeau.deJeton === jeton     // c\'est moi qui offre
     } : null
   }));
 }
@@ -1581,14 +1581,14 @@ function etatPour(table, jeton) {
         total: compter(m.cartes), resultat: m.resultat
       })),
       etat: p.etat,
-      // le solde des autres n'est envoye que s'ils ont choisi de l'afficher
+      // le solde des autres n\'est envoye que s\'ils ont choisi de l\'afficher
       solde: (estMoi || p.soldeVisible) ? p.solde : null,
       soldeVisible: !!p.soldeVisible
     };
   });
 
   const banque = table.banque.map((c, i) =>
-    (i === 1 && !table.cacheeRevelee) ? null : c            // la carte cachee n'est pas envoyee
+    (i === 1 && !table.cacheeRevelee) ? null : c            // la carte cachee n\'est pas envoyee
   );
 
   let secondes = 0;
@@ -1597,7 +1597,7 @@ function etatPour(table, jeton) {
   }
 
   const provocation = !!(moi && moi.provocation);
-  if (moi && moi.provocation) moi.provocation = false;       // on ne la montre qu'une fois
+  if (moi && moi.provocation) moi.provocation = false;       // on ne la montre qu\'une fois
 
   const mainActiveMoi = moi ? moi.mains[table.mainActive] : null;
 
@@ -1650,11 +1650,11 @@ function resumeSalon() {
 }
 
 /* ===================================================================
-   ROULETTE — une seule table partagée, le serveur tient l'économie
+   ROULETTE - une seule table partagee, le serveur tient l\'economie
    -------------------------------------------------------------------
-   Ajout autonome : aucune fonction du blackjack ci-dessus n'est
-   modifiée. La table de roulette vit dans son propre objet, avec son
-   propre battement (setInterval séparé) et ses propres routes
+   Ajout autonome : aucune fonction du blackjack ci-dessus n\'est
+   modifiee. La table de roulette vit dans son propre objet, avec son
+   propre battement (setInterval separe) et ses propres routes
    /api/roulette-*, pour ne prendre aucun risque avec le blackjack.
    =================================================================== */
 const ZONES_ROULETTE = [{"id":"n0","type":"plein","nums":[0]},{"id":"n1","type":"plein","nums":[1]},{"id":"n2","type":"plein","nums":[2]},{"id":"n3","type":"plein","nums":[3]},{"id":"n4","type":"plein","nums":[4]},{"id":"n5","type":"plein","nums":[5]},{"id":"n6","type":"plein","nums":[6]},{"id":"n7","type":"plein","nums":[7]},{"id":"n8","type":"plein","nums":[8]},{"id":"n9","type":"plein","nums":[9]},{"id":"n10","type":"plein","nums":[10]},{"id":"n11","type":"plein","nums":[11]},{"id":"n12","type":"plein","nums":[12]},{"id":"n13","type":"plein","nums":[13]},{"id":"n14","type":"plein","nums":[14]},{"id":"n15","type":"plein","nums":[15]},{"id":"n16","type":"plein","nums":[16]},{"id":"n17","type":"plein","nums":[17]},{"id":"n18","type":"plein","nums":[18]},{"id":"n19","type":"plein","nums":[19]},{"id":"n20","type":"plein","nums":[20]},{"id":"n21","type":"plein","nums":[21]},{"id":"n22","type":"plein","nums":[22]},{"id":"n23","type":"plein","nums":[23]},{"id":"n24","type":"plein","nums":[24]},{"id":"n25","type":"plein","nums":[25]},{"id":"n26","type":"plein","nums":[26]},{"id":"n27","type":"plein","nums":[27]},{"id":"n28","type":"plein","nums":[28]},{"id":"n29","type":"plein","nums":[29]},{"id":"n30","type":"plein","nums":[30]},{"id":"n31","type":"plein","nums":[31]},{"id":"n32","type":"plein","nums":[32]},{"id":"n33","type":"plein","nums":[33]},{"id":"n34","type":"plein","nums":[34]},{"id":"n35","type":"plein","nums":[35]},{"id":"n36","type":"plein","nums":[36]},{"id":"col0","type":"colonne","nums":[3,6,9,12,15,18,21,24,27,30,33,36]},{"id":"col1","type":"colonne","nums":[2,5,8,11,14,17,20,23,26,29,32,35]},{"id":"col2","type":"colonne","nums":[1,4,7,10,13,16,19,22,25,28,31,34]},{"id":"douz0","type":"douzaine","nums":[1,2,3,4,5,6,7,8,9,10,11,12]},{"id":"douz1","type":"douzaine","nums":[13,14,15,16,17,18,19,20,21,22,23,24]},{"id":"douz2","type":"douzaine","nums":[25,26,27,28,29,30,31,32,33,34,35,36]},{"id":"manque","type":"manque","nums":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]},{"id":"pair","type":"pair","nums":[2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36]},{"id":"rouge","type":"rouge","nums":[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]},{"id":"noir","type":"noir","nums":[2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35]},{"id":"impair","type":"impair","nums":[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35]},{"id":"passe","type":"passe","nums":[19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36]}];
@@ -1825,10 +1825,10 @@ function quitterTableRoulette(compte) {
 }
 
 /* ===================================================================
-   LE PERIPH — depart d'une course, en solo comme en multijoueur
+   LE PERIPH - depart d\'une course, en solo comme en multijoueur
    -------------------------------------------------------------------
    Factorise pour que la route /api/periph-demarrer (solo, inchangee)
-   et le demarrage d'un groupe multijoueur debitent la mise et ouvrent
+   et le demarrage d\'un groupe multijoueur debitent la mise et ouvrent
    la course exactement de la meme facon.
    =================================================================== */
 function demarrerCourseInterne(compte, mise, voitureDemandee) {
@@ -1847,7 +1847,7 @@ function demarrerCourseInterne(compte, mise, voitureDemandee) {
 }
 
 /* ===================================================================
-   LE PERIPH EN MULTIJOUEUR — file d'attente et groupes de course
+   LE PERIPH EN MULTIJOUEUR - file d\'attente et groupes de course
    =================================================================== */
 const filePeriphMulti = [];             // {jeton, pseudo, mise, voiture, couleur, rejointLe}
 let   groupeEnFormationPeriph = null;   // {echeance, jetons:[...]}
@@ -1865,7 +1865,7 @@ function majGroupeCoursePeriph(compte, patch) {
   if (g && g.membres[compte.jetonRef]) Object.assign(g.membres[compte.jetonRef], patch, { maj: Date.now() });
 }
 
-/* ce que la page d'un joueur voit des AUTRES joueurs reels de sa course.
+/* ce que la page d\'un joueur voit des AUTRES joueurs reels de sa course.
    "age" = depuis combien de millisecondes la position annoncee a ete
    mesuree sur la page de ce joueur (trajet aller compris). */
 function autresMembresPeriph(compte) {
@@ -1915,7 +1915,7 @@ function demarrerCoursePeriphMulti(jetons) {
     retirerDeLaFilePeriph(j);
     if (!entree || !compte) return;
     if (entree.mise > compte.solde + 1e-9) {
-      compte.periphMultiErreur = 'Solde insuffisant : la course a démarré sans vous.';
+      compte.periphMultiErreur = 'Solde insuffisant : la course a demarre sans vous.';
       return;
     }
     const voiture = demarrerCourseInterne(compte, entree.mise, entree.voiture);
@@ -1942,7 +1942,7 @@ function battementPeriphMulti() {
   if (groupeEnFormationPeriph) {
     const presents = groupeEnFormationPeriph.jetons.filter(j => filePeriphMulti.some(e => e.jeton === j));
     if (presents.length < 2) {
-      groupeEnFormationPeriph = null;                 // annule : personne n'est debite
+      groupeEnFormationPeriph = null;                 // annule : personne n\'est debite
     } else if (now >= groupeEnFormationPeriph.echeance) {
       demarrerCoursePeriphMulti(presents);
       groupeEnFormationPeriph = null;
@@ -1962,7 +1962,7 @@ function battementPeriphMulti() {
 setInterval(battementPeriphMulti, 200);
 
 /* ===================================================================
-   LE PONT DE CRISTAL — solo et multijoueur
+   LE PONT DE CRISTAL - solo et multijoueur
    -------------------------------------------------------------------
    Le serveur tire seul, au depart, quelle(s) vitre(s) tient/tiennent
    a chaque rangee. La page ne fait que choisir une vitre et animer la
@@ -2003,7 +2003,7 @@ function soldeAuSiege(compte) {
   if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
 }
 
-/* ---------- multijoueur : file d'attente, puis salons ---------- */
+/* ---------- multijoueur : file d\'attente, puis salons ---------- */
 const filePontMulti = [];              // {jeton, pseudo, mise, rejointLe}
 let   groupeEnFormationPont = null;    // {echeance, jetons:[...]}
 const salonsPont = new Map();          // id -> {creeLe, finiLe, rangs, revele, casses, membres:{jeton:{...}}}
@@ -2056,7 +2056,7 @@ function demarrerSalonPont(jetons) {
     retirerDeLaFilePont(j);
     if (!entree || !compte) return;
     if (entree.mise > compte.solde + 1e-9) {
-      compte.pontMultiErreur = 'Solde insuffisant : la traversée a démarré sans vous.';
+      compte.pontMultiErreur = 'Solde insuffisant : la traversee a demarre sans vous.';
       return;
     }
     // la mise est prise au depart, comme au periph multijoueur
@@ -2071,8 +2071,8 @@ function demarrerSalonPont(jetons) {
   if (Object.keys(membres).length) {
     salonsPont.set(id, {
       creeLe: Date.now(), finiLe: 0, rangs: rangs,
-      revele: new Array(m.rangees).fill(null),          // vitre solide, une fois la rangee foulee par quelqu'un
-      casses: Array.from({ length: m.rangees }, () => []), // vitres brisees sous quelqu'un
+      revele: new Array(m.rangees).fill(null),          // vitre solide, une fois la rangee foulee par quelqu\'un
+      casses: Array.from({ length: m.rangees }, () => []), // vitres brisees sous quelqu\'un
       membres: membres
     });
   }
@@ -2094,7 +2094,7 @@ function battementPontMulti() {
       if (g.jetons.indexOf(e.jeton) < 0) g.jetons.push(e.jeton);
     }
     if (g.jetons.length < 2) {
-      groupeEnFormationPont = null;                  // annule : personne n'est debite
+      groupeEnFormationPont = null;                  // annule : personne n\'est debite
     } else if (now >= g.echeance) {
       demarrerSalonPont(g.jetons);
       groupeEnFormationPont = null;
@@ -2178,8 +2178,8 @@ function siegeDe(compte) {
 
 // --- pour le code "RS6" : la liste de tous les comptes, avec leur presence
 // reelle si une session est ouverte sur ce serveur, sinon la derniere fois
-// vue selon l'index (voir Carnet.indexerJoueur). Les plus recemment vus
-// d'abord.
+// vue selon l\'index (voir Carnet.indexerJoueur). Les plus recemment vus
+// d\'abord.
 function listeJoueursAvecPresence(liste) {
   const maintenant = Date.now();
   const joueurs = liste.map(j => {
@@ -2207,7 +2207,7 @@ const serveur = http.createServer(async (req, res) => {
   async function envoyerEmailVerification(email, pseudo, code) {
     const apiKey = process.env.SENDGRID_API_KEY;
     if (!apiKey) {
-      console.log(‘SENDGRID_API_KEY non configuree, email non envoye’);
+      console.log('SENDGRID_API_KEY non configuree, email non envoye');
       return true;  // on laisse passer quand meme
     }
 
@@ -2215,8 +2215,8 @@ const serveur = http.createServer(async (req, res) => {
       personalizations: [{
         to: [{ email: email }]
       }],
-      from: { email: ‘noreply@casinomessina.com’, name: ‘Casino Messina’ },
-      subject: ‘Verifiez votre compte Casino Messina’,
+      from: { email: 'noreply@casinomessina.com', name: 'Casino Messina' },
+      subject: 'Verifiez votre compte Casino Messina',
       html: `
         <h2>Bienvenue sur Casino Messina !</h2>
         <p>Votre code de verification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
@@ -2228,36 +2228,36 @@ const serveur = http.createServer(async (req, res) => {
     try {
       const response = await new Promise((resolve, reject) => {
         const options = {
-          hostname: ‘api.sendgrid.com’,
+          hostname: 'api.sendgrid.com',
           port: 443,
-          path: ‘/v3/mail/send’,
-          method: ‘POST’,
+          path: '/v3/mail/send',
+          method: 'POST',
           headers: {
-            ‘Authorization’: ‘Bearer ‘ + apiKey,
-            ‘Content-Type’: ‘application/json’
+            'Authorization': 'Bearer ' + apiKey,
+            'Content-Type': 'application/json'
           }
         };
 
         const req = https.request(options, (res) => {
-          let body = ‘’;
-          res.on(‘data’, (chunk) => { body += chunk; });
-          res.on(‘end’, () => { resolve({ status: res.statusCode, body }); });
+          let body = '';
+          res.on('data', (chunk) => { body += chunk; });
+          res.on('end', () => { resolve({ status: res.statusCode, body }); });
         });
 
-        req.on(‘error’, reject);
+        req.on('error', reject);
         req.write(JSON.stringify(message));
         req.end();
       });
 
       if (response.status >= 200 && response.status < 300) {
-        console.log(‘Email de verification envoye a’, email);
+        console.log('Email de verification envoye a', email);
         return true;
       } else {
-        console.log(‘SendGrid erreur:’, response.status, response.body);
+        console.log('SendGrid erreur:', response.status, response.body);
         return false;
       }
     } catch (e) {
-      console.log(‘Erreur envoi email:’, e.message);
+      console.log('Erreur envoi email:', e.message);
       return false;
     }
   }
@@ -2271,38 +2271,38 @@ const serveur = http.createServer(async (req, res) => {
   }, 60000);  // toutes les minutes
 
   /* ---------------- API ---------------- */
-  if (route.startsWith(‘/api/’)) {
+  if (route.startsWith('/api/')) {
 
-    // --- créer un compte ---
-    if (route === ‘/api/inscription’ && req.method === ‘POST’) {
+    // --- creer un compte ---
+    if (route === '/api/inscription' && req.method === 'POST') {
       const body   = await corpsJSON(req);
-      const pseudo = String(body.pseudo || ‘’).trim().slice(0, 16);
-      const mdp    = String(body.motDePasse || ‘’);
-      const email  = String(body.email || ‘’).trim().toLowerCase();
+      const pseudo = String(body.pseudo || '').trim().slice(0, 16);
+      const mdp    = String(body.motDePasse || '');
+      const email  = String(body.email || '').trim().toLowerCase();
 
       if (pseudo.length < 3) {
-        return repondre(res, 400, { erreur: ‘Choisissez un pseudo d’au moins 3 caractères.’ });
+        return repondre(res, 400, { erreur: 'Choisissez un pseudo d\'au moins 3 caracteres.' });
       }
-      if (!/^[\p{L}\p{N} _.’-]+$/u.test(pseudo)) {
-        return repondre(res, 400, { erreur: ‘Pseudo : lettres, chiffres et espaces uniquement.’ });
+      if (!/^[\p{L}\p{N} _.'-]+$/u.test(pseudo)) {
+        return repondre(res, 400, { erreur: 'Pseudo : lettres, chiffres et espaces uniquement.' });
       }
       if (mdp.length < 4) {
-        return repondre(res, 400, { erreur: ‘Mot de passe trop court (4 caractères minimum).’ });
+        return repondre(res, 400, { erreur: 'Mot de passe trop court (4 caracteres minimum).' });
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return repondre(res, 400, { erreur: ‘Email invalide.’ });
+        return repondre(res, 400, { erreur: 'Email invalide.' });
       }
 
       const pseudoBas = pseudo.toLowerCase();
       if (await Carnet.lire(pseudoBas)) {
-        return repondre(res, 409, { erreur: ‘Ce pseudo est déjà pris. Choisissez-en un autre.’ });
+        return repondre(res, 409, { erreur: 'Ce pseudo est deja pris. Choisissez-en un autre.' });
       }
 
       // Generer un code de verification 6 chiffres
       const code = String(crypto.randomInt(100000, 999999));
       const expire = Date.now() + 10 * 60 * 1000;  // expire dans 10 minutes
 
-      // Stocker temporairement le code et les donnees d’inscription
+      // Stocker temporairement le code et les donnees d\'inscription
       codesVerification.set(pseudoBas, {
         code,
         email,
@@ -2311,39 +2311,39 @@ const serveur = http.createServer(async (req, res) => {
         expire
       });
 
-      // Envoyer l’email
+      // Envoyer l\'email
       await envoyerEmailVerification(email, pseudo, code);
 
       return repondre(res, 200, {
-        message: ‘Code de verification envoye. Verifiez votre email.’,
+        message: 'Code de verification envoye. Verifiez votre email.',
         pseudo: pseudo
       });
     }
 
     // --- verifier le code email et creer le compte ---
-    if (route === ‘/api/verifier-email’ && req.method === ‘POST’) {
+    if (route === '/api/verifier-email' && req.method === 'POST') {
       const body   = await corpsJSON(req);
-      const pseudo = String(body.pseudo || ‘’).trim();
-      const code   = String(body.code || ‘’).trim();
+      const pseudo = String(body.pseudo || '').trim();
+      const code   = String(body.code || '').trim();
 
       if (!pseudo || !code) {
-        return repondre(res, 400, { erreur: ‘Pseudo et code requis.’ });
+        return repondre(res, 400, { erreur: 'Pseudo et code requis.' });
       }
 
       const pseudoBas = pseudo.toLowerCase();
       const data = codesVerification.get(pseudoBas);
 
       if (!data) {
-        return repondre(res, 400, { erreur: ‘Aucune inscription en attente pour ce pseudo.’ });
+        return repondre(res, 400, { erreur: 'Aucune inscription en attente pour ce pseudo.' });
       }
 
       if (data.expire < Date.now()) {
         codesVerification.delete(pseudoBas);
-        return repondre(res, 400, { erreur: ‘Code expire. Recommencez l’inscription.’ });
+        return repondre(res, 400, { erreur: 'Code expire. Recommencez l\'inscription.' });
       }
 
       if (data.code !== code) {
-        return repondre(res, 400, { erreur: ‘Code incorrect.’ });
+        return repondre(res, 400, { erreur: 'Code incorrect.' });
       }
 
       // Code valide : creer le compte
@@ -2360,7 +2360,7 @@ const serveur = http.createServer(async (req, res) => {
       };
 
       if (!await Carnet.creer(fiche)) {
-        return repondre(res, 409, { erreur: ‘Ce pseudo est déjà pris. Recommencez l’inscription.’ });
+        return repondre(res, 409, { erreur: 'Ce pseudo est deja pris. Recommencez l\'inscription.' });
       }
 
       codesVerification.delete(pseudoBas);
@@ -2380,7 +2380,7 @@ const serveur = http.createServer(async (req, res) => {
       if (!fiche || !await motDePasseJuste(mdp, fiche.motDePasse)) {
         return repondre(res, 401, { erreur: 'Pseudo ou mot de passe incorrect.' });
       }
-      if (fiche.banni) return repondre(res, 403, { erreur: 'Ce compte a été banni du casino.' });
+      if (fiche.banni) return repondre(res, 403, { erreur: 'Ce compte a ete banni du casino.' });
       return repondre(res, 200, ouvrirSession(fiche));
     }
 
@@ -2393,23 +2393,23 @@ const serveur = http.createServer(async (req, res) => {
     }
     if (!compte) return repondre(res, 401, { erreur: 'session expiree' });
     // un compte banni ne peut plus rien faire, meme avec une session encore ouverte
-    if (compte.banni) return repondre(res, 403, { erreur: 'Ce compte a été banni du casino.' });
+    if (compte.banni) return repondre(res, 403, { erreur: 'Ce compte a ete banni du casino.' });
 
     // --- liste des tables ---
     if (route === '/api/salon') {
       return repondre(res, 200, { tables: resumeSalon(), roulette: resumeRoulette(), solde: compte.solde });
     }
 
-    // --- s'asseoir ---
+    // --- s\'asseoir ---
     if (route === '/api/asseoir' && req.method === 'POST') {
       const table = trouverTable(String(body.table || ''));
       if (!table) return repondre(res, 404, { erreur: 'table inconnue' });
 
-      // on quitte l'ancienne table le cas echeant
+      // on quitte l\'ancienne table le cas echeant
       quitterTable(compte);
 
       if (table.jeu === 'poker') {
-        // une place vraiment libre (pas celle d'un joueur parti en pleine donne)
+        // une place vraiment libre (pas celle d\'un joueur parti en pleine donne)
         const fantome = i => !!(table.main && table.phase !== 'attente' && table.phase !== 'decompte' &&
                                 table.main.joueurs[i]);
         const place = table.places.findIndex((p, i) => !p && !fantome(i));
@@ -2452,9 +2452,9 @@ const serveur = http.createServer(async (req, res) => {
 
     /* ================= ROULETTE ================= */
 
-    // --- s'asseoir a la table de roulette ---
+    // --- s\'asseoir a la table de roulette ---
     if (route === '/api/roulette-asseoir' && req.method === 'POST') {
-      // deja assis : on renvoie simplement l'etat
+      // deja assis : on renvoie simplement l\'etat
       let i = tableRoulette.places.findIndex(p => p && p.jeton === compte.jetonRef);
       if (i < 0) {
         i = tableRoulette.places.findIndex(p => !p);
@@ -2615,7 +2615,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, etatPour(table, compte.jetonRef));
     }
 
-    // --- offrir de l'argent a un joueur assis a la meme table ---
+    // --- offrir de l\'argent a un joueur assis a la meme table ---
     if (route === '/api/table-offrir' && req.method === 'POST') {
       const info = siegeDe(compte);
       if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
@@ -2635,10 +2635,10 @@ const serveur = http.createServer(async (req, res) => {
       majSoldeCompte(p);
       majSoldeCompte(cible);
       // le don est inscrit dans le chat de la table ; le champ "cadeau"
-      // permet au destinataire (et a lui seul) d'afficher une notification
+      // permet au destinataire (et a lui seul) d\'afficher une notification
       table.chat.push({
         id: ++table.chatId, systeme: true,
-        texte: p.nom + ' offre ' + eur(v) + ' à ' + cible.nom + '.', t: Date.now(),
+        texte: p.nom + ' offre ' + eur(v) + ' a ' + cible.nom + '.', t: Date.now(),
         cadeau: { de: p.nom, a: cible.nom, montant: v, deJeton: p.jeton, aJeton: cible.jeton }
       });
       if (table.chat.length > CHAT_MAX) table.chat.splice(0, table.chat.length - CHAT_MAX);
@@ -2658,7 +2658,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, soldeVisible: compte.soldeVisible });
     }
 
-    // --- chat de table (ephemere : voir cote client pour l'affichage) ---
+    // --- chat de table (ephemere : voir cote client pour l\'affichage) ---
     if (route === '/api/table-chat' && req.method === 'POST') {
       const info = siegeDe(compte);
       if (!info || !info.p) return repondre(res, 409, { erreur: 'pas a table' });
@@ -2672,7 +2672,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, etatPour(table, compte.jetonRef));
     }
 
-    // --- une prise à la pêche : c'est le serveur qui crédite ---
+    // --- une prise a la peche : c\'est le serveur qui credite ---
     if (route === '/api/peche' && req.method === 'POST') {
       compte.solde    = sous(compte.solde + 1);
       compte.poissons = compte.poissons + 1;
@@ -2682,7 +2682,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { solde: compte.solde, poissons: compte.poissons });
     }
 
-    // --- l'apparence du personnage ---
+    // --- l\'apparence du personnage ---
     if (route === '/api/perso' && req.method === 'POST') {
       try { compte.perso = JSON.stringify(body.perso || {}).slice(0, 400); } catch (e) {}
       Carnet.enregistrer(compte);
@@ -2700,7 +2700,7 @@ const serveur = http.createServer(async (req, res) => {
     // --- on pose sa mise et la serie commence ---
     if (route === '/api/penalty-demarrer' && req.method === 'POST') {
       if (compte.penalty) {
-        return repondre(res, 409, { erreur: 'Une série est déjà en cours.' });
+        return repondre(res, 409, { erreur: 'Une serie est deja en cours.' });
       }
       const mise = sous(Number(body.mise) || 0);
       if (!(mise >= MISE_MINI_PENALTY)) {
@@ -2726,20 +2726,20 @@ const serveur = http.createServer(async (req, res) => {
     // --- on tire ---
     if (route === '/api/penalty-tirer' && req.method === 'POST') {
       const serie = compte.penalty;
-      if (!serie) return repondre(res, 409, { erreur: 'Aucune série en cours.' });
+      if (!serie) return repondre(res, 409, { erreur: 'Aucune serie en cours.' });
 
       const zone = Math.max(0, Math.min(ZONES_PENALTY - 1, Number(body.zone) | 0));
 
-      /* Le petit secret : apres deux echecs d'affilee, viser la tete du
-         gardien donne un but a coup sur. C'est le serveur qui verifie la
-         condition, pas la page : impossible de s'en servir a volonte. */
+      /* Le petit secret : apres deux echecs d\'affilee, viser la tete du
+         gardien donne un but a coup sur. C\'est le serveur qui verifie la
+         condition, pas la page : impossible de s\'en servir a volonte. */
       const viseLaTete = body.tete === true;
       const secret = viseLaTete && (compte.defaitesPenalty | 0) >= DEFAITES_SECRET;
 
       // le sort en est jete
       const but = secret || crypto.randomInt(10000) < CHANCE_BUT;
 
-      // le gardien plonge la ou il faut pour que l'image colle au resultat
+      // le gardien plonge la ou il faut pour que l\'image colle au resultat
       let zoneGardien;
       if (secret)   zoneGardien = -1;          // il ne bouge pas, il encaisse
       else if (but) { do { zoneGardien = crypto.randomInt(ZONES_PENALTY); } while (zoneGardien === zone); }
@@ -2748,7 +2748,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.penaltys = compte.penaltys + 1;
 
       if (!but) {
-        // rate : la mise est perdue, la serie s'arrete
+        // rate : la mise est perdue, la serie s\'arrete
         const perdu = serie.mise;
         compte.penalty = null;
         compte.defaitesPenalty = (compte.defaitesPenalty | 0) + 1;
@@ -2760,7 +2760,7 @@ const serveur = http.createServer(async (req, res) => {
         });
       }
 
-      // but : on monte d'un cran
+      // but : on monte d\'un cran
       compte.buts = compte.buts + 1;
       compte.defaitesPenalty = 0;
       serie.palier = serie.palier + 1;
@@ -2769,7 +2769,7 @@ const serveur = http.createServer(async (req, res) => {
       const auSommet       = serie.palier >= ECHELLE_PENALTY.length;
 
       if (auSommet) {
-        // au sommet de l'echelle, on encaisse d'office
+        // au sommet de l\'echelle, on encaisse d\'office
         compte.solde   = sous(compte.solde + gainPotentiel);
         compte.penalty = null;
         const info = siegeDe(compte);
@@ -2793,12 +2793,12 @@ const serveur = http.createServer(async (req, res) => {
       });
     }
 
-    // --- on encaisse et on s'arrete la ---
+    // --- on encaisse et on s\'arrete la ---
     if (route === '/api/penalty-encaisser' && req.method === 'POST') {
       const serie = compte.penalty;
-      if (!serie) return repondre(res, 409, { erreur: 'Aucune série en cours.' });
+      if (!serie) return repondre(res, 409, { erreur: 'Aucune serie en cours.' });
       if (serie.palier < 1) {
-        return repondre(res, 400, { erreur: 'Marquez au moins un but avant d’encaisser.' });
+        return repondre(res, 400, { erreur: 'Marquez au moins un but avant d\'encaisser.' });
       }
 
       const gain = sous(serie.mise * ECHELLE_PENALTY[serie.palier - 1]);
@@ -2840,10 +2840,10 @@ const serveur = http.createServer(async (req, res) => {
     // --- la boutique : on achete la voiture premium ---
     if (route === '/api/periph-acheter-voiture' && req.method === 'POST') {
       if (compte.voiturePremium) {
-        return repondre(res, 409, { erreur: 'Vous avez déjà cette voiture.' });
+        return repondre(res, 409, { erreur: 'Vous avez deja cette voiture.' });
       }
       if (compte.periph) {
-        return repondre(res, 409, { erreur: 'Terminez votre course avant d’aller à la boutique.' });
+        return repondre(res, 409, { erreur: 'Terminez votre course avant d\'aller a la boutique.' });
       }
       if (compte.solde < PRIX_VOITURE_PREMIUM) {
         return repondre(res, 400, { erreur: 'Solde insuffisant.' });
@@ -2863,7 +2863,7 @@ const serveur = http.createServer(async (req, res) => {
       const course = compte.periph;
       if (!course) return repondre(res, 409, { erreur: 'Aucune course en cours.' });
       if (course.palier >= ECHELLE_PERIPH.length) {
-        return repondre(res, 409, { erreur: 'Course déjà terminée.' });
+        return repondre(res, 409, { erreur: 'Course deja terminee.' });
       }
       // la porte annoncee doit etre la suivante, et pas trop tot :
       // meme a fond, il faut le temps de parcourir la distance
@@ -2885,10 +2885,10 @@ const serveur = http.createServer(async (req, res) => {
       const gain     = sous(course.mise * ECHELLE_PERIPH[suivant - 1]);
       const fini     = suivant >= ECHELLE_PERIPH.length;
 
-      // pour l'affichage de la voiture des autres joueurs reels (multijoueur uniquement)
+      // pour l\'affichage de la voiture des autres joueurs reels (multijoueur uniquement)
       majGroupeCoursePeriph(compte, { palier: suivant, fraction: 0, statut: fini ? 'arrive' : 'course' });
 
-      if (fini) {                                   // Saint-Denis : on encaisse d'office
+      if (fini) {                                   // Saint-Denis : on encaisse d\'office
         compte.solde  = sous(compte.solde + gain);
         compte.periph = null;
         compte.periphMulti = null;
@@ -2926,7 +2926,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
     }
 
-    // --- la voiture est detruite, ou on s'est fait doubler ---
+    // --- la voiture est detruite, ou on s\'est fait doubler ---
     if (route === '/api/periph-perdu' && req.method === 'POST') {
       compte.periph = null;
       majGroupeCoursePeriph(compte, { statut: 'crash' });
@@ -2938,14 +2938,14 @@ const serveur = http.createServer(async (req, res) => {
     /* ===============================================================
        LE PERIPH EN MULTIJOUEUR
        ---------------------------------------------------------------
-       Une vraie file d'attente : le depart n'a lieu que si un deuxieme
+       Une vraie file d\'attente : le depart n\'a lieu que si un deuxieme
        joueur reel rejoint. Le gain/la perte de chacun reste toujours
        gouverne par les routes ci-dessus, inchangees.
        =============================================================== */
 
-    // --- on rejoint la file d'attente ---
+    // --- on rejoint la file d\'attente ---
     if (route === '/api/periph-multi-rejoindre' && req.method === 'POST') {
-      /* on ne peut appuyer sur "Multijoueur" que depuis l'accueil du jeu : une
+      /* on ne peut appuyer sur "Multijoueur" que depuis l\'accueil du jeu : une
          course encore ouverte ici a donc ete abandonnee (page rechargee, onglet
          ferme en pleine course). Elle est perdue, exactement comme en solo
          (/api/periph-demarrer), au lieu de bloquer le multijoueur pour toujours. */
@@ -2974,7 +2974,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true });
     }
 
-    // --- on quitte la file d'attente (bouton ou changement d'avis) ---
+    // --- on quitte la file d\'attente (bouton ou changement d\'avis) ---
     if (route === '/api/periph-multi-quitter' && req.method === 'POST') {
       retirerDeLaFilePeriph(compte.jetonRef);
       return repondre(res, 200, { ok: true });
@@ -2987,7 +2987,7 @@ const serveur = http.createServer(async (req, res) => {
           statut: 'parti',
           /* depuis combien de temps la course est partie ici : chaque page cale
              son "3, 2, 1, GO" sur ce meme instant, au lieu de partir quand son
-             propre sondage (toutes les 700 ms, plus le reseau) s'en apercoit */
+             propre sondage (toutes les 700 ms, plus le reseau) s\'en apercoit */
           ecoule: Date.now() - groupesCoursePeriph.get(compte.periphMulti.groupeId).creeLe,
           groupeId: compte.periphMulti.groupeId,
           couleur: compte.periphMulti.couleur,
@@ -3024,10 +3024,10 @@ const serveur = http.createServer(async (req, res) => {
         m.fraction = Math.max(0, Math.min(1, Number(body.fraction) || 0));
         m.x = Math.max(-7, Math.min(7, Number(body.x) || 0));
         /* position absolue (metres depuis la Porte Dauphine) et vitesse (km/h) :
-           c'est ce que les autres pages dessinent. Avant, seule la fraction du
+           c\'est ce que les autres pages dessinent. Avant, seule la fraction du
            troncon etait envoyee, et elle etait recombinee ici avec le palier du
            serveur, qui retarde sur celui de la page : la voiture sautait.
-           Ca ne sert qu'a l'affichage, jamais a un gain ; on borne quand meme
+           Ca ne sert qu\'a l\'affichage, jamais a un gain ; on borne quand meme
            a ce qui est physiquement possible depuis le depart. */
         if (body.d !== undefined) {
           const course = compte.periph;
@@ -3035,7 +3035,7 @@ const serveur = http.createServer(async (req, res) => {
           const possible = course ? (Date.now() - course.depart) / 1000 * vmax + 30 : Infinity;
           m.d = Math.max(0, Math.min(distancePeriph(ECHELLE_PERIPH.length), possible, Number(body.d) || 0));
           m.v = Math.max(0, Math.min(300, Number(body.v) || 0));
-          /* l'instant de la mesure : a son arrivee ici, moins le trajet aller
+          /* l\'instant de la mesure : a son arrivee ici, moins le trajet aller
              annonce par la page (la moitie de son aller-retour mesure). Les
              autres pages savent ainsi exactement de quand date la position,
              et la prolongent du bon temps (voir majVoitureReelle). La porte
@@ -3055,17 +3055,17 @@ const serveur = http.createServer(async (req, res) => {
     }
 
     /* ===============================================================
-       LE PONT DE CRISTAL — SOLO
+       LE PONT DE CRISTAL - SOLO
        ---------------------------------------------------------------
        Le pont est tire ici au depart et ne quitte jamais le serveur :
        la page apprend seulement, rangee par rangee, si la vitre choisie
        a tenu (et, une fois la rangee jouee, ou etait la bonne).
        =============================================================== */
     if (route === '/api/pont-demarrer' && req.method === 'POST') {
-      if (compte.pont) return repondre(res, 409, { erreur: 'Une traversée est déjà en cours.' });
+      if (compte.pont) return repondre(res, 409, { erreur: 'Une traversee est deja en cours.' });
       const g = salonPontDe(compte);
       if (g && g.membres[compte.jetonRef] && g.membres[compte.jetonRef].statut === 'jeu') {
-        return repondre(res, 409, { erreur: 'Une traversée multijoueur est en cours.' });
+        return repondre(res, 409, { erreur: 'Une traversee multijoueur est en cours.' });
       }
       const nomMode = MODES_PONT[body.mode] ? body.mode : 'classique';
       const m = MODES_PONT[nomMode];
@@ -3083,7 +3083,7 @@ const serveur = http.createServer(async (req, res) => {
 
     if (route === '/api/pont-avancer' && req.method === 'POST') {
       const p = compte.pont;
-      if (!p) return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
+      if (!p) return repondre(res, 409, { erreur: 'Aucune traversee en cours.' });
       const m = MODES_PONT[p.mode];
       const j = Number(body.vitre) | 0;
       if (j < 0 || j >= m.largeur) return repondre(res, 400, { erreur: 'Vitre inconnue.' });
@@ -3095,7 +3095,7 @@ const serveur = http.createServer(async (req, res) => {
       }
       p.pos = k;
       const mult = m.solo[k - 1];
-      if (k >= m.rangees) {                       // la rive d'or : on encaisse d'office
+      if (k >= m.rangees) {                       // la rive d\'or : on encaisse d\'office
         const gain = sous(p.mise * mult);
         compte.solde = sous(compte.solde + gain);
         compte.pont = null;
@@ -3108,8 +3108,8 @@ const serveur = http.createServer(async (req, res) => {
 
     if (route === '/api/pont-encaisser' && req.method === 'POST') {
       const p = compte.pont;
-      if (!p) return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
-      if (p.pos < 1) return repondre(res, 400, { erreur: 'Franchissez au moins une rangée avant d’encaisser.' });
+      if (!p) return repondre(res, 409, { erreur: 'Aucune traversee en cours.' });
+      if (p.pos < 1) return repondre(res, 400, { erreur: 'Franchissez au moins une rangee avant d\'encaisser.' });
       const mult = MODES_PONT[p.mode].solo[p.pos - 1];
       const gain = sous(p.mise * mult);
       compte.solde = sous(compte.solde + gain);
@@ -3126,11 +3126,11 @@ const serveur = http.createServer(async (req, res) => {
     }
 
     /* ===============================================================
-       LE PONT DE CRISTAL — MULTIJOUEUR
+       LE PONT DE CRISTAL - MULTIJOUEUR
        ---------------------------------------------------------------
-       Meme file d'attente que le periph (2e joueur -> 10 s -> depart,
+       Meme file d\'attente que le periph (2e joueur -> 10 s -> depart,
        3 joueurs au plus). Pas de tour de role : chacun avance quand il
-       veut sur le MEME pont. Toute rangee foulee par l'un (vitre qui
+       veut sur le MEME pont. Toute rangee foulee par l\'un (vitre qui
        tient ou qui casse) devient connue de tout le salon.
        =============================================================== */
     if (route === '/api/pont-multi-rejoindre' && req.method === 'POST') {
@@ -3175,7 +3175,7 @@ const serveur = http.createServer(async (req, res) => {
     if (route === '/api/pont-multi-avancer' && req.method === 'POST') {
       const g = salonPontDe(compte);
       const moi = g && g.membres[compte.jetonRef];
-      if (!moi || moi.statut !== 'jeu') return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
+      if (!moi || moi.statut !== 'jeu') return repondre(res, 409, { erreur: 'Aucune traversee en cours.' });
       const m = MODES_PONT.classique;
       const j = Number(body.vitre) | 0;
       if (j < 0 || j >= m.largeur) return repondre(res, 400, { erreur: 'Vitre inconnue.' });
@@ -3205,8 +3205,8 @@ const serveur = http.createServer(async (req, res) => {
     if (route === '/api/pont-multi-encaisser' && req.method === 'POST') {
       const g = salonPontDe(compte);
       const moi = g && g.membres[compte.jetonRef];
-      if (!moi || moi.statut !== 'jeu') return repondre(res, 409, { erreur: 'Aucune traversée en cours.' });
-      if (moi.pos < 1) return repondre(res, 400, { erreur: 'Franchissez au moins une rangée avant d’encaisser.' });
+      if (!moi || moi.statut !== 'jeu') return repondre(res, 409, { erreur: 'Aucune traversee en cours.' });
+      if (moi.pos < 1) return repondre(res, 400, { erreur: 'Franchissez au moins une rangee avant d\'encaisser.' });
       const mult = MODES_PONT.classique.duo[moi.pos - 1];
       moi.gain = sous(moi.mise * mult);
       moi.statut = 'encaisse'; moi.maj = Date.now();
@@ -3219,17 +3219,17 @@ const serveur = http.createServer(async (req, res) => {
     /* ===============================================================
        TOWER RUSH
        ---------------------------------------------------------------
-       Le seul chiffre que la page choisit vraiment, c'est le moment ou
-       elle demande le lacher. Tout le reste (l'instant exact ou ca en
+       Le seul chiffre que la page choisit vraiment, c\'est le moment ou
+       elle demande le lacher. Tout le reste (l\'instant exact ou ca en
        etait dans le balancement, la precision qui en decoule, le
-       multiplicateur tire, le risque d'effondrement) est recalcule ici
-       a partir de l'heure d'arrivee de la requete. Personne ne peut
+       multiplicateur tire, le risque d\'effondrement) est recalcule ici
+       a partir de l\'heure d\'arrivee de la requete. Personne ne peut
        forcer un bon multiplicateur en trafiquant la page.
        =============================================================== */
 
     // --- on pose sa mise, le premier etage commence a se balancer ---
     if (route === '/api/tower-demarrer' && req.method === 'POST') {
-      if (compte.tower) return repondre(res, 409, { erreur: 'Une tour est déjà en cours.' });
+      if (compte.tower) return repondre(res, 409, { erreur: 'Une tour est deja en cours.' });
       const mise = sous(Number(body.mise) || 0);
       if (!(mise >= MISE_MINI_TOWER)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
       if (mise > MISE_MAXI_TOWER)     return repondre(res, 400, { erreur: 'Mise maximum : 500 €.' });
@@ -3281,7 +3281,7 @@ const serveur = http.createServer(async (req, res) => {
         });
       }
 
-      // le sommet (12e niveau, ou le plafond x100) : on encaisse d'office
+      // le sommet (12e niveau, ou le plafond x100) : on encaisse d\'office
       if (r.sommet) {
         const gain = sous(tour.mise * tour.totalMult);
         compte.solde = sous(compte.solde + gain);
@@ -3316,7 +3316,7 @@ const serveur = http.createServer(async (req, res) => {
     if (route === '/api/tower-encaisser' && req.method === 'POST') {
       const tour = compte.tower;
       if (!tour) return repondre(res, 409, { erreur: 'Aucune tour en cours.' });
-      if (tour.floors.length < 1) return repondre(res, 400, { erreur: 'Posez au moins un étage avant d’encaisser.' });
+      if (tour.floors.length < 1) return repondre(res, 400, { erreur: 'Posez au moins un etage avant d\'encaisser.' });
 
       const gain = sous(tour.mise * Math.min(TOWER_MULT_MAX, tour.totalMult));   // plafond dur x100
       compte.solde = sous(compte.solde + gain);
@@ -3335,28 +3335,28 @@ const serveur = http.createServer(async (req, res) => {
        "50€" credite 50,00 € une seule fois par compte. "RS6" ne touche
        pas au solde : il revele la liste de tous les comptes deja crees
        (pseudo, creation, derniere fois vu), pour le proprietaire du
-       site. On accepte l'espace, le signe € et "eur"/"euros" en trop,
-       parce que c'est malcommode a taper sur un telephone.
+       site. On accepte l\'espace, le signe € et "eur"/"euros" en trop,
+       parce que c\'est malcommode a taper sur un telephone.
        =============================================================== */
     if (route === '/api/code' && req.method === 'POST') {
       // --- frein contre le devinage en boucle (un script qui essaie plein
-      // de codes d'affilee) : 5 essais rates maximum par minute et par
+      // de codes d\'affilee) : 5 essais rates maximum par minute et par
       // compte, ensuite on refuse sans meme regarder le code envoye. ---
       const maintenantCode = Date.now();
       if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
       compte.codeEchecs = compte.codeEchecs.filter(t => maintenantCode - t < 60000);
       if (compte.codeEchecs.length >= 5) {
-        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+        return repondre(res, 429, { erreur: 'Trop d\'essais. Reessayez dans une minute.' });
       }
 
       let normalise = String(body.code || '').trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/[''’]/g, '').replace(/€/g, '')
+        .replace(/\s+/g, '').replace(/[''']/g, '').replace(/€/g, '')
         .replace(/(euros|euro|eur)$/, '');
 
       if (normalise === '50') {
         if (!Array.isArray(compte.codesUtilises)) compte.codesUtilises = [];
         if (compte.codesUtilises.indexOf('50EUROS') >= 0) {
-          return repondre(res, 409, { erreur: 'Ce code a déjà été utilisé.' });
+          return repondre(res, 409, { erreur: 'Ce code a deja ete utilise.' });
         }
         compte.codesUtilises.push('50EUROS');
         compte.solde = sous(compte.solde + 50);
@@ -3367,9 +3367,9 @@ const serveur = http.createServer(async (req, res) => {
       }
 
       // Codes reserves au proprietaire du site. Change-les si tu penses que
-      // quelqu'un d'autre les connait : c'est la seule protection, donc ils
+      // quelqu\'un d\'autre les connait : c\'est la seule protection, donc ils
       // ne doivent JAMAIS apparaitre dans index.html, ni dans un fichier
-      // partage avec quelqu'un d'autre, ni etre dits a voix haute.
+      // partage avec quelqu\'un d\'autre, ni etre dits a voix haute.
       if (normalise === 'martins') {                 // liste des comptes, lecture seule
         const liste = await Carnet.listerJoueurs();
         return repondre(res, 200, { ok: true, genre: 'liste', joueurs: listeJoueursAvecPresence(liste) });
@@ -3396,10 +3396,10 @@ const serveur = http.createServer(async (req, res) => {
       if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
       compte.codeEchecs = compte.codeEchecs.filter(t => maintenantBan - t < 60000);
       if (compte.codeEchecs.length >= 5) {
-        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+        return repondre(res, 429, { erreur: 'Trop d\'essais. Reessayez dans une minute.' });
       }
       const codeNorm = String(body.code || '').trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/[''’]/g, '');
+        .replace(/\s+/g, '').replace(/[''']/g, '');
       if (codeNorm !== 'exclusionfdp') {
         compte.codeEchecs.push(maintenantBan);
         return repondre(res, 403, { erreur: 'Code invalide.' });
@@ -3434,10 +3434,10 @@ const serveur = http.createServer(async (req, res) => {
       if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
       compte.codeEchecs = compte.codeEchecs.filter(t => maintenantSup - t < 60000);
       if (compte.codeEchecs.length >= 5) {
-        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+        return repondre(res, 429, { erreur: 'Trop d\'essais. Reessayez dans une minute.' });
       }
       const codeNormS = String(body.code || '').trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/[''’]/g, '');
+        .replace(/\s+/g, '').replace(/[''']/g, '');
       if (codeNormS !== 'exclusionfdp') {
         compte.codeEchecs.push(maintenantSup);
         return repondre(res, 403, { erreur: 'Code invalide.' });
@@ -3448,7 +3448,7 @@ const serveur = http.createServer(async (req, res) => {
       const ficheSup = await Carnet.lire(cibleSup);
       if (!ficheSup) return repondre(res, 404, { erreur: 'Compte introuvable.' });
 
-      // si ce compte a une session ouverte, on le vire d'abord de partout
+      // si ce compte a une session ouverte, on le vire d\'abord de partout
       for (const c of comptes.values()) {
         if (c.pseudoBas === cibleSup) {
           c.banni = true;
@@ -3461,16 +3461,16 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, pseudo: ficheSup.pseudo });
     }
 
-    // --- changer le solde d'un compte (meme code que bannir) ---
+    // --- changer le solde d\'un compte (meme code que bannir) ---
     if (route === '/api/modifier-solde' && req.method === 'POST') {
       const maintenantSol = Date.now();
       if (!Array.isArray(compte.codeEchecs)) compte.codeEchecs = [];
       compte.codeEchecs = compte.codeEchecs.filter(t => maintenantSol - t < 60000);
       if (compte.codeEchecs.length >= 5) {
-        return repondre(res, 429, { erreur: 'Trop d’essais. Réessayez dans une minute.' });
+        return repondre(res, 429, { erreur: 'Trop d\'essais. Reessayez dans une minute.' });
       }
       const codeNormO = String(body.code || '').trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/[''’]/g, '');
+        .replace(/\s+/g, '').replace(/[''']/g, '');
       if (codeNormO !== 'exclusionfdp') {
         compte.codeEchecs.push(maintenantSol);
         return repondre(res, 403, { erreur: 'Code invalide.' });
@@ -3492,7 +3492,7 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, pseudo: ficheSol.pseudo, solde: nouveauSolde });
     }
 
-    // --- ma fiche (écran profil) ---
+    // --- ma fiche (ecran profil) ---
     if (route === '/api/moi') {
       return repondre(res, 200, {
         pseudo:   compte.pseudo,
@@ -3536,9 +3536,9 @@ const serveur = http.createServer(async (req, res) => {
   servirFichier(res, chemin);
 });
 
-/* Ouvre une session pour un joueur reconnu. Un joueur ne peut être
-   connecté qu'une fois : ouvrir une session ferme la précédente, sinon
-   deux appareils feraient diverger le même solde. */
+/* Ouvre une session pour un joueur reconnu. Un joueur ne peut etre
+   connecte qu\'une fois : ouvrir une session ferme la precedente, sinon
+   deux appareils feraient diverger le meme solde. */
 function ouvrirSession(fiche) {
   for (const [j, c] of comptes) {
     if (c.pseudoBas === fiche.pseudoBas) {
@@ -3618,12 +3618,12 @@ function quitterTable(compte) {
 }
 
 /* pour la simulation des cotes de Tower Rush (node -e "require('./serveur.js')") :
-   rien n'est exporte d'autre, et le site demarre exactement comme avant */
+   rien n\'est exporte d\'autre, et le site demarre exactement comme avant */
 module.exports = { towerTirer, towerAmpFor, towerPeriodFor, TOWER_NIVEAUX, TOWER_MULT_MAX, TOWER_SURVIE, TOWER_ECHELLE };
 
 Carnet.demarrer().then(() => {
   if (require.main !== module) return;
   serveur.listen(PORT, () => {
-    console.log('Casino Messina — le salon est ouvert sur le port ' + PORT);
+    console.log('Casino Messina - le salon est ouvert sur le port ' + PORT);
   });
 });
