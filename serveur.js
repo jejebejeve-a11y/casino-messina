@@ -2478,6 +2478,414 @@ setInterval(() => {
 }, 60000);  // toutes les minutes
 
 
+
+/* ===================================================================
+   RAZZIA - le jeu de conquete sur la vraie carte de Paris
+   -------------------------------------------------------------------
+   Chaque joueur pose sa base sur un vrai batiment du secteur ouest
+   (16e, Trocadero, Bois de Boulogne, Boulogne-Billancourt, bord du 15e).
+   Il achete des koalas (100 EUR), des pistolets (un pistolet = un koala arme),
+   les repartit sur les 4 cotes de sa base et envoie jusqu'a 4 groupes
+   dans les vraies rues, a pied ou par le metro.
+   Une base pillee perd 25 % du vrai solde du casino (partage entre
+   les allies qui attaquent ensemble) et brule 30 minutes.
+   Tout le monde est ici, dans un seul "monde" garde dans la base Upstash.
+   =================================================================== */
+/* nu = koala sans arme ; pistolet = pistolet noir ; diamant = pistolet noir diamant rouge (le mieux) */
+const RZ_TYPES = ['nu', 'pistolet', 'diamant'];
+const RZ_FORCE = { nu: 1, pistolet: 4, diamant: 10 };
+const RZ_PRIX  = { koala: 100, pistolet: 600, diamant: 2500 };
+const RZ_NIV_ARME = { pistolet: 1, diamant: 2 };                            // niveau d'armurerie requis
+const RZ_PRIX_ARMURERIE = [2000, 12000];                                    // pour passer au niveau 1, puis 2
+const RZ_ARMURERIE_MAX  = RZ_PRIX_ARMURERIE.length;
+const RZ_PRIX_DEFENSE   = [0, 2000, 6000, 15000, 40000];                   // index = niveau actuel (1 a 4)
+const RZ_MAX_GROUPES = 4;
+const RZ_PILLAGE     = 0.25;
+const RZ_FEU         = 30 * 60 * 1000;
+const RZ_REPARATION  = 5000;
+const RZ_BOUCLIER_ATTENTE = 12 * 3600 * 1000;   // 12 h avant de pouvoir remettre le bouclier
+const RZ_V_PIED      = 14;      // metres par seconde (le temps du jeu est accelere)
+const RZ_V_METRO     = 30;
+const RZ_DUREE_MAX   = 540;     // 9 minutes au plus, d'un bout a l'autre de la carte
+const RZ_REVENU      = 0.005;   // EUR par koala et par minute au Bat B (100 koalas = 0,50 EUR/min)
+const RZ_BATB        = { lon: 2.27890, lat: 48.85270 };   // Maison de la Radio, au milieu du secteur
+const RZ_COTES       = ['devant', 'derriere', 'gauche', 'droite'];
+const RZ_ZONE = [
+  [2.2330,48.8680],[2.2500,48.8830],[2.2740,48.8900],[2.2960,48.8925],[2.3060,48.8790],
+  [2.3085,48.8695],[2.3060,48.8580],[2.2970,48.8475],[2.2880,48.8320],[2.2840,48.8195],
+  [2.2600,48.8105],[2.2400,48.8160],[2.2230,48.8260],[2.2220,48.8420],[2.2250,48.8560]
+];
+/* les stations de metro du secteur (le trace des lignes n'est jamais montre) */
+const RZ_STATIONS = [
+  ['Charles de Gaulle–Étoile',2.2950,48.8738],['Argentine',2.2894,48.8756],['Porte Maillot',2.2826,48.8781],
+  ['Les Sablons',2.2718,48.8812],['Pont de Neuilly',2.2598,48.8846],['Victor Hugo',2.2858,48.8698],
+  ['Porte Dauphine',2.2764,48.8716],['Ternes',2.2982,48.8781],['Kléber',2.2934,48.8715],
+  ['Boissière',2.2900,48.8668],['Trocadéro',2.2871,48.8634],['Passy',2.2858,48.8575],
+  ['Bir-Hakeim',2.2892,48.8539],['Dupleix',2.2935,48.8504],['La Motte-Picquet–Grenelle',2.2985,48.8496],
+  ['Iéna',2.2939,48.8646],['Alma–Marceau',2.3010,48.8647],['Rue de la Pompe',2.2779,48.8641],
+  ['La Muette',2.2740,48.8581],['Ranelagh',2.2700,48.8554],['Jasmin',2.2680,48.8524],
+  ['Michel-Ange–Auteuil',2.2644,48.8479],['Michel-Ange–Molitor',2.2615,48.8449],['Exelmans',2.2598,48.8425],
+  ['Porte de Saint-Cloud',2.2567,48.8378],['Marcel Sembat',2.2432,48.8338],['Billancourt',2.2380,48.8321],
+  ['Pont de Sèvres',2.2303,48.8297],['Boulogne–Pont de Saint-Cloud',2.2285,48.8408],
+  ['Boulogne–Jean Jaurès',2.2388,48.8421],['Porte d\'Auteuil',2.2582,48.8479],['Église d\'Auteuil',2.2690,48.8471],
+  ['Chardon-Lagache',2.2670,48.8452],['Mirabeau',2.2730,48.8471],['Javel–André Citroën',2.2780,48.8462],
+  ['Charles Michels',2.2858,48.8466],['Avenue Émile Zola',2.2950,48.8470],['Balard',2.2785,48.8365],
+  ['Lourmel',2.2822,48.8388],['Boucicaut',2.2878,48.8410],['Félix Faure',2.2918,48.8427],['Commerce',2.2940,48.8447]
+];
+
+const RZJ = {};                 // pseudoBas -> joueur du jeu
+const RZG = {};                 // id -> groupe de koalas hors de la base
+let   rzCompteur = 1;
+let   rzCharge   = false;
+
+function rzVide() { return { nu: 0, pistolet: 0, diamant: 0 }; }
+function rzPropre(u) { const r = rzVide(); RZ_TYPES.forEach(t => { r[t] = Math.max(0, Math.floor(Number(u && u[t]) || 0)); }); return r; }
+function rzTotal(u) { return RZ_TYPES.reduce((s, t) => s + (u[t] | 0), 0); }
+function rzPuissance(u) { return RZ_TYPES.reduce((s, t) => s + (u[t] | 0) * RZ_FORCE[t], 0); }
+/* les plus faibles tombent en premier */
+function rzPertes(u, aPerdre) {
+  const r = Object.assign(rzVide(), u);
+  for (const t of RZ_TYPES) while (aPerdre > 1e-9 && r[t] > 0) { r[t]--; aPerdre -= RZ_FORCE[t]; }
+  return r;
+}
+/* purement mathematique : 101 contre 100, le premier gagne et garde 1 koala */
+function rzCombat(A, multA, B, multB) {
+  const pa = rzPuissance(A) * multA, pb = rzPuissance(B) * multB;
+  if (pa > pb) return { gagnant: 'A', A: rzPertes(A, pb / multA), B: rzVide() };
+  if (pb > pa) return { gagnant: 'B', A: rzVide(), B: rzPertes(B, pa / multB) };
+  return { gagnant: 'nul', A: rzVide(), B: rzVide() };
+}
+function rzMultDefense(j) { return 1 + 0.25 * ((j.defense || 1) - 1); }
+/* repartit les koalas de la base sur les 4 cotes, selon les pourcentages choisis */
+function rzRepartir(stock, rep) {
+  const res = {}; RZ_COTES.forEach(c => { res[c] = rzVide(); });
+  RZ_TYPES.forEach(t => {
+    const n = stock[t] | 0; let cumulPct = 0, donne = 0;
+    RZ_COTES.forEach(c => {
+      cumulPct += (rep[c] || 0);
+      const jusque = Math.round(n * cumulPct / 100);
+      res[c][t] = Math.max(0, jusque - donne); donne = jusque;
+    });
+  });
+  return res;
+}
+
+function rzDist(a, b) {           // a, b = [lon, lat], en metres
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * r, dLon = (b[0] - a[0]) * r;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function rzLongueur(coords) { let s = 0; for (let i = 1; i < coords.length; i++) s += rzDist(coords[i - 1], coords[i]); return s; }
+function rzDansZone(p) {
+  let dedans = false;
+  for (let i = 0, j = RZ_ZONE.length - 1; i < RZ_ZONE.length; j = i++) {
+    const xi = RZ_ZONE[i][0], yi = RZ_ZONE[i][1], xj = RZ_ZONE[j][0], yj = RZ_ZONE[j][1];
+    if (((yi > p[1]) !== (yj > p[1])) && (p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi)) dedans = !dedans;
+  }
+  return dedans;
+}
+function rzPoint(p) {
+  if (!Array.isArray(p) || p.length < 2) return null;
+  const lon = Number(p[0]), lat = Number(p[1]);
+  if (!isFinite(lon) || !isFinite(lat) || Math.abs(lon - 2.26) > 0.2 || Math.abs(lat - 48.85) > 0.2) return null;
+  return [Math.round(lon * 1e6) / 1e6, Math.round(lat * 1e6) / 1e6];
+}
+
+function rzNouveauJoueur(compte) {
+  return { pseudo: compte.pseudo, base: null, bouclier: true, bouclierRetireLe: 0, feuJusqua: 0,
+           defense: 1, armurerie: 0, stock: rzVide(),
+           repartition: { devant: 25, derriere: 25, gauche: 25, droite: 25 },
+           allies: [], demandes: [], evenements: [] };
+}
+function rzJoueur(compte) {
+  let j = RZJ[compte.pseudoBas];
+  if (!j) { j = rzNouveauJoueur(compte); RZJ[compte.pseudoBas] = j; }
+  j.pseudo = compte.pseudo;
+  return j;
+}
+function rzEvenement(pb, texte, genre) {
+  const j = RZJ[pb]; if (!j) return;
+  j.evenements.push({ t: Date.now(), texte, genre: genre || 'info' });
+  if (j.evenements.length > 25) j.evenements.splice(0, j.evenements.length - 25);
+}
+function rzAllies(a, b) { const j = RZJ[a]; return !!(j && j.allies.indexOf(b) >= 0); }
+function rzEnFeu(j) { return (j.feuJusqua || 0) > Date.now(); }
+function rzGroupesDe(pb) { return Object.values(RZG).filter(g => g.proprio === pb); }
+
+/* ---- l'argent : le vrai solde du casino, que le joueur soit la ou non ---- */
+function rzCompteEnLigne(pb) { for (const c of comptes.values()) if (c.pseudoBas === pb) return c; return null; }
+async function rzSolde(pb) {
+  const c = rzCompteEnLigne(pb); if (c) return c.solde;
+  const f = await Carnet.lire(pb); return f ? (Number(f.solde) || 0) : 0;
+}
+async function rzAjouter(pb, delta) {
+  const c = rzCompteEnLigne(pb);
+  if (c) {
+    c.solde = sous(Math.max(0, c.solde + delta));
+    const info = siegeDe(c);
+    if (info && info.p) { info.p.solde = c.solde; touche(info.table); }
+    Carnet.enregistrer(c);
+    return c.solde;
+  }
+  const f = await Carnet.lire(pb); if (!f) return null;
+  f.solde = sous(Math.max(0, (Number(f.solde) || 0) + delta));
+  Carnet.memoire.set(pb, f);
+  if (Carnet.pret) Carnet.commande(['SET', 'joueur:' + pb, JSON.stringify(f)]).catch(() => {});
+  return f.solde;
+}
+
+/* ---- sauvegarde du monde ---- */
+let rzSauvePrevue = null;
+function rzSauver() {
+  if (!rzCharge || rzSauvePrevue) return;
+  rzSauvePrevue = setTimeout(() => {
+    rzSauvePrevue = null;
+    if (!Carnet.pret) return;
+    Carnet.commande(['SET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur })])
+      .catch(e => console.log('Razzia : sauvegarde impossible (' + e.message + ')'));
+  }, 1500);
+}
+(async function rzCharger() {
+  for (let i = 0; i < 30 && !Carnet.pret; i++) await new Promise(r => setTimeout(r, 1000));
+  if (Carnet.pret) {
+    try {
+      const r = await Carnet.commande(['GET', 'razzia:monde']);
+      if (r && r.result) {
+        const d = JSON.parse(r.result);
+        Object.assign(RZJ, d.joueurs || {}); Object.assign(RZG, d.groupes || {});
+        // anciennes armes -> nouvelles (couteau = sans arme, grosses armes = diamant)
+        const conv = u => { if (!u) return rzVide(); const r = rzVide();
+          r.nu = (u.nu | 0) + (u.couteau | 0); r.pistolet = u.pistolet | 0; r.diamant = (u.diamant | 0) + (u.kalach | 0) + (u.roquette | 0); return r; };
+        Object.values(RZJ).forEach(j => { j.stock = conv(j.stock); j.armurerie = Math.min(RZ_ARMURERIE_MAX, j.armurerie | 0); });
+        Object.values(RZG).forEach(g => { g.unites = conv(g.unites); });
+        rzCompteur = Math.max(rzCompteur, d.n || 1);
+      }
+    } catch (e) { console.log('Razzia : lecture du monde impossible (' + e.message + ')'); }
+  }
+  rzCharge = true;
+  console.log('Razzia : monde pret (' + Object.keys(RZJ).length + ' joueurs).');
+})();
+
+/* ---- les trajets ----
+   Les etapes a pied suivent les vraies rues (calculees par la page).
+   Le serveur recalcule lui-meme toutes les durees. */
+function rzStation(nom) { return RZ_STATIONS.find(s => s[0] === nom) || null; }
+function rzPlanifier(depart, arrivee, etapesBrutes, t0) {
+  if (!Array.isArray(etapesBrutes) || !etapesBrutes.length || etapesBrutes.length > 5) return null;
+  const etapes = [];
+  for (const e of etapesBrutes) {
+    if (e && e.type === 'pied') {
+      const c = (Array.isArray(e.coords) ? e.coords : []).slice(0, 600).map(rzPoint).filter(Boolean);
+      if (c.length < 2) return null;
+      etapes.push({ type: 'pied', coords: c });
+    } else if (e && e.type === 'metro') {
+      const de = rzStation(e.de), a = rzStation(e.a);
+      if (!de || !a || de === a) return null;
+      etapes.push({ type: 'metro', de: de[0], a: a[0] });
+    } else return null;
+  }
+  if (etapes[0].type !== 'pied' || etapes[etapes.length - 1].type !== 'pied') return null;
+  // le trajet part bien du groupe et arrive bien a la cible
+  const premier = etapes[0].coords, dernier = etapes[etapes.length - 1].coords;
+  if (rzDist(premier[0], depart) > 450 || rzDist(dernier[dernier.length - 1], arrivee) > 450) return null;
+  premier.unshift(depart.slice()); dernier.push(arrivee.slice());
+  // les passages dans le metro commencent et finissent pres des stations
+  for (let i = 0; i < etapes.length; i++) {
+    const e = etapes[i]; if (e.type !== 'metro') continue;
+    const avant = etapes[i - 1], apres = etapes[i + 1];
+    if (!avant || !apres || avant.type !== 'pied' || apres.type !== 'pied') return null;
+    e.depuis = avant.coords[avant.coords.length - 1];
+    e.vers = apres.coords[0];
+    const sDe = rzStation(e.de), sA = rzStation(e.a);
+    if (rzDist(e.depuis, [sDe[1], sDe[2]]) > 450 || rzDist(e.vers, [sA[1], sA[2]]) > 450) return null;
+  }
+  // durees
+  let total = 0;
+  etapes.forEach(e => {
+    if (e.type === 'pied') e.duree = Math.max(rzLongueur(e.coords), rzDist(e.coords[0], e.coords[e.coords.length - 1])) / RZ_V_PIED;
+    else e.duree = rzDist(e.depuis, e.vers) * 1.25 / RZ_V_METRO + 15;
+    total += e.duree;
+  });
+  const f = total > RZ_DUREE_MAX ? RZ_DUREE_MAX / total : 1;
+  let t = t0;
+  etapes.forEach(e => { e.t0 = t; t += Math.max(1, e.duree * f) * 1000; e.t1 = Math.round(t); delete e.duree; });
+  return { etapes, fin: Math.round(t) };
+}
+/* le chemin du retour : le meme, a l'envers */
+function rzRetour(g, t0) {
+  const etapes = g.etapes.slice().reverse().map(e => {
+    const d = e.t1 - e.t0;
+    if (e.type === 'pied') return { type: 'pied', coords: e.coords.slice().reverse(), d };
+    return { type: 'metro', de: e.a, a: e.de, depuis: e.vers, vers: e.depuis, d };
+  });
+  let t = t0;
+  etapes.forEach(e => { e.t0 = t; t += e.d; e.t1 = t; delete e.d; });
+  const j = RZJ[g.proprio];
+  g.etapes = etapes; g.fin = t; g.etat = 'route';
+  g.cible = { type: 'maison' };
+  if (j && j.base) g.cible.lon = j.base.lon, g.cible.lat = j.base.lat;
+}
+function rzPositionFin(g) { const e = g.etapes[g.etapes.length - 1]; return e.coords[e.coords.length - 1]; }
+
+/* ---- a l'arrivee d'un groupe ---- */
+async function rzArrivee(g) {
+  const now = Date.now();
+  const moi = RZJ[g.proprio];
+  const c = g.cible || {};
+  if (!moi) { delete RZG[g.id]; return; }
+
+  if (c.type === 'maison') {
+    RZ_TYPES.forEach(t => { moi.stock[t] += g.unites[t] | 0; });
+    delete RZG[g.id];
+    return;
+  }
+  if (c.type === 'point') { g.etat = 'poste'; g.pos = rzPositionFin(g); return; }
+
+  if (c.type === 'batb') {
+    const occupants = Object.values(RZG).filter(x => x.etat === 'poste' && x.cible && x.cible.type === 'batb'
+      && x.proprio !== g.proprio && !rzAllies(g.proprio, x.proprio));
+    g.etat = 'poste'; g.pos = [RZ_BATB.lon, RZ_BATB.lat]; g.cagnotte = 0; g.depuis = now;
+    if (!occupants.length) { rzEvenement(g.proprio, 'Tes koalas ont pris le Bat B. Ils rapportent de l\'argent chaque minute.', 'bon'); return; }
+    const def = rzVide(); occupants.forEach(o => RZ_TYPES.forEach(t => { def[t] += o.unites[t] | 0; }));
+    const r = rzCombat(g.unites, 1, def, 1);
+    const noms = [...new Set(occupants.map(o => RZJ[o.proprio] ? RZJ[o.proprio].pseudo : '?'))].join(', ');
+    if (r.gagnant === 'A') {
+      g.unites = r.A;
+      occupants.forEach(o => { rzEvenement(o.proprio, moi.pseudo + ' a attaqué le Bat B : tes koalas y sont tous tombés.', 'mauvais'); delete RZG[o.id]; });
+      rzEvenement(g.proprio, 'Bat B repris à ' + noms + '. Il te reste ' + rzTotal(r.A) + ' koalas sur place.', 'bon');
+    } else {
+      // les survivants de la defense se repartissent entre leurs groupes
+      const restes = r.B;
+      occupants.forEach(o => {
+        const u = rzVide();
+        RZ_TYPES.forEach(t => { const pris = Math.min(o.unites[t] | 0, restes[t]); u[t] = pris; restes[t] -= pris; });
+        o.unites = u;
+        if (!rzTotal(u)) delete RZG[o.id];
+        rzEvenement(o.proprio, moi.pseudo + ' a attaqué le Bat B et a perdu. Tes koalas tiennent toujours.', 'bon');
+      });
+      rzEvenement(g.proprio, 'Attaque du Bat B ratée : tes ' + rzTotal(g.unites) + ' koalas sont tombés face à ' + noms + '.', 'mauvais');
+      delete RZG[g.id];
+    }
+    return;
+  }
+
+  if (c.type === 'base') {
+    const cible = RZJ[c.pseudo];
+    if (!cible || !cible.base) { rzRetour(g, now); return; }
+    if (cible.bouclier) {
+      rzEvenement(g.proprio, 'La base de ' + cible.pseudo + ' est sous bouclier : tes koalas font demi-tour.', 'info');
+      rzRetour(g, now); return;
+    }
+    const cote = RZ_COTES.indexOf(c.cote) >= 0 ? c.cote : 'devant';
+    const cotes = rzRepartir(cible.stock, cible.repartition);
+    const def = cotes[cote];
+    const r = rzCombat(g.unites, 1, def, rzMultDefense(cible));
+    // les defenseurs tombes sont retires de la base
+    RZ_TYPES.forEach(t => { cible.stock[t] = Math.max(0, cible.stock[t] - ((def[t] | 0) - (r.B[t] | 0))); });
+    const nomCote = { devant: 'devant', derriere: 'derrière', gauche: 'à gauche', droite: 'à droite' }[cote];
+    if (r.gagnant !== 'A') {
+      rzEvenement(g.proprio, 'Attaque ratée ' + nomCote + ' chez ' + cible.pseudo + ' : tes ' + rzTotal(g.unites) + ' koalas sont tombés.', 'mauvais');
+      rzEvenement(c.pseudo, moi.pseudo + ' t\'a attaqué ' + nomCote + ' et a perdu. Il te reste ' + rzTotal(r.B) + ' défenseurs de ce côté.', 'bon');
+      delete RZG[g.id];
+      return;
+    }
+    g.unites = r.A;
+    if (rzEnFeu(cible)) {
+      rzEvenement(g.proprio, 'La base de ' + cible.pseudo + ' brûlait déjà : rien à piller, mais ses défenseurs ' + nomCote + ' sont tombés.', 'info');
+      rzEvenement(c.pseudo, moi.pseudo + ' a tué tes défenseurs ' + nomCote + ' pendant que ta base brûlait.', 'mauvais');
+      rzRetour(g, now); return;
+    }
+    // le pillage : 25 % du vrai solde, partage entre les allies qui attaquent la meme base
+    const participants = [g.proprio];
+    Object.values(RZG).forEach(x => {
+      if (x.id !== g.id && x.etat === 'route' && x.cible && x.cible.type === 'base' && x.cible.pseudo === c.pseudo
+          && participants.indexOf(x.proprio) < 0 && rzAllies(g.proprio, x.proprio)) participants.push(x.proprio);
+    });
+    cible.feuJusqua = now + RZ_FEU;
+    const solde = await rzSolde(c.pseudo);
+    const butin = sous(solde * RZ_PILLAGE);
+    const part = sous(butin / participants.length);
+    if (butin > 0) {
+      await rzAjouter(c.pseudo, -butin);
+      for (const p of participants) await rzAjouter(p, part);
+    }
+    const noms = participants.map(p => RZJ[p] ? RZJ[p].pseudo : '?').join(' et ');
+    rzEvenement(c.pseudo, 'Ta base a été pillée par ' + noms + ' : −' + butin.toLocaleString('fr-FR') + ' €. Elle brûle 30 minutes.', 'mauvais');
+    participants.forEach(p => rzEvenement(p, 'Pillage réussi chez ' + cible.pseudo + ' : +' + part.toLocaleString('fr-FR') + ' €' + (participants.length > 1 ? ' (partagé en ' + participants.length + ')' : '') + '. Sa base brûle.', 'bon'));
+    rzRetour(g, now);
+    return;
+  }
+  rzRetour(g, now);
+}
+
+/* ---- le battement : arrivees et revenus du Bat B ---- */
+let rzOccupe = false, rzDernierRevenu = Date.now();
+setInterval(async () => {
+  if (!rzCharge || rzOccupe) return;
+  rzOccupe = true;
+  try {
+    const now = Date.now();
+    const arrives = Object.values(RZG).filter(g => g.etat === 'route' && g.fin <= now).sort((a, b) => a.fin - b.fin);
+    for (const g of arrives) { if (RZG[g.id] && RZG[g.id].etat === 'route') await rzArrivee(g); }
+    if (arrives.length) rzSauver();
+    if (now - rzDernierRevenu >= 60000) {
+      rzDernierRevenu = now;
+      const gains = {};
+      Object.values(RZG).forEach(g => {
+        if (g.etat !== 'poste' || !g.cible || g.cible.type !== 'batb') return;
+        g.cagnotte = (g.cagnotte || 0) + rzTotal(g.unites) * RZ_REVENU;
+        const verse = Math.floor(g.cagnotte * 100) / 100;
+        if (verse >= 0.01) { g.cagnotte -= verse; g.gagne = sous((g.gagne || 0) + verse); gains[g.proprio] = (gains[g.proprio] || 0) + verse; }
+      });
+      for (const pb of Object.keys(gains)) await rzAjouter(pb, sous(gains[pb]));
+      if (Object.keys(gains).length) rzSauver();
+    }
+  } catch (e) { console.log('Razzia : ' + e.message); }
+  rzOccupe = false;
+}, 1000);
+
+/* ce que voit un joueur */
+function rzVue(compte, depuis) {
+  const now = Date.now();
+  const pb = compte.pseudoBas;
+  const moi = rzJoueur(compte);
+  const bases = Object.keys(RZJ).filter(k => RZJ[k].base).map(k => {
+    const j = RZJ[k];
+    return { id: k, pseudo: j.pseudo, lon: j.base.lon, lat: j.base.lat, forme: j.base.forme, haut: j.base.haut,
+             bouclier: !!j.bouclier, feu: rzEnFeu(j) ? j.feuJusqua : 0, allie: rzAllies(pb, k), moi: k === pb };
+  });
+  const groupes = Object.values(RZG).map(g => {
+    const mien = g.proprio === pb;
+    const o = { id: g.id, proprio: g.proprio, pseudo: RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?', mien,
+                etat: g.etat, n: rzTotal(g.unites), etapes: g.etat === 'route' ? g.etapes : null, pos: g.pos || null,
+                armes: RZ_TYPES.filter(t => t !== 'nu' && g.unites[t] > 0), cible: { type: g.cible.type, pseudo: g.cible.pseudo } };
+    if (mien) { o.unites = g.unites; o.cibleCote = g.cible.cote; o.gagne = g.gagne || 0; o.fin = g.fin; }
+    return o;
+  });
+  const alertes = Object.values(RZG).filter(g => g.etat === 'route' && g.cible.type === 'base' && g.cible.pseudo === pb)
+    .map(g => ({ pseudo: RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?', n: rzTotal(g.unites), fin: g.fin, cote: g.cible.cote }));
+  const occ = Object.values(RZG).filter(g => g.etat === 'poste' && g.cible.type === 'batb');
+  const batb = { lon: RZ_BATB.lon, lat: RZ_BATB.lat,
+                 occupants: [...new Set(occ.map(g => RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?'))],
+                 n: occ.reduce((s, g) => s + rzTotal(g.unites), 0) };
+  const evts = moi.evenements.filter(e => e.t > (Number(depuis) || 0));
+  return {
+    now, solde: compte.solde, batb, bases, groupes, alertes, evenements: evts,
+    moi: {
+      base: moi.base, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
+      feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock,
+      repartition: moi.repartition, cotes: rzRepartir(moi.stock, moi.repartition),
+      allies: moi.allies.map(k => ({ id: k, pseudo: RZJ[k] ? RZJ[k].pseudo : k })),
+      demandes: moi.demandes.map(k => ({ id: k, pseudo: RZJ[k] ? RZJ[k].pseudo : k })),
+      groupes: rzGroupesDe(pb).length
+    },
+    regles: { prix: RZ_PRIX, force: RZ_FORCE, niveauArme: RZ_NIV_ARME, prixArmurerie: RZ_PRIX_ARMURERIE,
+              armurerieMax: RZ_ARMURERIE_MAX, prixDefense: RZ_PRIX_DEFENSE, maxGroupes: RZ_MAX_GROUPES, reparation: RZ_REPARATION,
+              stations: RZ_STATIONS, zone: RZ_ZONE }
+  };
+}
+
 const serveur = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const route = url.pathname;
@@ -3837,6 +4245,181 @@ const serveur = http.createServer(async (req, res) => {
     }
 
     // --- ma fiche (ecran profil) ---
+    /* ================= RAZZIA ================= */
+    if (route.startsWith('/api/razzia-')) {
+      if (!rzCharge) return repondre(res, 503, { erreur: 'La carte se prépare, réessaie dans quelques secondes.' });
+      const moi = rzJoueur(compte);
+      const pb = compte.pseudoBas;
+      const now = Date.now();
+      const FEU = 'Ta base brûle : tu ne peux rien faire avant la fin de l\'incendie ou la réparation.';
+
+      if (route === '/api/razzia-monde') {
+        return repondre(res, 200, rzVue(compte, url.searchParams.get('depuis') || body.depuis));
+      }
+
+      if (route === '/api/razzia-base' && req.method === 'POST') {
+        if (moi.base) return repondre(res, 409, { erreur: 'Ta base est déjà posée.' });
+        const p = rzPoint([body.lon, body.lat]);
+        if (!p || !rzDansZone(p)) return repondre(res, 400, { erreur: 'Cet endroit est hors de la zone ouverte.' });
+        if (Object.values(RZJ).some(j => j.base && rzDist([j.base.lon, j.base.lat], p) < 25))
+          return repondre(res, 409, { erreur: 'Ce bâtiment est déjà la base de quelqu\'un.' });
+        const forme = (Array.isArray(body.forme) ? body.forme : []).slice(0, 80).map(rzPoint).filter(Boolean);
+        moi.base = { lon: p[0], lat: p[1], forme: forme.length >= 3 ? forme : null,
+                     haut: Math.max(6, Math.min(120, Number(body.haut) || 18)) };
+        moi.bouclier = true;
+        rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (!moi.base && route !== '/api/razzia-alliance') return repondre(res, 409, { erreur: 'Pose d\'abord ta base.' });
+
+      if (route === '/api/razzia-acheter' && req.method === 'POST') {
+        if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
+        const quoi = String(body.quoi || '');
+        const n = Math.max(1, Math.min(500, Math.floor(Number(body.n) || 1)));
+        if (quoi === 'koala' || quoi === 'humain') {
+          const prix = RZ_PRIX.koala * n;
+          if (compte.solde < prix) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
+          compte.solde = sous(compte.solde - prix); moi.stock.nu += n;
+        } else if (RZ_NIV_ARME[quoi]) {
+          if (moi.armurerie < RZ_NIV_ARME[quoi]) return repondre(res, 409, { erreur: 'Améliore ton armurerie pour débloquer ce pistolet.' });
+          if (moi.stock.nu < n) return repondre(res, 409, { erreur: 'Il faut un koala sans arme par pistolet acheté. Achète d\'abord des koalas.' });
+          const prix = RZ_PRIX[quoi] * n;
+          if (compte.solde < prix) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
+          compte.solde = sous(compte.solde - prix); moi.stock.nu -= n; moi.stock[quoi] += n;
+        } else return repondre(res, 400, { erreur: 'Achat inconnu.' });
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte); rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-ameliorer' && req.method === 'POST') {
+        if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
+        const quoi = String(body.quoi || '');
+        let prix;
+        if (quoi === 'defense') { if (moi.defense >= 5) return repondre(res, 409, { erreur: 'Défense au maximum.' }); prix = RZ_PRIX_DEFENSE[moi.defense]; }
+        else if (quoi === 'armurerie') { if (moi.armurerie >= RZ_ARMURERIE_MAX) return repondre(res, 409, { erreur: 'Armurerie au maximum.' }); prix = RZ_PRIX_ARMURERIE[moi.armurerie]; }
+        else return repondre(res, 400, { erreur: 'Amélioration inconnue.' });
+        if (compte.solde < prix) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
+        compte.solde = sous(compte.solde - prix);
+        if (quoi === 'defense') moi.defense++; else moi.armurerie++;
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte); rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-repartition' && req.method === 'POST') {
+        const v = RZ_COTES.map(c => Math.max(0, Number(body[c]) || 0));
+        const s = v.reduce((a, b) => a + b, 0);
+        if (s <= 0) return repondre(res, 400, { erreur: 'Répartition vide.' });
+        const r = v.map(x => Math.round(x / s * 100)); r[0] += 100 - r.reduce((a, b) => a + b, 0);
+        RZ_COTES.forEach((c, i) => { moi.repartition[c] = r[i]; });
+        rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-bouclier' && req.method === 'POST') {
+        if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
+        if (body.actif) {
+          if (moi.bouclier) return repondre(res, 200, rzVue(compte, now));
+          const reste = moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now;
+          if (reste > 0) return repondre(res, 409, { erreur: 'Bouclier disponible dans ' + Math.ceil(reste / 60000) + ' min.' });
+          moi.bouclier = true;
+        } else if (moi.bouclier) { moi.bouclier = false; moi.bouclierRetireLe = now; }
+        rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-reparer' && req.method === 'POST') {
+        if (!rzEnFeu(moi)) return repondre(res, 409, { erreur: 'Ta base ne brûle pas.' });
+        if (compte.solde < RZ_REPARATION) return repondre(res, 409, { erreur: 'Il faut 5 000 € pour réparer.' });
+        compte.solde = sous(compte.solde - RZ_REPARATION);
+        moi.feuJusqua = 0;
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte); rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-envoyer' && req.method === 'POST') {
+        if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
+        const cible = body.cible || {};
+        let depart, g = null, unites;
+        if (body.groupe) {
+          g = RZG[String(body.groupe)];
+          if (!g || g.proprio !== pb) return repondre(res, 404, { erreur: 'Groupe introuvable.' });
+          if (g.etat !== 'poste') return repondre(res, 409, { erreur: 'Ce groupe est déjà en route.' });
+          depart = g.pos;
+        } else {
+          unites = rzPropre(body.unites);
+          if (!rzTotal(unites)) return repondre(res, 400, { erreur: 'Choisis au moins un koala.' });
+          if (RZ_TYPES.some(t => unites[t] > moi.stock[t])) return repondre(res, 409, { erreur: 'Tu n\'as pas tous ces koalas à la base.' });
+          if (rzGroupesDe(pb).length >= RZ_MAX_GROUPES) return repondre(res, 409, { erreur: '4 groupes dehors au maximum.' });
+          depart = [moi.base.lon, moi.base.lat];
+        }
+        let arrivee, c;
+        if (cible.type === 'base') {
+          const v = RZJ[String(cible.pseudo || '')];
+          if (!v || !v.base || cible.pseudo === pb) return repondre(res, 404, { erreur: 'Base introuvable.' });
+          if (rzAllies(pb, cible.pseudo)) return repondre(res, 409, { erreur: 'Tu ne peux pas attaquer un allié.' });
+          if (v.bouclier) return repondre(res, 409, { erreur: 'Cette base est sous bouclier.' });
+          arrivee = [v.base.lon, v.base.lat];
+          c = { type: 'base', pseudo: String(cible.pseudo), cote: RZ_COTES.indexOf(cible.cote) >= 0 ? cible.cote : 'devant' };
+        } else if (cible.type === 'batb') {
+          arrivee = [RZ_BATB.lon, RZ_BATB.lat]; c = { type: 'batb' };
+        } else if (cible.type === 'maison') {
+          arrivee = [moi.base.lon, moi.base.lat]; c = { type: 'maison' };
+        } else {
+          const p = rzPoint([cible.lon, cible.lat]);
+          if (!p || !rzDansZone(p)) return repondre(res, 400, { erreur: 'Destination hors de la zone ouverte.' });
+          arrivee = p; c = { type: 'point' };
+        }
+        const plan = rzPlanifier(depart, arrivee, body.etapes, now);
+        if (!plan) return repondre(res, 400, { erreur: 'Trajet refusé. Réessaie.' });
+        if (c.type === 'base' && moi.bouclier) { moi.bouclier = false; moi.bouclierRetireLe = now; }   // attaquer fait tomber son propre bouclier
+        if (!g) {
+          RZ_TYPES.forEach(t => { moi.stock[t] -= unites[t]; });
+          g = { id: 'g' + (rzCompteur++), proprio: pb, unites };
+          RZG[g.id] = g;
+        }
+        g.etat = 'route'; g.pos = null; g.cible = c; g.etapes = plan.etapes; g.fin = plan.fin; g.cagnotte = 0; g.gagne = 0;
+        rzSauver();
+        return repondre(res, 200, Object.assign(rzVue(compte, now), { groupe: g.id }));
+      }
+
+      if (route === '/api/razzia-alliance' && req.method === 'POST') {
+        const autre = String(body.pseudo || '');
+        const lui = RZJ[autre];
+        if (!lui || autre === pb) return repondre(res, 404, { erreur: 'Joueur introuvable.' });
+        const action = String(body.action || '');
+        const oter = (arr, x) => { const i = arr.indexOf(x); if (i >= 0) arr.splice(i, 1); };
+        if (action === 'demander') {
+          if (moi.allies.indexOf(autre) >= 0) return repondre(res, 409, { erreur: 'Vous êtes déjà alliés.' });
+          if (moi.demandes.indexOf(autre) >= 0) {           // il l'avait deja demande : on accepte
+            oter(moi.demandes, autre); moi.allies.push(autre); if (lui.allies.indexOf(pb) < 0) lui.allies.push(pb);
+            rzEvenement(autre, moi.pseudo + ' a accepté ton alliance.', 'bon');
+          } else if (lui.demandes.indexOf(pb) < 0) {
+            lui.demandes.push(pb);
+            rzEvenement(autre, moi.pseudo + ' te propose une alliance. Touche sa base pour répondre.', 'info');
+          }
+        } else if (action === 'accepter') {
+          if (moi.demandes.indexOf(autre) < 0) return repondre(res, 409, { erreur: 'Aucune demande de sa part.' });
+          oter(moi.demandes, autre);
+          if (moi.allies.indexOf(autre) < 0) moi.allies.push(autre);
+          if (lui.allies.indexOf(pb) < 0) lui.allies.push(pb);
+          rzEvenement(autre, moi.pseudo + ' a accepté ton alliance.', 'bon');
+        } else if (action === 'refuser') {
+          oter(moi.demandes, autre);
+        } else if (action === 'rompre') {
+          oter(moi.allies, autre); oter(lui.allies, pb);
+          rzEvenement(autre, moi.pseudo + ' a rompu votre alliance.', 'mauvais');
+        } else return repondre(res, 400, { erreur: 'Action inconnue.' });
+        rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      return repondre(res, 404, { erreur: 'route inconnue' });
+    }
+
     if (route === '/api/moi') {
       return repondre(res, 200, {
         pseudo:   compte.pseudo,

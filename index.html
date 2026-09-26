@@ -2492,6 +2492,11 @@ body.pont-actif{overflow:hidden}
             <div class="cj-texte">Une grue, un étage qui se balance, et une tour qui monte dans le ciel. Lâchez au bon moment pour empiler, encaissez avant qu'elle ne penche trop.</div>
             <div class="cj-pied">Jouer</div>
           </button>
+          <button class="carte-jeu" data-jeu="razzia">
+            <div class="cj-titre serif">Razzia</div>
+            <div class="cj-texte">La vraie carte de Paris. Pose ta base sur un vrai bâtiment, arme tes koalas, tiens le Bat B, et va piller les autres joueurs par les rues ou par le métro.</div>
+            <div class="cj-pied">Jouer</div>
+          </button>
         </div>
       </div>
 
@@ -3747,6 +3752,7 @@ function fermerJeu() {
   if (window.PERIPH && PERIPH.ouvert) PERIPH.fermer();
   if (window.TOUR && TOUR.ouvert) TOUR.fermer();
   if (window.PONT && PONT.ouvert) PONT.fermer(true);
+  if (window.RAZZIA && RAZZIA.ouvert) RAZZIA.fermer();
 }
 function ouvrirJeu(nom) {
   if (nom === 'periph') {                 // le periph prend tout l'ecran
@@ -3755,6 +3761,10 @@ function ouvrirJeu(nom) {
   }
   if (nom === 'pont') {                   // le Pont de Cristal aussi
     if (window.PONT && PONT.ouvrir) PONT.ouvrir();
+    return;
+  }
+  if (nom === 'razzia') {                 // Razzia : la carte de Paris en plein ecran
+    if (window.RAZZIA && RAZZIA.ouvrir) RAZZIA.ouvrir();
     return;
   }
   if (nom === 'tower') {                  // Tower Rush prend tout l'ecran aussi
@@ -13803,5 +13813,1312 @@ rangsVides();
 })();
 </script>
 
+
+<!-- ===================================================================
+     RAZZIA — la vraie carte de Paris, les koalas en noir, le Bat B.
+     Tout l'argent et tous les combats sont decides par serveur.js
+     (routes /api/razzia-*) : la page ne fait que montrer et animer.
+     =================================================================== -->
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+#rzEcran{position:fixed;inset:0;height:100vh;height:100dvh;z-index:950;background:#5f6266;overflow:hidden;
+  font-family:'Barlow Condensed','Bebas Neue',Inter,system-ui,sans-serif;color:#f2f0ec;
+  --rz-panneau:rgba(12,13,16,.92);--rz-bord:rgba(255,255,255,.1);--rz-rouge:#e0212e;--rz-rouge-f:#8e0f18;
+  --rz-or:#e6c56c;--rz-bleu:#4b93ff;--rz-vert:#49b36e;--rz-gris:#9aa0a7;-webkit-user-select:none;user-select:none}
+#rzEcran[hidden],#rzEcran [hidden]{display:none!important}
+#rzEcran *{box-sizing:border-box}
+body.rz-actif{overflow:hidden}
+#rzCarte{position:absolute;inset:0}
+#rzCalque{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#rzEcran .maplibregl-ctrl-bottom-right{bottom:calc(74px + env(safe-area-inset-bottom,0px))}
+#rzEcran .maplibregl-ctrl-attrib{font-family:Inter,sans-serif;font-size:10px}
+
+/* --- le haut --- */
+#rzHaut{position:absolute;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;gap:7px;align-items:stretch;pointer-events:none;z-index:5}
+#rzHaut>*{pointer-events:auto}
+.rz-carre{width:44px;min-height:44px;border-radius:10px;border:1px solid var(--rz-bord);background:var(--rz-panneau);color:#fff;font:600 17px/1 'Barlow Condensed',sans-serif;cursor:pointer;flex:none}
+.rz-carre:active{transform:scale(.96)}
+.rz-bloc{background:var(--rz-panneau);border:1px solid var(--rz-bord);border-radius:10px;padding:5px 11px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.rz-bloc small{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--rz-gris);line-height:1.1}
+.rz-bloc b{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.1}
+#rzSolde b{color:var(--rz-or)}
+#rzPuces{order:9;flex:1 1 100%;display:flex;gap:5px;flex-wrap:wrap;min-width:0;pointer-events:none!important}
+#rzHaut .rz-espace{flex:1}
+.rz-puce{font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:5px 9px;border-radius:999px;background:var(--rz-panneau);border:1px solid var(--rz-bord);white-space:nowrap}
+.rz-puce.bleu{color:#9cc6ff;border-color:rgba(75,147,255,.45)}
+.rz-puce.rouge{color:#ff8c84;border-color:rgba(224,33,46,.6)}
+.rz-puce.or{color:var(--rz-or)}
+
+#rzAlerte{position:absolute;left:10px;right:10px;top:calc(98px + env(safe-area-inset-top,0px));z-index:6;background:linear-gradient(90deg,#b3121d,#7d0a12);
+  border:1px solid #ff4a55;color:#fff;border-radius:10px;padding:8px 12px;font-size:16px;font-weight:700;letter-spacing:.03em;cursor:pointer;
+  box-shadow:0 6px 22px rgba(120,0,0,.45);animation:rzPouls 1.2s ease-in-out infinite}
+#rzAlerte small{display:block;font-weight:500;font-size:13px;opacity:.9;letter-spacing:.02em}
+@keyframes rzPouls{50%{box-shadow:0 6px 30px rgba(255,30,40,.7)}}
+
+#rzConsigne{position:absolute;left:50%;transform:translateX(-50%);top:calc(100px + env(safe-area-inset-top,0px));z-index:5;max-width:calc(100% - 20px);
+  background:var(--rz-panneau);border:1px solid var(--rz-rouge);border-radius:10px;padding:9px 14px;font-size:16px;font-weight:600;text-align:center;letter-spacing:.02em}
+#rzConsigne button{margin-left:10px}
+
+#rzToasts{position:absolute;left:50%;transform:translateX(-50%);top:calc(150px + env(safe-area-inset-top,0px));z-index:7;display:flex;flex-direction:column;gap:6px;
+  width:min(440px,calc(100% - 20px));pointer-events:none}
+.rz-toast{background:var(--rz-panneau);border:1px solid var(--rz-bord);border-left:4px solid var(--rz-gris);border-radius:8px;padding:8px 12px;font-size:15.5px;font-weight:500;
+  letter-spacing:.01em;animation:rzEntre .25s ease-out}
+.rz-toast.bon{border-left-color:var(--rz-vert)}
+.rz-toast.mauvais{border-left-color:var(--rz-rouge)}
+.rz-toast.sort{opacity:0;transition:opacity .5s}
+@keyframes rzEntre{from{transform:translateY(-8px);opacity:0}}
+
+/* --- la barre du bas --- */
+#rzBas{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;gap:6px;justify-content:center;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(0deg,rgba(8,9,11,.9),rgba(8,9,11,0))}
+#rzBas button{flex:1 1 0;min-width:0;max-width:120px;min-height:52px;padding:0 2px;overflow:hidden;border-radius:10px;border:1px solid var(--rz-bord);background:var(--rz-panneau);color:#eee;cursor:pointer;
+  font:700 13.5px/1.05 'Barlow Condensed',sans-serif;letter-spacing:.09em;text-transform:uppercase;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative}
+#rzBas button svg{width:20px;height:20px}
+#rzBas button:active{transform:scale(.97)}
+#rzBas button .rz-pastille{position:absolute;top:4px;right:6px;min-width:17px;height:17px;border-radius:9px;background:var(--rz-rouge);color:#fff;font-size:11px;line-height:17px;padding:0 4px}
+
+/* --- la feuille du bas --- */
+#rzFeuille{position:absolute;left:0;right:0;bottom:0;z-index:8;max-height:72%;display:flex;flex-direction:column;background:#0d0e11f5;border-top:1px solid var(--rz-rouge-f);
+  border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.5);animation:rzMonte .22s ease-out;padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (min-width:760px){#rzFeuille{left:auto;right:12px;bottom:12px;width:400px;max-height:calc(100% - 100px);border-radius:14px;border:1px solid var(--rz-rouge-f)}}
+@keyframes rzMonte{from{transform:translateY(30px);opacity:0}}
+#rzFeuilleTete{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
+#rzFeuilleTete h3{flex:1;margin:0;font-size:22px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff}
+#rzFeuilleTete h3 em{font-style:normal;color:var(--rz-rouge)}
+#rzFeuilleCorps{overflow:auto;padding:2px 14px 16px;font-family:Inter,system-ui,sans-serif;font-size:14px;color:#d8d6d2;-webkit-user-select:text;user-select:text}
+.rz-sec{margin-top:14px}
+.rz-sec:first-child{margin-top:4px}
+.rz-titre{font:700 12.5px/1 'Barlow Condensed',sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--rz-gris);margin-bottom:8px}
+.rz-ligne{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #ffffff0d}
+.rz-ligne:last-child{border-bottom:0}
+.rz-ligne .rz-txt{flex:1;min-width:0}
+.rz-ligne .rz-txt b{display:block;color:#fff;font-weight:600}
+.rz-ligne .rz-txt span{font-size:12.5px;color:var(--rz-gris)}
+.rz-btn{border:1px solid #ffffff24;background:#1b1d22;color:#fff;border-radius:9px;padding:9px 13px;cursor:pointer;white-space:nowrap;
+  font:700 14.5px/1 'Barlow Condensed',sans-serif;letter-spacing:.07em;text-transform:uppercase}
+.rz-btn:disabled{opacity:.35;cursor:not-allowed}
+.rz-btn.rouge{background:linear-gradient(180deg,#d61f2b,#9c0f19);border-color:#ff4b56}
+.rz-btn.or{background:linear-gradient(180deg,#e9c86e,#b8913a);border-color:#f3dc98;color:#1b1406}
+.rz-btn.plein{width:100%;padding:13px;font-size:17px;margin-top:10px}
+.rz-btn.mini{padding:6px 9px;font-size:13px}
+.rz-grille{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.rz-grille4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rz-cote{border:1px solid #ffffff24;background:#16181c;color:#fff;border-radius:9px;padding:9px 4px;cursor:pointer;text-align:center;font:700 14px/1.1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.rz-cote small{display:block;font:500 11px/1.2 Inter,sans-serif;color:var(--rz-gris);letter-spacing:0;text-transform:none;margin-top:3px}
+.rz-cote.choisi{border-color:var(--rz-rouge);background:#2a0d10;box-shadow:inset 0 0 0 1px var(--rz-rouge)}
+.rz-pas{display:flex;align-items:center;gap:6px}
+.rz-pas button{width:34px;height:34px;border-radius:8px;border:1px solid #ffffff24;background:#1b1d22;color:#fff;font-size:18px;cursor:pointer}
+.rz-pas input{width:58px;height:34px;border-radius:8px;border:1px solid #ffffff24;background:#0a0b0d;color:#fff;text-align:center;font:600 15px Inter,sans-serif}
+.rz-curseur{width:100%;accent-color:var(--rz-rouge)}
+.rz-note{font-size:12.5px;color:var(--rz-gris);line-height:1.45;margin-top:6px}
+.rz-erreur{color:#ff8c84;font-size:13px;min-height:16px;margin-top:6px}
+.rz-chiffres{display:flex;gap:8px;flex-wrap:wrap}
+.rz-chiffres div{flex:1;min-width:84px;background:#16181c;border:1px solid #ffffff12;border-radius:9px;padding:7px 9px}
+.rz-chiffres small{display:block;font:700 10.5px 'Barlow Condensed',sans-serif;letter-spacing:.15em;text-transform:uppercase;color:var(--rz-gris)}
+.rz-chiffres b{font:700 20px 'Barlow Condensed',sans-serif;color:#fff;font-variant-numeric:tabular-nums}
+.rz-icone{width:38px;height:38px;flex:none}
+.rz-option{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid #ffffff1f;background:#16181c;color:#fff;border-radius:10px;padding:11px 12px;cursor:pointer;margin-bottom:8px;font-family:Inter,sans-serif}
+.rz-option.choisi{border-color:var(--rz-rouge);box-shadow:inset 0 0 0 1px var(--rz-rouge);background:#1f0c0f}
+.rz-option b{display:block;font:700 17px 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.rz-option span{font-size:12.5px;color:var(--rz-gris)}
+.rz-option i{margin-left:auto;font:700 22px 'Barlow Condensed',sans-serif;font-style:normal;color:var(--rz-or);white-space:nowrap}
+.rz-journal div{padding:7px 0 7px 10px;border-left:3px solid #555;margin-bottom:6px;font-size:13.5px}
+.rz-journal div.bon{border-color:var(--rz-vert)} .rz-journal div.mauvais{border-color:var(--rz-rouge)}
+.rz-journal small{display:block;color:var(--rz-gris);font-size:11.5px}
+
+#rzChargement{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#0b0c0e;
+  font:700 22px 'Barlow Condensed',sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#fff}
+#rzChargement small{font:500 13px Inter,sans-serif;letter-spacing:0;text-transform:none;color:var(--rz-gris);max-width:300px;text-align:center}
+#rzChargement .rz-logo{font-size:54px;letter-spacing:.12em;color:var(--rz-rouge);text-shadow:0 0 30px rgba(224,33,46,.45)}
+@media (max-width:480px){ #rzBas{gap:4px;padding-left:6px;padding-right:6px} #rzBas button{font-size:11px;letter-spacing:0} .rz-bloc b{font-size:17px} }
+</style>
+
+<div id="rzEcran" hidden>
+  <div id="rzCarte"></div>
+  <canvas id="rzCalque"></canvas>
+
+  <div id="rzHaut">
+    <button class="rz-carre" id="rzQuitter" aria-label="Quitter">✕</button>
+    <div class="rz-bloc" id="rzSolde"><small>Solde</small><b id="rzSoldeV">—</b></div>
+    <div class="rz-bloc" id="rzEffectif"><small>À la base</small><b id="rzEffectifV">0</b></div>
+    <div id="rzPuces"></div>
+    <span class="rz-espace"></span>
+    <button class="rz-carre" id="rzSon" aria-label="Son">♪</button>
+  </div>
+  <div id="rzAlerte" hidden></div>
+  <div id="rzConsigne" hidden></div>
+  <div id="rzToasts"></div>
+
+  <div id="rzBas">
+    <button data-rz="base"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>Base</button>
+    <button data-rz="armurerie"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 8h15l1-2h2v5h-6l-1 2h-3l-1 5H6l1-5H3z"/></svg>Armurerie</button>
+    <button data-rz="defense"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Défense</button>
+    <button data-rz="groupes"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20c0-4 2.5-6 5-6s5 2 5 6zM12 20c0-4 2.5-6 5-6s5 2 5 6z"/></svg>Groupes<span class="rz-pastille" id="rzNbGroupes" hidden></span></button>
+    <button data-rz="allies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><path d="M4 12a8 8 0 1016 0 8 8 0 00-16 0"/></svg>Alliés<span class="rz-pastille" id="rzNbDemandes" hidden></span></button>
+    <button data-rz="journal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Journal</button>
+  </div>
+
+  <div id="rzFeuille" hidden>
+    <div id="rzFeuilleTete"><h3 id="rzFeuilleTitre"></h3><button class="rz-carre" id="rzFeuilleFermer" aria-label="Fermer">✕</button></div>
+    <div id="rzFeuilleCorps"></div>
+  </div>
+
+  <div id="rzChargement"><div class="rz-logo">RAZZIA</div><span id="rzChargementTxt">Paris se charge…</span><small>Les koalas enfilent leurs sweats noirs.</small></div>
+</div>
+
+<script>
+/* ===================================================================
+   RAZZIA — la page. Le serveur decide tout (argent, combats, trajets) ;
+   ici on ne fait que dessiner la carte, les koalas, et envoyer les ordres.
+   =================================================================== */
+window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var MAPLIBRE_JS  = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+  var MAPLIBRE_CSS = 'https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+  var TUILES       = 'https://tiles.openfreemap.org/planet';
+  var POLICES      = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+  var ITINERAIRE   = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/';
+
+  var COTES = ['devant', 'derriere', 'gauche', 'droite'];
+  var NOM_COTE = { devant: 'Devant', derriere: 'Derrière', gauche: 'Gauche', droite: 'Droite' };
+  /* devant = sud, derriere = nord, gauche = ouest, droite = est (vus du haut de la carte) */
+  var DIR_COTE = { devant: [0, -1], derriere: [0, 1], gauche: [-1, 0], droite: [1, 0] };
+  var TYPES = ['nu', 'pistolet', 'diamant'];
+  var NOM_TYPE = { nu: 'Koalas sans arme', pistolet: 'Koalas au pistolet noir', diamant: 'Koalas au pistolet diamant' };
+  var COUL = { moi: '#e6c56c', allie: '#4b93ff', ennemi: '#e0212e', neutre: '#b9bcc0' };
+
+  var S = {
+    carte: null, pret: false, vue: null, decalage: 0, dernierEvt: 0, journal: [],
+    mode: 'normal',          // normal | poser | destination
+    envoi: null,             // ce qu'on est en train d'envoyer
+    options: null, optionChoisie: 0,
+    feuille: null,           // { type, ... } pour la rafraichir
+    anim: null, sondage: null, demande: false,
+    combats: {},             // id groupe -> combat en cours a l'ecran
+    alertesVues: {}, son: true
+  };
+
+  /* ---------------- petits outils ---------------- */
+  function maintenant() { return Date.now() + S.decalage; }
+  function eur(v) { return (Number(v) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+  function eurRond(v) { return (Number(v) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' €'; }
+  function duree(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s >= 3600) return Math.floor(s / 3600) + ' h ' + String(Math.floor(s % 3600 / 60)).padStart(2, '0');
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function echap(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function dist(a, b) {
+    var R = 6371000, r = Math.PI / 180;
+    var dLat = (b[1] - a[1]) * r, dLon = (b[0] - a[0]) * r;
+    var x = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.pow(Math.sin(dLon / 2), 2);
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+  function longueur(c) { var s = 0; for (var i = 1; i < c.length; i++) s += dist(c[i - 1], c[i]); return s; }
+  function decale(p, dx, dy) {   // dx, dy en metres
+    return [p[0] + dx / (111320 * Math.cos(p[1] * Math.PI / 180)), p[1] + dy / 110540];
+  }
+  function cercle(p, r, n) {
+    var pts = []; n = n || 40;
+    for (var i = 0; i <= n; i++) { var a = i / n * Math.PI * 2; pts.push(decale(p, Math.cos(a) * r, Math.sin(a) * r)); }
+    return pts;
+  }
+  function dansZone(p, zone) {
+    var dedans = false;
+    for (var i = 0, j = zone.length - 1; i < zone.length; j = i++) {
+      var xi = zone[i][0], yi = zone[i][1], xj = zone[j][0], yj = zone[j][1];
+      if (((yi > p[1]) !== (yj > p[1])) && (p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi)) dedans = !dedans;
+    }
+    return dedans;
+  }
+  function total(u) { return u ? TYPES.reduce(function (s, t) { return s + (u[t] | 0); }, 0) : 0; }
+  function meilleureArme(u) { return u && u.diamant > 0 ? 'diamant' : u && u.pistolet > 0 ? 'pistolet' : 'nu'; }
+  function repartir(stock, rep) {
+    var res = {}; COTES.forEach(function (c) { res[c] = { nu: 0, pistolet: 0, diamant: 0 }; });
+    TYPES.forEach(function (t) {
+      var n = stock[t] | 0, cumul = 0, donne = 0;
+      COTES.forEach(function (c) { cumul += (rep[c] || 0); var j = Math.round(n * cumul / 100); res[c][t] = Math.max(0, j - donne); donne = j; });
+    });
+    return res;
+  }
+  function hasard(seed) { var x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+
+  async function api(route, donnees) {
+    try {
+      var r = await fetch('/api/' + route, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ jeton: (typeof JETON !== 'undefined' ? JETON : null) }, donnees || {}))
+      });
+      var j = await r.json();
+      if (j && !j.erreur && j.now) appliquer(j);
+      return j;
+    } catch (e) { return { erreur: 'Le réseau ne répond pas.' }; }
+  }
+
+  /* ---------------- le son (petits bruits de dessin anime) ---------------- */
+  var Son = { ctx: null, maitre: null, dernierPew: 0 };
+  function sonInit() {
+    if (Son.ctx) { if (Son.ctx.state === 'suspended') Son.ctx.resume(); return; }
+    try {
+      Son.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      Son.maitre = Son.ctx.createGain(); Son.maitre.gain.value = S.son ? 0.55 : 0; Son.maitre.connect(Son.ctx.destination);
+      var n = Son.ctx.sampleRate * 0.4, b = Son.ctx.createBuffer(1, n, Son.ctx.sampleRate), d = b.getChannelData(0);
+      for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      Son.bruit = b;
+    } catch (e) { Son.ctx = null; }
+  }
+  function pew(volume, aigu) {
+    if (!Son.ctx || !S.son || volume <= 0.01) return;
+    var t = Son.ctx.currentTime;
+    if (t - Son.dernierPew < 0.045) return; Son.dernierPew = t;
+    var o = Son.ctx.createOscillator(), g = Son.ctx.createGain();
+    o.type = 'square';
+    var f0 = (aigu ? 1500 : 1050) * (0.9 + Math.random() * 0.25);
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.22, t + 0.11);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16 * volume, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g); g.connect(Son.maitre); o.start(t); o.stop(t + 0.13);
+    var s = Son.ctx.createBufferSource(), gs = Son.ctx.createGain(), fl = Son.ctx.createBiquadFilter();
+    s.buffer = Son.bruit; fl.type = 'highpass'; fl.frequency.value = 1800;
+    gs.gain.setValueAtTime(0.12 * volume, t); gs.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    s.connect(fl); fl.connect(gs); gs.connect(Son.maitre); s.start(t, Math.random() * 0.3, 0.06);
+  }
+  function crepite(volume) {
+    if (!Son.ctx || !S.son || volume <= 0.01) return;
+    var t = Son.ctx.currentTime, s = Son.ctx.createBufferSource(), g = Son.ctx.createGain(), fl = Son.ctx.createBiquadFilter();
+    s.buffer = Son.bruit; fl.type = 'bandpass'; fl.frequency.value = 900 + Math.random() * 1400; fl.Q.value = 3;
+    g.gain.setValueAtTime(0.25 * volume, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04 + Math.random() * 0.05);
+    s.connect(fl); fl.connect(g); g.connect(Son.maitre); s.start(t, Math.random() * 0.3, 0.1);
+  }
+  function tut(f, d, v, type) {
+    if (!Son.ctx || !S.son) return;
+    var t = Son.ctx.currentTime, o = Son.ctx.createOscillator(), g = Son.ctx.createGain();
+    o.type = type || 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v || 0.12, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(Son.maitre); o.start(t); o.stop(t + d + 0.02);
+  }
+  function sirene() { [0, 0.28, 0.56].forEach(function (d, i) { setTimeout(function () { tut(i % 2 ? 620 : 880, 0.24, 0.1, 'square'); }, d * 1000); }); }
+  function caisse() { tut(1320, 0.09, 0.1); setTimeout(function () { tut(1760, 0.16, 0.1); }, 90); }
+  function aie() { tut(220, 0.25, 0.14, 'sawtooth'); setTimeout(function () { tut(160, 0.3, 0.12, 'sawtooth'); }, 160); }
+
+  /* ---------------- la carte : les vraies rues, les vrais batiments, style carre ---------------- */
+  function largeur(f) {
+    var cls = ['match', ['get', 'class'], ['motorway', 'trunk'], 1.8, 'primary', 1.5, 'secondary', 1.2, 'tertiary', 1, 'minor', 0.75, 'service', 0.45, 0.35];
+    return ['interpolate', ['exponential', 1.6], ['zoom'], 12, ['*', 0.9 * f, cls], 16, ['*', 6 * f, cls], 19, ['*', 34 * f, cls]];
+  }
+  var ROUTES = ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service']]];
+  var STYLE = {
+    version: 8, glyphs: POLICES,
+    sources: { omt: { type: 'vector', url: TUILES } },
+    light: { anchor: 'map', position: [1.4, 200, 40], color: '#ffffff', intensity: 0.5 },
+    layers: [
+      { id: 'fond', type: 'background', paint: { 'background-color': '#8a8d90' } },
+      { id: 'verdure', type: 'fill', source: 'omt', 'source-layer': 'landcover',
+        filter: ['in', ['get', 'class'], ['literal', ['grass', 'wood', 'farmland', 'wetland']]], paint: { 'fill-color': '#577d4b' } },
+      { id: 'sols', type: 'fill', source: 'omt', 'source-layer': 'landuse',
+        filter: ['in', ['get', 'class'], ['literal', ['cemetery', 'pitch', 'stadium', 'playground', 'grass']]], paint: { 'fill-color': '#638a57' } },
+      { id: 'parcs', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': '#5a8250', 'fill-opacity': 0.9 } },
+      { id: 'eau', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': '#3d6177' } },
+      { id: 'trottoirs', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: ROUTES,
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#b4b6b8', 'line-width': largeur(1.45) } },
+      { id: 'routes', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: ROUTES,
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#3a3c40', 'line-width': largeur(1) } },
+      { id: 'lignes', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 16.5,
+        filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary', 'trunk']]],
+        paint: { 'line-color': '#e9e9e9', 'line-opacity': 0.55, 'line-width': 1, 'line-dasharray': [3, 4] } },
+      { id: 'rz-bat', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 13,
+        paint: { 'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 10], 0, '#b8babd', 40, '#cfd1d3'],
+                 'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 12],
+                 'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+                 'fill-extrusion-vertical-gradient': true } },
+      { id: 'noms', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 15.5,
+        layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11.5, 'text-letter-spacing': 0.04 },
+        paint: { 'text-color': '#f1f1f1', 'text-halo-color': '#2b2d31', 'text-halo-width': 1.4 } }
+    ]
+  };
+
+  function chargerLib() {
+    return new Promise(function (ok, ko) {
+      if (window.maplibregl) return ok();
+      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = MAPLIBRE_CSS; document.head.appendChild(l);
+      var s = document.createElement('script'); s.src = MAPLIBRE_JS; s.onload = function () { ok(); }; s.onerror = function () { ko(new Error('lib')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function vide() { return { type: 'FeatureCollection', features: [] }; }
+  function creerCarte() {
+    var c = new maplibregl.Map({
+      container: 'rzCarte', style: STYLE, center: [2.2789, 48.8527], zoom: 14.3, pitch: 48, bearing: -18,
+      minZoom: 12.5, maxZoom: 19.6, maxBounds: [[2.17, 48.79], [2.35, 48.91]], attributionControl: { compact: true },
+      dragRotate: true, pitchWithRotate: true, maxPitch: 65
+    });
+    c.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+    c.on('load', function () {
+      c.addSource('rz-masque', { type: 'geojson', data: vide() });
+      c.addLayer({ id: 'rz-masque', type: 'fill', source: 'rz-masque', paint: { 'fill-color': '#08090b', 'fill-opacity': 0.62 } }, 'rz-bat');
+      c.addLayer({ id: 'rz-bord', type: 'line', source: 'rz-masque', paint: { 'line-color': '#e0212e', 'line-width': 2.2, 'line-dasharray': [2, 2] } }, 'rz-bat');
+      c.addSource('rz-batb', { type: 'geojson', data: vide() });
+      c.addLayer({ id: 'rz-batb-sol', type: 'fill', source: 'rz-batb', paint: { 'fill-color': '#e6c56c', 'fill-opacity': 0.14 } }, 'rz-bat');
+      c.addLayer({ id: 'rz-batb-trait', type: 'line', source: 'rz-batb', paint: { 'line-color': '#e6c56c', 'line-width': 3, 'line-dasharray': [1.5, 1] } }, 'rz-bat');
+      c.addSource('rz-trajet', { type: 'geojson', data: vide() });
+      c.addLayer({ id: 'rz-trajet-fond', type: 'line', source: 'rz-trajet', layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#000', 'line-opacity': 0.55, 'line-width': ['case', ['==', ['get', 'type'], 'apercu'], 9, 6] } }, 'rz-bat');
+      c.addLayer({ id: 'rz-trajet', type: 'line', source: 'rz-trajet', layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['match', ['get', 'type'], 'metro', '#e0212e', 'apercu', '#ffffff', '#e6c56c'],
+                 'line-width': ['case', ['==', ['get', 'type'], 'apercu'], 5, 3], 'line-dasharray': [1.2, 1.2] } }, 'rz-bat');
+      c.addSource('rz-bases', { type: 'geojson', data: vide() });
+      c.addLayer({ id: 'rz-bases', type: 'fill-extrusion', source: 'rz-bases',
+        paint: { 'fill-extrusion-color': ['get', 'couleur'], 'fill-extrusion-height': ['get', 'haut'], 'fill-extrusion-base': 0,
+                 'fill-extrusion-vertical-gradient': true } });
+      c.addSource('rz-boucliers', { type: 'geojson', data: vide() });
+      c.addLayer({ id: 'rz-boucliers', type: 'fill-extrusion', source: 'rz-boucliers',
+        paint: { 'fill-extrusion-color': '#57a6ff', 'fill-extrusion-height': ['get', 'haut'], 'fill-extrusion-opacity': 0.2 } });
+      c.addLayer({ id: 'rz-boucliers-sol', type: 'line', source: 'rz-boucliers', paint: { 'line-color': '#8cc2ff', 'line-width': 2 } });
+      S.pret = true;
+      dessinerFixe();
+      if (S.vue) majCouches();
+      $('rzChargement').hidden = true;
+      if (S.vue && S.vue.moi.base) c.jumpTo({ center: [S.vue.moi.base.lon, S.vue.moi.base.lat], zoom: 16.2 });
+    });
+    c.on('error', function (e) { if (e && e.error && /tiles|pbf|fonts/.test(String(e.error.message || ''))) return; });
+    c.on('click', clicCarte);
+    return c;
+  }
+
+  function dessinerFixe() {
+    if (!S.pret || !S.vue) return;
+    var zone = S.vue.regles.zone.slice(); zone.push(zone[0]);
+    var monde = [[2.0, 48.6], [2.6, 48.6], [2.6, 49.1], [2.0, 49.1], [2.0, 48.6]];
+    S.carte.getSource('rz-masque').setData({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [monde, zone.slice().reverse()] } });
+    var b = [S.vue.batb.lon, S.vue.batb.lat];
+    S.carte.getSource('rz-batb').setData({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [cercle(b, 105, 56)] } });
+  }
+
+  function formeBase(b) {
+    if (b.forme && b.forme.length >= 3) { var f = b.forme.slice(); f.push(f[0]); return f; }
+    var p = [b.lon, b.lat];
+    return [decale(p, -8, -8), decale(p, 8, -8), decale(p, 8, 8), decale(p, -8, 8), decale(p, -8, -8)];
+  }
+  function couleurBase(b) {
+    if (b.feu > maintenant()) return '#2a1d18';
+    return b.moi ? '#d9b65a' : b.allie ? '#3f7fe0' : '#23242a';
+  }
+  function majCouches() {
+    if (!S.pret || !S.vue) return;
+    var bases = S.vue.bases.map(function (b) {
+      return { type: 'Feature', properties: { id: b.id, couleur: couleurBase(b), haut: (b.haut || 18) + 0.8 }, geometry: { type: 'Polygon', coordinates: [formeBase(b)] } };
+    });
+    S.carte.getSource('rz-bases').setData({ type: 'FeatureCollection', features: bases });
+    var bo = S.vue.bases.filter(function (b) { return b.bouclier; }).map(function (b) {
+      return { type: 'Feature', properties: { haut: (b.haut || 18) + 16 }, geometry: { type: 'Polygon', coordinates: [cercle([b.lon, b.lat], 42)] } };
+    });
+    S.carte.getSource('rz-boucliers').setData({ type: 'FeatureCollection', features: bo });
+    majTraces();
+  }
+  /* le trace de mes groupes en route (le metro reste secret pour les autres) */
+  function majTraces() {
+    if (!S.pret || !S.vue) return;
+    var f = [];
+    if (S.options && S.options[S.optionChoisie]) {
+      S.options[S.optionChoisie].etapes.forEach(function (e) {
+        if (e.type === 'pied') f.push({ type: 'Feature', properties: { type: 'apercu' }, geometry: { type: 'LineString', coordinates: e.coords } });
+        else { var a = station(e.de), z = station(e.a); f.push({ type: 'Feature', properties: { type: 'metro' }, geometry: { type: 'LineString', coordinates: [[a[1], a[2]], [z[1], z[2]]] } }); }
+      });
+    }
+    S.vue.groupes.forEach(function (g) {
+      if (!g.mien || g.etat !== 'route' || !g.etapes) return;
+      g.etapes.forEach(function (e) {
+        if (e.t1 < maintenant()) return;
+        if (e.type === 'pied') f.push({ type: 'Feature', properties: { type: 'pied' }, geometry: { type: 'LineString', coordinates: e.coords } });
+        else f.push({ type: 'Feature', properties: { type: 'metro' }, geometry: { type: 'LineString', coordinates: [e.depuis, e.vers] } });
+      });
+    });
+    S.carte.getSource('rz-trajet').setData({ type: 'FeatureCollection', features: f });
+  }
+  function station(nom) { return S.vue.regles.stations.find(function (s) { return s[0] === nom; }); }
+
+  /* ---------------- l'etat recu du serveur ---------------- */
+  function appliquer(v) {
+    var premiere = !S.vue;
+    S.decalage = v.now - Date.now();
+    S.vue = v;
+    if (typeof E !== 'undefined' && E.joueur && typeof v.solde === 'number') {
+      E.joueur.solde = v.solde; if (typeof majSolde === 'function') majSolde();
+    }
+    (v.evenements || []).forEach(function (e) {
+      if (e.t <= S.dernierEvt) return;
+      S.dernierEvt = Math.max(S.dernierEvt, e.t);
+      S.journal.unshift(e); if (S.journal.length > 40) S.journal.pop();
+      if (!premiere) { toast(e.texte, e.genre); if (e.genre === 'bon' && /Pillage|\+/.test(e.texte)) caisse(); else if (e.genre === 'mauvais') aie(); }
+    });
+    if (premiere) dessinerFixe();
+    majHaut(); majCouches();
+    if (S.mode === 'normal' && !v.moi.base) entrerPose();
+    if (S.feuille && S.feuille.vivante) S.feuille.vivante();
+  }
+  async function sonder() {
+    if (!RAZZIA.ouvert || S.demande) return;
+    S.demande = true;
+    var r = await api('razzia-monde', { depuis: S.dernierEvt });
+    S.demande = false;
+    if (r && r.erreur && !S.vue) $('rzChargementTxt').textContent = r.erreur;
+  }
+
+  function puce(txt, cls) { return '<span class="rz-puce ' + (cls || '') + '">' + txt + '</span>'; }
+  function majHaut() {
+    var v = S.vue, m = v.moi, now = maintenant();
+    $('rzSoldeV').textContent = eur(v.solde);
+    $('rzEffectifV').textContent = total(m.stock) + ' koala' + (total(m.stock) > 1 ? 's' : '');
+    var p = '';
+    if (m.base) {
+      if (m.feu > now) p += puce('En feu · ' + duree(m.feu - now), 'rouge');
+      p += m.bouclier ? puce('Bouclier', 'bleu') : puce(m.bouclierDispo > 0 ? 'Bouclier dans ' + duree(m.bouclierDispo) : 'Sans bouclier', 'rouge');
+      var bb = v.groupes.filter(function (g) { return g.mien && g.etat === 'poste' && g.cible.type === 'batb'; });
+      if (bb.length) (p += puce('Bat B · ' + bb.reduce(function (s, g) { return s + g.n; }, 0), 'or'));
+    }
+    $('rzPuces').innerHTML = p;
+    var ng = v.groupes.filter(function (g) { return g.mien; }).length;
+    $('rzNbGroupes').hidden = !ng; $('rzNbGroupes').textContent = ng;
+    $('rzNbDemandes').hidden = !m.demandes.length; $('rzNbDemandes').textContent = m.demandes.length;
+    // l'alerte : quelqu'un arrive
+    var al = (v.alertes || []).slice().sort(function (a, b) { return a.fin - b.fin; });
+    if (al.length) {
+      var a = al[0];
+      $('rzAlerte').hidden = false;
+      $('rzAlerte').innerHTML = '⚠ ' + echap(a.pseudo) + ' arrive avec ' + a.n + ' koalas' +
+        '<small>Côté ' + NOM_COTE[a.cote].toLowerCase() + ' · dans ' + duree(a.fin - now) + (al.length > 1 ? ' · ' + (al.length - 1) + ' autre(s) attaque(s)' : '') + '</small>';
+      var cle = a.pseudo + a.fin;
+      if (!S.alertesVues[cle]) { S.alertesVues[cle] = 1; sirene(); }
+    } else $('rzAlerte').hidden = true;
+  }
+  $('rzAlerte').onclick = function () { if (S.vue && S.vue.moi.base) volerVers([S.vue.moi.base.lon, S.vue.moi.base.lat], 16.8); ouvrirDefense(); };
+
+  function toast(texte, genre) {
+    var d = document.createElement('div');
+    d.className = 'rz-toast ' + (genre || '');
+    d.textContent = texte;
+    $('rzToasts').appendChild(d);
+    while ($('rzToasts').children.length > 3) $('rzToasts').removeChild($('rzToasts').firstChild);
+    setTimeout(function () { d.classList.add('sort'); setTimeout(function () { d.remove(); }, 600); }, 5200);
+  }
+  function volerVers(p, z) { if (S.carte) S.carte.flyTo({ center: p, zoom: z || S.carte.getZoom(), speed: 1.4 }); }
+
+  /* ================= LE DESSIN : koalas, combats, feu ================= */
+  var cv = $('rzCalque'), cx = cv.getContext('2d');
+  var cibles = [];          // ce qu'on peut toucher a l'ecran
+
+  function ecran(p) { var q = S.carte.project(p); return [q.x, q.y]; }
+  function metresParPixel(lat) { return 40075016.686 * Math.cos(lat * Math.PI / 180) / (512 * Math.pow(2, S.carte.getZoom())); }
+  function hauteurPx(lat, h) { return h / metresParPixel(lat) * Math.sin(S.carte.getPitch() * Math.PI / 180); }
+  function tailleKoala() { return Math.max(2, Math.min(15, Math.pow(2, S.carte.getZoom() - 17) * 6.5)); }
+  function volumeIci(x, y) {
+    var z = S.carte.getZoom(); if (z < 14.6) return 0;
+    if (x < -50 || y < -50 || x > cv.clientWidth + 50 || y > cv.clientHeight + 50) return 0;
+    return Math.min(1, (z - 14.6) / 2.4);
+  }
+
+  /* un koala, tout en noir, vu de trois quarts. sens = 1 (regarde a droite) ou -1 */
+  function koala(x, y, k, equipe, arme, sens, tir, pas, alpha) {
+    cx.save(); cx.globalAlpha = alpha == null ? 1 : alpha;
+    cx.translate(x, y - Math.abs(Math.sin(pas || 0)) * k * 0.18); cx.scale(sens, 1);
+    // ombre
+    cx.fillStyle = 'rgba(0,0,0,.3)'; cx.beginPath(); cx.ellipse(0, k * 1.95, k * 1.05, k * 0.32, 0, 0, 7); cx.fill();
+    // jambes
+    cx.fillStyle = '#0d0d0f';
+    var j = Math.sin(pas || 0) * k * 0.25;
+    cx.fillRect(-k * 0.55 + j, k * 1.35, k * 0.42, k * 0.55); cx.fillRect(k * 0.12 - j, k * 1.35, k * 0.42, k * 0.55);
+    // corps : sweat noir
+    cx.fillStyle = '#141417'; cx.beginPath();
+    if (cx.roundRect) cx.roundRect(-k * 0.78, k * 0.1, k * 1.56, k * 1.4, k * 0.45); else cx.rect(-k * 0.78, k * 0.1, k * 1.56, k * 1.4);
+    cx.fill();
+    // bande de l'equipe
+    cx.fillStyle = equipe; cx.fillRect(-k * 0.78, k * 0.95, k * 1.56, k * 0.2);
+    // le bras et le pistolet
+    if (arme && arme !== 'nu') {
+      cx.fillStyle = '#141417'; cx.fillRect(k * 0.35, k * 0.5, k * 0.75, k * 0.3);
+      var diam = arme === 'diamant';
+      cx.fillStyle = diam ? '#070708' : '#1f2023';
+      cx.fillRect(k * 0.95, k * 0.42, k * 1.05, k * 0.3);            // canon
+      cx.fillRect(k * 0.95, k * 0.62, k * 0.3, k * 0.45);             // crosse
+      if (diam) {
+        cx.fillStyle = '#e0192b';
+        cx.beginPath(); cx.moveTo(k * 1.45, k * 0.44); cx.lineTo(k * 1.6, k * 0.57); cx.lineTo(k * 1.45, k * 0.7); cx.lineTo(k * 1.3, k * 0.57); cx.closePath(); cx.fill();
+        cx.fillStyle = 'rgba(255,255,255,.85)'; cx.fillRect(k * 1.4, k * 0.5, k * 0.06, k * 0.06);
+        cx.strokeStyle = 'rgba(224,25,43,.8)'; cx.lineWidth = Math.max(0.6, k * 0.06); cx.strokeRect(k * 0.95, k * 0.42, k * 1.05, k * 0.3);
+      } else { cx.fillStyle = '#4a4c52'; cx.fillRect(k * 1.05, k * 0.45, k * 0.8, k * 0.06); }
+      if (tir) {
+        cx.fillStyle = '#ffe36b'; cx.beginPath();
+        for (var i = 0; i < 10; i++) { var a = i / 10 * Math.PI * 2, r = (i % 2 ? 0.22 : 0.55) * k; cx.lineTo(k * 2.3 + Math.cos(a) * r, k * 0.57 + Math.sin(a) * r); }
+        cx.closePath(); cx.fill();
+        cx.fillStyle = '#ff8a1f'; cx.beginPath(); cx.arc(k * 2.2, k * 0.57, k * 0.17, 0, 7); cx.fill();
+      }
+    } else {
+      cx.fillStyle = '#141417'; cx.fillRect(k * 0.4, k * 0.45, k * 0.3, k * 0.7);
+    }
+    // la tete
+    cx.fillStyle = '#9aa0a6';
+    cx.beginPath(); cx.arc(-k * 0.82, -k * 0.98, k * 0.5, 0, 7); cx.arc(k * 0.82, -k * 0.98, k * 0.5, 0, 7); cx.fill();
+    cx.fillStyle = '#e0cfd1';
+    cx.beginPath(); cx.arc(-k * 0.82, -k * 0.98, k * 0.27, 0, 7); cx.arc(k * 0.82, -k * 0.98, k * 0.27, 0, 7); cx.fill();
+    cx.fillStyle = '#a4aab0'; cx.beginPath(); cx.arc(0, -k * 0.42, k * 0.95, 0, 7); cx.fill();
+    cx.fillStyle = '#1a1a1c'; cx.beginPath(); cx.ellipse(k * 0.22, -k * 0.25, k * 0.26, k * 0.36, 0, 0, 7); cx.fill();
+    cx.fillStyle = '#111'; cx.beginPath(); cx.arc(-k * 0.2, -k * 0.62, k * 0.1, 0, 7); cx.arc(k * 0.55, -k * 0.62, k * 0.1, 0, 7); cx.fill();
+    // le bonnet noir
+    cx.fillStyle = '#0d0d0f'; cx.beginPath(); cx.arc(0, -k * 0.62, k * 0.84, Math.PI * 1.08, Math.PI * 1.92); cx.closePath(); cx.fill();
+    cx.restore();
+  }
+
+  function pastille(x, y, texte, bord, fond) {
+    cx.font = '700 13px "Barlow Condensed", sans-serif';
+    var w = Math.max(22, cx.measureText(texte).width + 14);
+    cx.fillStyle = fond || 'rgba(10,11,13,.9)'; cx.strokeStyle = bord; cx.lineWidth = 1.5;
+    cx.beginPath(); if (cx.roundRect) cx.roundRect(x - w / 2, y - 10, w, 20, 10); else cx.rect(x - w / 2, y - 10, w, 20); cx.fill(); cx.stroke();
+    cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(texte, x, y + 1);
+  }
+
+  /* ou est un groupe a l'instant t */
+  function position(g, t) {
+    if (g.etat !== 'route' || !g.etapes) return { p: g.pos, metro: false };
+    var es = g.etapes;
+    for (var i = 0; i < es.length; i++) {
+      var e = es[i];
+      if (t < e.t0) return { p: e.type === 'pied' ? e.coords[0] : e.depuis, metro: e.type === 'metro' };
+      if (t <= e.t1) {
+        var f = (t - e.t0) / Math.max(1, e.t1 - e.t0);
+        if (e.type === 'metro') return { p: [e.depuis[0] + (e.vers[0] - e.depuis[0]) * f, e.depuis[1] + (e.vers[1] - e.depuis[1]) * f], metro: true };
+        var L = e._L || (e._L = longueur(e.coords)), vise = f * L, fait = 0;
+        for (var j = 1; j < e.coords.length; j++) {
+          var d = dist(e.coords[j - 1], e.coords[j]);
+          if (fait + d >= vise) {
+            var h = d ? (vise - fait) / d : 0, a = e.coords[j - 1], b = e.coords[j];
+            return { p: [a[0] + (b[0] - a[0]) * h, a[1] + (b[1] - a[1]) * h], metro: false };
+          }
+          fait += d;
+        }
+        return { p: e.coords[e.coords.length - 1], metro: false };
+      }
+    }
+    var der = es[es.length - 1];
+    return { p: der.type === 'pied' ? der.coords[der.coords.length - 1] : der.vers, metro: false };
+  }
+
+  function relation(pb) {
+    if (!S.vue) return 'neutre';
+    var b = S.vue.bases.find(function (x) { return x.id === pb; });
+    if (b && b.moi) return 'moi';
+    if (b && b.allie) return 'allie';
+    return 'ennemi';
+  }
+  function rayonBase(b) {
+    if (!b.forme || b.forme.length < 3) return 10;
+    var c = [b.lon, b.lat]; return Math.min(45, Math.max.apply(null, b.forme.map(function (q) { return dist(c, q); })));
+  }
+
+  /* une petite troupe en formation autour d'un point de l'ecran */
+  function troupe(x, y, n, k, equipe, armes, sens, marche, graine, tirs, alpha) {
+    var m = Math.min(n, k > 9 ? 10 : 7), cols = Math.ceil(Math.sqrt(m * 1.6)), esp = k * 2.3, t = performance.now();
+    var pos = [];
+    for (var i = 0; i < m; i++) {
+      var c = i % cols, r = Math.floor(i / cols);
+      var px = x + (c - (cols - 1) / 2) * esp + (r % 2) * esp * 0.4, py = y + (r - (Math.ceil(m / cols) - 1) / 2) * esp * 0.75;
+      pos.push([px, py, i]);
+    }
+    pos.sort(function (a, b) { return a[1] - b[1]; });
+    var arme = function (i) { return armes[i % armes.length] || 'nu'; };
+    pos.forEach(function (q) {
+      var tir = tirs && hasard(graine * 31 + q[2] * 7 + Math.floor(t / 110)) > 0.83 && arme(q[2]) !== 'nu';
+      koala(q[0], q[1], k, equipe, arme(q[2]), sens, tir, marche ? t / 90 + q[2] * 1.7 : 0, alpha);
+      if (tir) tirs(q[0] + sens * k * 2.3, q[1] + k * 0.57, arme(q[2]));
+    });
+    return pos;
+  }
+
+  function flamme(x, y, h, t, graine) {
+    var f = 0.75 + 0.25 * Math.sin(t / 90 + graine * 5) + 0.12 * Math.sin(t / 37 + graine);
+    var H = h * f, W = h * 0.42;
+    var g = cx.createLinearGradient(x, y, x, y - H);
+    g.addColorStop(0, '#ff3b1f'); g.addColorStop(0.5, '#ff8a1f'); g.addColorStop(1, 'rgba(255,220,90,0)');
+    cx.fillStyle = g; cx.beginPath();
+    cx.moveTo(x - W, y);
+    cx.quadraticCurveTo(x - W * 1.1, y - H * 0.55, x + Math.sin(t / 120 + graine) * W * 0.4, y - H);
+    cx.quadraticCurveTo(x + W * 1.1, y - H * 0.55, x + W, y);
+    cx.closePath(); cx.fill();
+    cx.fillStyle = 'rgba(255,236,140,.85)'; cx.beginPath(); cx.ellipse(x, y - H * 0.18, W * 0.38, H * 0.22, 0, 0, 7); cx.fill();
+  }
+  function fumee(x, y, h, t, graine) {
+    for (var i = 0; i < 3; i++) {
+      var ph = ((t / 2600 + i / 3 + graine) % 1);
+      cx.fillStyle = 'rgba(40,40,44,' + (0.4 * (1 - ph)).toFixed(3) + ')';
+      cx.beginPath(); cx.arc(x + Math.sin(ph * 5 + graine) * h * 0.3, y - h * 0.6 - ph * h * 2.2, h * (0.25 + ph * 0.55), 0, 7); cx.fill();
+    }
+  }
+
+  /* ---------------- chaque image ---------------- */
+  function preparerCombats(now) {
+    S.vue.groupes.forEach(function (g) {
+      if (S.combats[g.id] || g.etat !== 'route' || !g.cible || (g.cible.type !== 'base' && g.cible.type !== 'batb') || !g.fin) return;
+      var reste = g.fin - now;
+      if (reste > 2600 || reste < -400) return;
+      var centre, rayon, cote = g.cibleCote || 'devant', defN, defEquipe, defArmes;
+      var der = g.etapes[g.etapes.length - 1], avant = der.type === 'pied' && der.coords.length > 2 ? der.coords[der.coords.length - 3] : null;
+      if (g.cible.type === 'base') {
+        var b = S.vue.bases.find(function (x) { return x.id === g.cible.pseudo; });
+        if (!b) return;
+        centre = [b.lon, b.lat]; rayon = rayonBase(b) + 7;
+        if (b.moi) { var c = S.vue.moi.cotes[cote] || {}; defN = total(c); defArmes = TYPES.filter(function (t) { return c[t] > 0; }); }
+        else { defN = 2 + Math.floor(hasard(g.fin) * 5); defArmes = ['pistolet', 'nu', 'pistolet']; }
+        defEquipe = COUL[b.moi ? 'moi' : b.allie ? 'allie' : 'ennemi'];
+        if (b.moi) defEquipe = COUL.moi; else if (g.mien) defEquipe = '#7a7f86';
+        if (b.moi) {   // on m'attaque : l'alerte dit de quel cote
+          var al = (S.vue.alertes || []).find(function (x) { return x.fin === g.fin && x.pseudo === g.pseudo; });
+          if (al) { cote = al.cote; var c2 = S.vue.moi.cotes[cote] || {}; defN = total(c2); defArmes = TYPES.filter(function (t) { return c2[t] > 0; }); }
+        }
+        var d = g.cibleCote || b.moi ? DIR_COTE[cote] : null;
+        if (!d && avant) { var dx = (avant[0] - centre[0]) * Math.cos(centre[1] * Math.PI / 180), dy = avant[1] - centre[1], l = Math.hypot(dx, dy) || 1; d = [dx / l, dy / l]; }
+        if (!d) d = [0, -1];
+        centre = decale(centre, d[0] * rayon, d[1] * rayon);
+        var dir = d;
+      } else {
+        var bb = [S.vue.batb.lon, S.vue.batb.lat];
+        var dd = avant ? [(avant[0] - bb[0]) * Math.cos(bb[1] * Math.PI / 180), avant[1] - bb[1]] : [0, -1];
+        var ll = Math.hypot(dd[0], dd[1]) || 1; dir = [dd[0] / ll, dd[1] / ll];
+        centre = decale(bb, dir[0] * 100, dir[1] * 100);
+        defN = S.vue.batb.n; defArmes = ['pistolet', 'nu']; defEquipe = '#7a7f86';
+        if (!defN) return;             // personne a combattre : il s'installe
+      }
+      if (!defN) return;               // cote vide : pas de bagarre, il passe
+      S.combats[g.id] = {
+        p: centre, dir: dir, debut: g.fin - 2600, fin: g.fin + 1900, graine: hasard(g.fin + g.n),
+        n: g.n, armes: g.armes && g.armes.length ? g.armes.concat(['nu']) : ['nu'], equipe: COUL[g.mien ? 'moi' : relation(g.proprio)],
+        defN: defN, defArmes: defArmes.length ? defArmes : ['nu'], defEquipe: defEquipe, pseudo: g.pseudo
+      };
+    });
+    Object.keys(S.combats).forEach(function (id) { if (S.combats[id].fin < now) delete S.combats[id]; });
+  }
+
+  function dessiner() {
+    S.anim = requestAnimationFrame(dessiner);
+    if (!S.pret || !S.vue) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
+    cibles = [];
+    var now = maintenant(), t = performance.now(), z = S.carte.getZoom(), k = tailleKoala();
+    var v = S.vue;
+    preparerCombats(now);
+
+    // les stations de metro
+    if (z >= 14.8) v.regles.stations.forEach(function (s) {
+      var q = ecran([s[1], s[2]]); if (q[0] < -20 || q[1] < -20 || q[0] > W + 20 || q[1] > H + 20) return;
+      cx.fillStyle = '#e0212e'; cx.fillRect(q[0] - 7, q[1] - 7, 14, 14);
+      cx.fillStyle = '#fff'; cx.font = '700 11px "Barlow Condensed",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('M', q[0], q[1] + 0.5);
+      if (z >= 16) { cx.font = '600 11.5px Inter,sans-serif'; cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.7)'; cx.strokeText(s[0], q[0], q[1] + 16); cx.fillStyle = '#fff'; cx.fillText(s[0], q[0], q[1] + 16); }
+    });
+
+    var acteurs = [];   // tout ce qui doit etre trie par profondeur
+    // les bases : feu, gardes, etiquettes
+    v.bases.forEach(function (b) {
+      var c = [b.lon, b.lat], q = ecran(c), hp = hauteurPx(b.lat, b.haut || 18);
+      if (q[0] < -200 || q[1] < -200 || q[0] > W + 200 || q[1] > H + 300) return;
+      cibles.push({ x: q[0], y: q[1] - hp / 2, r: Math.max(26, hp * 0.6), type: 'base', b: b });
+      if (b.feu > now) {
+        var pts = (b.forme && b.forme.length >= 3 ? b.forme.filter(function (_, i) { return i % Math.ceil(b.forme.length / 6) === 0; }) : []).concat([c]);
+        acteurs.push({ y: q[1], f: function () {
+          var fh = Math.max(8, Math.min(60, 26 / metresParPixel(b.lat) * 0.5 + 6));
+          pts.forEach(function (p, i) { var s = ecran(p); fumee(s[0], s[1] - hp, fh, t, i * 0.37); });
+          pts.forEach(function (p, i) { var s = ecran(p); flamme(s[0], s[1] - hp, fh, t, i + b.lat * 1000); });
+          if (Math.random() < 0.18) crepite(volumeIci(q[0], q[1]) * 0.7);
+        } });
+      }
+      if (b.moi && z >= 16.2 && v.moi.cotes) {
+        var r = rayonBase(b) + 5;
+        COTES.forEach(function (cote) {
+          var u = v.moi.cotes[cote], n = Math.min(4, total(u)); if (!n) return;
+          var d = DIR_COTE[cote], armes = TYPES.filter(function (x) { return u[x] > 0; }).reverse();
+          for (var i = 0; i < n; i++) {
+            var lat = (i - (n - 1) / 2) * 4.5;
+            var p = decale(c, d[0] * r - d[1] * lat, d[1] * r + d[0] * lat), s = ecran(p);
+            (function (s, a, i, cote) {
+              var enCombat = Object.keys(S.combats).some(function (id) { var cb = S.combats[id]; return dist(cb.p, p) < 25 && now > cb.debut; });
+              if (enCombat) return;
+              acteurs.push({ y: s[1], f: function () { koala(s[0], s[1] - k * 1.9, k, COUL.moi, a, d[0] < 0 || (d[0] === 0 && i % 2) ? -1 : 1, false, 0); } });
+            })(s, armes[i % armes.length], i, cote);
+          }
+        });
+      }
+      acteurs.push({ y: 1e9 + q[1], f: function () {
+        var col = b.moi ? COUL.moi : b.allie ? COUL.allie : COUL.ennemi;
+        var txt = (b.moi ? 'Ma base' : b.pseudo) + (b.bouclier ? '  ◈' : '') + (b.feu > now ? '  EN FEU' : '');
+        pastille(q[0], q[1] - hp - 16, txt, col, b.feu > now ? 'rgba(90,14,10,.92)' : null);
+      } });
+    });
+
+    // le Bat B
+    var qb = ecran([v.batb.lon, v.batb.lat]), hb = hauteurPx(v.batb.lat, 28);
+    cibles.push({ x: qb[0], y: qb[1] - hb / 2, r: Math.max(34, 90 / metresParPixel(v.batb.lat)), type: 'batb' });
+    acteurs.push({ y: 1e9 + qb[1], f: function () {
+      pastille(qb[0], qb[1] - hb - 18, 'BAT B' + (v.batb.n ? ' · ' + v.batb.occupants.join(', ') + ' · ' + v.batb.n : ' · libre'), COUL.moi, 'rgba(40,30,8,.94)');
+    } });
+
+    // les groupes
+    var occ = 0;
+    v.groupes.forEach(function (g) {
+      var cb = S.combats[g.id];
+      if (cb && now >= cb.debut) return;             // il est dans la bagarre
+      var ps = position(g, now); if (!ps.p) return;
+      var p = ps.p;
+      if (g.etat === 'poste' && g.cible.type === 'batb') {
+        var ang = hasard(parseInt(String(g.id).replace(/\D/g, ''), 10) || occ) * Math.PI * 2 + occ * 1.3; occ++;
+        p = decale(p, Math.cos(ang) * 98, Math.sin(ang) * 98);
+      }
+      if (ps.metro && !g.mien) return;               // dans le metro, personne ne te voit
+      var q = ecran(p); if (q[0] < -80 || q[1] < -80 || q[0] > W + 80 || q[1] > H + 80) return;
+      var rel = g.mien ? 'moi' : relation(g.proprio), col = COUL[rel];
+      cibles.push({ x: q[0], y: q[1], r: Math.max(20, k * 3), type: 'groupe', g: g });
+      var suiv = position(g, now + 900).p || p, qs = ecran(suiv), sens = qs[0] < q[0] - 0.5 ? -1 : 1;
+      acteurs.push({ y: q[1], f: function () {
+        if (ps.metro) {
+          cx.globalAlpha = 0.8; cx.fillStyle = '#e0212e'; cx.beginPath(); cx.arc(q[0], q[1], 13, 0, 7); cx.fill(); cx.globalAlpha = 1;
+          cx.fillStyle = '#fff'; cx.font = '700 12px "Barlow Condensed",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('M ' + g.n, q[0], q[1] + 0.5);
+          return;
+        }
+        if (z < 15.3) {
+          cx.fillStyle = '#111'; cx.strokeStyle = col; cx.lineWidth = 3; cx.beginPath(); cx.arc(q[0], q[1], 12, 0, 7); cx.fill(); cx.stroke();
+          cx.fillStyle = '#fff'; cx.font = '700 13px "Barlow Condensed",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(String(g.n), q[0], q[1] + 0.5);
+          return;
+        }
+        var armes = (g.armes && g.armes.length ? g.armes.slice().reverse() : []).concat(['nu']);
+        var pos = troupe(q[0], q[1] - k * 1.9, g.n, k, col, armes, sens, g.etat === 'route', 1, null);
+        var haut = Math.min.apply(null, pos.map(function (x) { return x[1]; }));
+        pastille(q[0], haut - k * 2.3, (g.mien ? '' : g.pseudo + ' · ') + g.n, col);
+      } });
+    });
+
+    // les bagarres
+    Object.keys(S.combats).forEach(function (id) {
+      var cb = S.combats[id]; if (now < cb.debut) return;
+      var ph = (now - cb.debut) / (cb.fin - cb.debut);
+      var fondu = ph > 0.82 ? Math.max(0, 1 - (ph - 0.82) / 0.18) : 1;
+      var pa = decale(cb.p, cb.dir[0] * 20, cb.dir[1] * 20), pd = decale(cb.p, -cb.dir[0] * 1, -cb.dir[1] * 1);
+      var qa = ecran(pa), qd = ecran(pd);
+      if (Math.max(qa[0], qd[0]) < -80 || Math.min(qa[0], qd[0]) > W + 80 || Math.max(qa[1], qd[1]) < -80 || Math.min(qa[1], qd[1]) > H + 80) return;
+      var sensA = qd[0] < qa[0] ? -1 : 1, vol = volumeIci((qa[0] + qd[0]) / 2, (qa[1] + qd[1]) / 2);
+      var balles = [];
+      function tirs(camp) { return function (x, y, arme) { balles.push([x, y, camp, arme]); pew(vol, arme === 'diamant'); }; }
+      acteurs.push({ y: Math.max(qa[1], qd[1]), f: function () {
+        var kk = Math.max(k, 3.2);
+        var posD = troupe(qd[0], qd[1] - kk * 1.9, cb.defN, kk, cb.defEquipe, cb.defArmes, -sensA, false, cb.graine * 7 + 3, tirs('d'), fondu);
+        var posA = troupe(qa[0], qa[1] - kk * 1.9, cb.n, kk, cb.equipe, cb.armes, sensA, false, cb.graine * 13 + 1, tirs('a'), fondu);
+        balles.forEach(function (bl, i) {
+          var cibleP = (bl[2] === 'a' ? posD : posA); var c2 = cibleP[Math.floor(hasard(i + t / 300) * cibleP.length)] || [qd[0], qd[1]];
+          cx.strokeStyle = bl[3] === 'diamant' ? 'rgba(255,50,70,.95)' : 'rgba(255,230,120,.95)'; cx.lineWidth = Math.max(1, kk * 0.14);
+          cx.setLineDash([kk * 0.8, kk * 0.7]); cx.beginPath(); cx.moveTo(bl[0], bl[1]); cx.lineTo(c2[0], c2[1]); cx.stroke(); cx.setLineDash([]);
+          cx.fillStyle = 'rgba(255,255,255,.9)'; cx.beginPath(); cx.arc(c2[0] + (hasard(i) - 0.5) * kk, c2[1] + (hasard(i + 3) - 0.5) * kk, kk * 0.28, 0, 7); cx.fill();
+        });
+        if (z >= 15.6) {
+          cx.font = '700 ' + Math.round(Math.max(12, kk * 1.3)) + 'px "Barlow Condensed",sans-serif'; cx.textAlign = 'center';
+          cx.fillStyle = 'rgba(255,255,255,' + (0.6 + 0.4 * Math.sin(t / 80)).toFixed(2) + ')';
+          if (balles.length) cx.fillText('PEW', (qa[0] + qd[0]) / 2 + Math.sin(t / 50) * 6, Math.min(qa[1], qd[1]) - kk * 5);
+        }
+      } });
+    });
+
+    acteurs.sort(function (a, b) { return a.y - b.y; }).forEach(function (a) { a.f(); });
+
+    // la destination qu'on vise
+    if (S.envoi && S.envoi.cible && S.envoi.cible.type === 'point') {
+      var qp = ecran([S.envoi.cible.lon, S.envoi.cible.lat]);
+      cx.strokeStyle = '#e0212e'; cx.lineWidth = 3; cx.beginPath(); cx.arc(qp[0], qp[1], 12 + Math.sin(t / 200) * 3, 0, 7); cx.stroke();
+      cx.beginPath(); cx.moveTo(qp[0] - 18, qp[1]); cx.lineTo(qp[0] + 18, qp[1]); cx.moveTo(qp[0], qp[1] - 18); cx.lineTo(qp[0], qp[1] + 18); cx.stroke();
+    }
+    // chaque seconde, les chronos du haut
+    if (!S._dernierHaut || t - S._dernierHaut > 1000) { S._dernierHaut = t; majHaut(); if (S.feuille && S.feuille.chrono) S.feuille.chrono(); if (Math.floor(t / 1000) % 5 === 0) majTraces(); }
+  }
+
+  /* ================= LES FEUILLES (menus du bas) ================= */
+  function ouvrirFeuille(titre, html, opts) {
+    S.feuille = opts || {};
+    $('rzFeuilleTitre').innerHTML = titre;
+    $('rzFeuilleCorps').innerHTML = html;
+    $('rzFeuille').hidden = false;
+    Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('[data-a]'), function (el) {
+      var f = ACTIONS[el.dataset.a]; if (!f) return;
+      el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'click', function (ev) { ev.stopPropagation(); f(el, ev); });
+    });
+    Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('.rz-pas'), brancherPas);
+  }
+  function fermerFeuille() {
+    $('rzFeuille').hidden = true; S.feuille = null;
+    if (S.options) { S.options = null; majTraces(); }
+    if (S.mode !== 'destination') S.envoi = null;
+  }
+  $('rzFeuilleFermer').onclick = fermerFeuille;
+  function erreurFeuille(t) { var e = $('rzFeuilleCorps').querySelector('.rz-erreur'); if (e) e.textContent = t || ''; else if (t) toast(t, 'mauvais'); }
+  async function action(route, donnees, apres) {
+    sonInit();
+    var boutons = $('rzFeuilleCorps').querySelectorAll('button'); Array.prototype.forEach.call(boutons, function (b) { b.disabled = true; });
+    var r = await api(route, donnees);
+    Array.prototype.forEach.call(boutons, function (b) { b.disabled = false; });
+    if (r.erreur) { erreurFeuille(r.erreur); tut(180, 0.18, 0.1, 'square'); return null; }
+    if (apres) apres(r);
+    return r;
+  }
+
+  /* --- le choix des koalas a envoyer --- */
+  function blocUnites(stock) {
+    var h = '', rien = true;
+    TYPES.slice().reverse().forEach(function (t) {
+      var n = stock[t] | 0; if (!n) return; rien = false;
+      h += '<div class="rz-ligne"><div class="rz-txt"><b>' + NOM_TYPE[t] + '</b><span>' + n + ' à la base · force ' + S.vue.regles.force[t] + ' chacun</span></div>' +
+        '<div class="rz-pas" data-max="' + n + '"><button type="button">−</button><input id="rzU_' + t + '" inputmode="numeric" value="0"><button type="button">+</button></div>' +
+        '<button class="rz-btn mini" data-a="tout" data-t="' + t + '" data-n="' + n + '">Tout</button></div>';
+    });
+    if (rien) h = '<p class="rz-note">Aucun koala à la base. Passe à l\'armurerie pour en acheter.</p>';
+    return h;
+  }
+  function brancherPas(p) {
+    var max = +p.dataset.max || 0, inp = p.querySelector('input'), b = p.querySelectorAll('button');
+    var fixe = function (v) { inp.value = Math.max(0, Math.min(max, Math.floor(+v || 0))); if (S.feuille && S.feuille.change) S.feuille.change(); };
+    b[0].onclick = function () { fixe(+inp.value - (max > 30 ? 5 : 1)); };
+    b[1].onclick = function () { fixe(+inp.value + (max > 30 ? 5 : 1)); };
+    inp.oninput = function () { fixe(inp.value); };
+  }
+  function lireUnites() {
+    var u = { nu: 0, pistolet: 0, diamant: 0 };
+    TYPES.forEach(function (t) { var i = $('rzU_' + t); if (i) u[t] = Math.max(0, Math.floor(+i.value || 0)); });
+    return u;
+  }
+  function forceDe(u) { return TYPES.reduce(function (s, t) { return s + (u[t] | 0) * S.vue.regles.force[t]; }, 0); }
+
+  var ACTIONS = {
+    tout: function (el) { var i = $('rzU_' + el.dataset.t); if (i) { i.value = el.dataset.n; if (S.feuille && S.feuille.change) S.feuille.change(); } },
+    acheter: function (el) { action('razzia-acheter', { quoi: el.dataset.q, n: +el.dataset.n }, function () { caisse(); ouvrirArmurerie(); }); },
+    ameliorer: function (el) { action('razzia-ameliorer', { quoi: el.dataset.q }, function () { caisse(); el.dataset.q === 'defense' ? ouvrirDefense() : ouvrirArmurerie(); }); },
+    rep: function () {
+      var vals = COTES.map(function (c) { return +$('rzR_' + c).value; }), s = vals.reduce(function (a, b) { return a + b; }, 0) || 1;
+      var rep = {}; COTES.forEach(function (c, i) { rep[c] = Math.round(vals[i] / s * 100); });
+      var cotes = repartir(S.vue.moi.stock, rep);
+      COTES.forEach(function (c, i) { $('rzRv_' + c).textContent = rep[c] + ' % · ' + total(cotes[c]) + ' koalas'; });
+    },
+    repSauver: function () {
+      var d = {}; COTES.forEach(function (c) { d[c] = +$('rzR_' + c).value; });
+      action('razzia-repartition', d, function () { toast('Défense répartie.', 'bon'); ouvrirDefense(); });
+    },
+    bouclier: function (el) { action('razzia-bouclier', { actif: el.dataset.v === '1' }, function () { ouvrirDefense(); }); },
+    bouclierConfirmer: function () {
+      ouvrirFeuille('Enlever le <em>bouclier</em> ?', '<p class="rz-note" style="font-size:14px">Sans bouclier, tout le monde peut attaquer ta base. Tu ne pourras le remettre que dans <b>12 heures</b>.</p>' +
+        '<div class="rz-grille" style="margin-top:12px"><button class="rz-btn" data-a="defense">Garder</button><button class="rz-btn rouge" data-a="bouclier" data-v="0">Enlever</button></div><div class="rz-erreur"></div>');
+    },
+    reparer: function () { action('razzia-reparer', {}, function () { toast('Le feu est éteint.', 'bon'); ouvrirDefense(); }); },
+    defense: function () { ouvrirDefense(); },
+    armurerie: function () { ouvrirArmurerie(); },
+    groupes: function () { ouvrirGroupes(); },
+    cote: function (el) {
+      Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('.rz-cote'), function (x) { x.classList.toggle('choisi', x === el); });
+      if (S.envoi && S.envoi.cible) S.envoi.cible.cote = el.dataset.c;
+    },
+    alliance: function (el) { action('razzia-alliance', { pseudo: el.dataset.p, action: el.dataset.v }, function (r) {
+      toast({ demander: 'Demande d\'alliance envoyée.', accepter: 'Alliance conclue.', refuser: 'Demande refusée.', rompre: 'Alliance rompue.' }[el.dataset.v], 'info');
+      if (S.feuille && S.feuille.rouvrir) S.feuille.rouvrir(); else ouvrirAllies();
+    }); },
+    trajet: function () {
+      if (!S.envoi) return;
+      if (!S.envoi.groupe) {
+        var u = lireUnites();
+        if (!total(u)) return erreurFeuille('Choisis au moins un koala.');
+        S.envoi.unites = u;
+      }
+      calculer();
+    },
+    pointCarte: function () {
+      var u = lireUnites(); if (!total(u)) return erreurFeuille('Choisis au moins un koala.');
+      S.envoi = { unites: u }; entrerDestination();
+    },
+    option: function (el) {
+      S.optionChoisie = +el.dataset.i; majTraces();
+      Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('.rz-option'), function (x) { x.classList.toggle('choisi', x === el); });
+    },
+    partir: function () {
+      var o = S.options && S.options[S.optionChoisie]; if (!o || !S.envoi) return;
+      var d = { cible: S.envoi.cible, etapes: o.etapes.map(function (e) { return e.type === 'pied' ? { type: 'pied', coords: e.coords } : { type: 'metro', de: e.de, a: e.a }; }) };
+      if (S.envoi.groupe) d.groupe = S.envoi.groupe; else d.unites = S.envoi.unites;
+      action('razzia-envoyer', d, function () {
+        tut(520, 0.1, 0.1); setTimeout(function () { tut(780, 0.14, 0.1); }, 110);
+        toast(S.envoi.cible.type === 'base' ? 'Tes koalas partent à l\'attaque.' : 'Tes koalas sont en route.', 'info');
+        S.envoi = null; fermerFeuille();
+      });
+    },
+    rentrer: function (el) { S.envoi = { groupe: el.dataset.g, cible: { type: 'maison' } }; calculer(); },
+    ailleurs: function (el) { S.envoi = { groupe: el.dataset.g }; entrerDestination(); },
+    voir: function (el) { var g = S.vue.groupes.find(function (x) { return x.id === el.dataset.g; }); if (g) { var p = position(g, maintenant()).p; if (p) volerVers(p, 17.2); } },
+    viserBase: function () { if (S.vue.moi.base) volerVers([S.vue.moi.base.lon, S.vue.moi.base.lat], 16.8); }
+  };
+
+  /* --- ma base --- */
+  function ouvrirBase() {
+    var m = S.vue.moi, now = maintenant();
+    if (!m.base) return entrerPose();
+    volerVers([m.base.lon, m.base.lat], Math.max(16.4, S.carte.getZoom()));
+    var h = '<div class="rz-sec rz-chiffres">' +
+      '<div><small>Sans arme</small><b>' + m.stock.nu + '</b></div><div><small>Pistolet noir</small><b>' + m.stock.pistolet + '</b></div><div><small>Diamant</small><b>' + m.stock.diamant + '</b></div></div>' +
+      '<div class="rz-sec rz-chiffres"><div><small>Force à la base</small><b>' + forceDe(m.stock) + '</b></div><div><small>Défense</small><b>niv. ' + m.defense + '</b></div><div><small>Armurerie</small><b>niv. ' + m.armurerie + '</b></div></div>' +
+      (m.feu > now ? '<p class="rz-note" style="color:#ff8c84">Ta base brûle encore ' + duree(m.feu - now) + '. Tant qu\'elle brûle, tu ne peux ni acheter, ni améliorer, ni envoyer de koalas.</p>' : '') +
+      '<div class="rz-sec rz-grille"><button class="rz-btn" data-a="armurerie">Armurerie</button><button class="rz-btn" data-a="defense">Défense</button></div>' +
+      '<div class="rz-sec"><div class="rz-titre">Envoyer des koalas quelque part</div>' + blocUnites(m.stock) +
+      (total(m.stock) ? '<button class="rz-btn rouge plein" data-a="pointCarte">Choisir l\'endroit sur la carte</button>' : '') + '<div class="rz-erreur"></div>' +
+      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur sur la carte. Pour gagner de l\'argent sans attaquer, touche le Bat B.</p></div>';
+    ouvrirFeuille('Ma <em>base</em>', h, { rouvrir: ouvrirBase });
+  }
+
+  /* --- l'armurerie --- */
+  function ouvrirArmurerie() {
+    var m = S.vue.moi, R = S.vue.regles, feu = m.feu > maintenant();
+    var ligne = function (titre, sous, q, ns, verrou) {
+      return '<div class="rz-ligne"><div class="rz-txt"><b>' + titre + '</b><span>' + sous + '</span></div>' +
+        (verrou ? '<span class="rz-note" style="margin:0">' + verrou + '</span>' :
+          ns.map(function (n) { return '<button class="rz-btn mini' + (n === ns[0] ? ' rouge' : '') + '" data-a="acheter" data-q="' + q + '" data-n="' + n + '"' + (feu ? ' disabled' : '') + '>×' + n + '</button>'; }).join('')) + '</div>';
+    };
+    var h = '<div class="rz-sec rz-chiffres"><div><small>Sans arme</small><b>' + m.stock.nu + '</b></div><div><small>Pistolet noir</small><b>' + m.stock.pistolet + '</b></div><div><small>Diamant</small><b>' + m.stock.diamant + '</b></div></div>' +
+      '<div class="rz-sec"><div class="rz-titre">Acheter</div>' +
+      ligne('Koala', eurRond(R.prix.koala) + ' · force ' + R.force.nu, 'koala', [1, 10, 50]) +
+      ligne('Pistolet noir', eurRond(R.prix.pistolet) + ' · force ' + R.force.pistolet + ' · équipe un koala sans arme', 'pistolet', [1, 10], m.armurerie < R.niveauArme.pistolet ? 'Armurerie niv. 1' : '') +
+      ligne('Pistolet diamant rouge', eurRond(R.prix.diamant) + ' · force ' + R.force.diamant + ' · le meilleur', 'diamant', [1, 5], m.armurerie < R.niveauArme.diamant ? 'Armurerie niv. 2' : '') +
+      '</div><div class="rz-sec"><div class="rz-titre">Armurerie · niveau ' + m.armurerie + ' / ' + R.armurerieMax + '</div>' +
+      (m.armurerie < R.armurerieMax
+        ? '<button class="rz-btn or plein" data-a="ameliorer" data-q="armurerie"' + (feu ? ' disabled' : '') + '>Passer au niveau ' + (m.armurerie + 1) + ' · ' + eurRond(R.prixArmurerie[m.armurerie]) + '</button>' +
+          '<p class="rz-note">Niveau 1 : pistolet noir. Niveau 2 : pistolet diamant rouge.</p>'
+        : '<p class="rz-note">Ton armurerie est au maximum.</p>') +
+      '<div class="rz-erreur">' + (feu ? 'Ta base brûle : l\'armurerie est fermée.' : '') + '</div></div>';
+    ouvrirFeuille('<em>Armurerie</em>', h, { rouvrir: ouvrirArmurerie });
+  }
+
+  /* --- la defense --- */
+  function ouvrirDefense() {
+    var m = S.vue.moi, R = S.vue.regles, now = maintenant(), feu = m.feu > now;
+    if (!m.base) return entrerPose();
+    var h = '';
+    if (feu) h += '<div class="rz-sec"><div class="rz-titre" style="color:#ff8c84">Ta base brûle · ' + duree(m.feu - now) + '</div>' +
+      '<button class="rz-btn rouge plein" data-a="reparer">Éteindre le feu · ' + eurRond(R.reparation) + '</button></div>';
+    h += '<div class="rz-sec"><div class="rz-titre">Bouclier</div>';
+    if (m.bouclier) h += '<p class="rz-note" style="margin-top:0">Ta base est protégée : personne ne peut l\'attaquer. Attaquer quelqu\'un enlève ton bouclier.</p><button class="rz-btn plein" data-a="bouclierConfirmer">Enlever le bouclier</button>';
+    else if (m.bouclierDispo > 0) h += '<p class="rz-note" style="margin-top:0">Tu pourras remettre ton bouclier dans <b data-chrono>' + duree(m.bouclierDispo) + '</b>.</p>';
+    else h += '<button class="rz-btn plein" data-a="bouclier" data-v="1"' + (feu ? ' disabled' : '') + '>Remettre le bouclier</button>';
+    h += '</div><div class="rz-sec"><div class="rz-titre">Défense · niveau ' + m.defense + ' / 5</div>' +
+      '<p class="rz-note" style="margin-top:0">Chaque niveau rend tes défenseurs 25 % plus forts.</p>' +
+      (m.defense < 5 ? '<button class="rz-btn or plein" data-a="ameliorer" data-q="defense"' + (feu ? ' disabled' : '') + '>Passer au niveau ' + (m.defense + 1) + ' · ' + eurRond(R.prixDefense[m.defense]) + '</button>' : '') +
+      '</div><div class="rz-sec"><div class="rz-titre">Les 4 côtés de ta base · ' + total(m.stock) + ' koalas</div>';
+    COTES.forEach(function (c) {
+      h += '<div class="rz-ligne" style="flex-wrap:wrap;gap:4px"><div class="rz-txt"><b>' + NOM_COTE[c] + '</b><span id="rzRv_' + c + '">' + m.repartition[c] + ' % · ' + total(m.cotes[c]) + ' koalas</span></div>' +
+        '<input type="range" class="rz-curseur" min="0" max="100" step="5" id="rzR_' + c + '" value="' + m.repartition[c] + '" data-a="rep"></div>';
+    });
+    h += '<button class="rz-btn rouge plein" data-a="repSauver">Enregistrer la répartition</button>' +
+      '<p class="rz-note">L\'attaquant choisit un seul côté. S\'il est plus fort que les koalas de ce côté, il pille ta base.</p><div class="rz-erreur"></div></div>';
+    ouvrirFeuille('<em>Défense</em>', h, {
+      rouvrir: ouvrirDefense,
+      chrono: function () { var e = $('rzFeuilleCorps').querySelector('[data-chrono]'); if (e) e.textContent = duree(S.vue.moi.bouclierDispo - (maintenant() - S.vue.now)); }
+    });
+  }
+
+  /* --- mes groupes --- */
+  function texteGroupe(g) {
+    var now = maintenant(), c = g.cible || {};
+    if (g.etat === 'poste') return c.type === 'batb' ? 'Au Bat B · a rapporté ' + eur(g.gagne) : 'Posté, attend tes ordres';
+    var ou = c.type === 'maison' ? 'Rentre à la base' : c.type === 'batb' ? 'Vers le Bat B' : c.type === 'base' ? 'Attaque ' + (S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo + (g.cibleCote ? ' · ' + NOM_COTE[g.cibleCote].toLowerCase() : '') : 'Vers un point';
+    return ou + (g.fin ? ' · <span data-fin="' + g.fin + '">' + duree(g.fin - now) + '</span>' : '');
+  }
+  function ouvrirGroupes() {
+    var mes = S.vue.groupes.filter(function (g) { return g.mien; });
+    var h = '<div class="rz-sec"><div class="rz-titre">Dehors · ' + mes.length + ' / ' + S.vue.regles.maxGroupes + ' groupes</div>';
+    if (!mes.length) h += '<p class="rz-note">Aucun groupe dehors. Touche une base ennemie, le Bat B, ou « Ma base » pour envoyer des koalas.</p>';
+    mes.forEach(function (g) {
+      h += '<div class="rz-ligne"><div class="rz-txt"><b>' + g.n + ' koala' + (g.n > 1 ? 's' : '') + (g.armes && g.armes.length ? ' · ' + g.armes.map(function (a) { return a === 'diamant' ? 'diamant' : 'pistolet'; }).join(' + ') : '') + '</b><span>' + texteGroupe(g) + '</span></div>' +
+        '<button class="rz-btn mini" data-a="voir" data-g="' + g.id + '">Voir</button>' +
+        (g.etat === 'poste' ? '<button class="rz-btn mini" data-a="ailleurs" data-g="' + g.id + '">Ailleurs</button><button class="rz-btn mini rouge" data-a="rentrer" data-g="' + g.id + '">Rentrer</button>' : '') + '</div>';
+    });
+    h += '<div class="rz-erreur"></div></div>';
+    ouvrirFeuille('Mes <em>groupes</em>', h, {
+      rouvrir: ouvrirGroupes, vivante: function () { if (S.feuille && S.feuille.rouvrir === ouvrirGroupes) majChronos(); },
+      chrono: majChronos
+    });
+  }
+  function majChronos() { Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('[data-fin]'), function (e) { e.textContent = duree(+e.dataset.fin - maintenant()); }); }
+
+  /* --- les allies --- */
+  function ouvrirAllies() {
+    var m = S.vue.moi, h = '';
+    if (m.demandes.length) {
+      h += '<div class="rz-sec"><div class="rz-titre">Ils veulent s\'allier avec toi</div>';
+      m.demandes.forEach(function (d) {
+        h += '<div class="rz-ligne"><div class="rz-txt"><b>' + echap(d.pseudo) + '</b></div><button class="rz-btn mini" data-a="alliance" data-p="' + echap(d.id) + '" data-v="refuser">Refuser</button><button class="rz-btn mini rouge" data-a="alliance" data-p="' + echap(d.id) + '" data-v="accepter">Accepter</button></div>';
+      });
+      h += '</div>';
+    }
+    h += '<div class="rz-sec"><div class="rz-titre">Mes alliés</div>';
+    if (!m.allies.length) h += '<p class="rz-note">Pas encore d\'allié. Touche la base d\'un joueur sur la carte pour lui proposer une alliance.</p>';
+    m.allies.forEach(function (a) { h += '<div class="rz-ligne"><div class="rz-txt"><b>' + echap(a.pseudo) + '</b><span>Vous ne pouvez pas vous attaquer. Si vous pillez la même base ensemble, le butin est partagé.</span></div><button class="rz-btn mini" data-a="alliance" data-p="' + echap(a.id) + '" data-v="rompre">Rompre</button></div>'; });
+    h += '<div class="rz-erreur"></div></div>';
+    ouvrirFeuille('Mes <em>alliés</em>', h, { rouvrir: ouvrirAllies });
+  }
+
+  function ouvrirJournal() {
+    var h = '<div class="rz-sec rz-journal">' + (S.journal.length ? S.journal.map(function (e) {
+      return '<div class="' + e.genre + '">' + echap(e.texte) + '<small>' + new Date(e.t - S.decalage).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</small></div>';
+    }).join('') : '<p class="rz-note">Rien pour l\'instant.</p>') + '</div>';
+    ouvrirFeuille('<em>Journal</em>', h, { rouvrir: ouvrirJournal });
+  }
+
+  /* --- la base d'un autre joueur --- */
+  function ouvrirCibleBase(b, groupe) {
+    if (b.moi) return ouvrirBase();
+    var m = S.vue.moi, now = maintenant();
+    var demandeRecue = m.demandes.some(function (d) { return d.id === b.id; });
+    var h = '<div class="rz-sec"><div class="rz-chiffres"><div><small>Bouclier</small><b>' + (b.bouclier ? 'Oui' : 'Non') + '</b></div><div><small>État</small><b>' + (b.feu > now ? 'En feu' : 'Intacte') + '</b></div></div></div>';
+    h += '<div class="rz-sec"><div class="rz-titre">Alliance</div>';
+    if (b.allie) h += '<div class="rz-ligne"><div class="rz-txt"><b>Vous êtes alliés</b><span>Impossible de l\'attaquer.</span></div><button class="rz-btn mini" data-a="alliance" data-p="' + echap(b.id) + '" data-v="rompre">Rompre</button></div>';
+    else if (demandeRecue) h += '<div class="rz-ligne"><div class="rz-txt"><b>Il te propose une alliance</b></div><button class="rz-btn mini" data-a="alliance" data-p="' + echap(b.id) + '" data-v="refuser">Refuser</button><button class="rz-btn mini rouge" data-a="alliance" data-p="' + echap(b.id) + '" data-v="accepter">Accepter</button></div>';
+    else h += '<button class="rz-btn plein" data-a="alliance" data-p="' + echap(b.id) + '" data-v="demander">Proposer une alliance</button>';
+    h += '</div>';
+    if (!b.allie) {
+      h += '<div class="rz-sec"><div class="rz-titre">Attaquer</div>';
+      if (!m.base) h += '<p class="rz-note">Pose d\'abord ta base.</p>';
+      else if (b.bouclier) h += '<p class="rz-note">Sa base est sous bouclier : impossible de l\'attaquer pour l\'instant.</p>';
+      else {
+        S.envoi = { cible: { type: 'base', pseudo: b.id, cote: 'devant' }, groupe: groupe || null };
+        h += '<div class="rz-grille4">' + COTES.map(function (c, i) { return '<button class="rz-cote' + (i ? '' : ' choisi') + '" data-a="cote" data-c="' + c + '">' + NOM_COTE[c] + '</button>'; }).join('') + '</div>' +
+          '<p class="rz-note">Choisis le côté par où tes koalas entrent. Tu ne vois pas combien il en a de chaque côté.</p>';
+        if (!groupe) h += blocUnites(m.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>';
+        if (b.feu > now) h += '<p class="rz-note" style="color:#ff8c84">Sa base brûle déjà : rien à piller, tu ne ferais que tuer ses défenseurs.</p>';
+        if (m.bouclier) h += '<p class="rz-note" style="color:#ffcf7a">Attaquer enlève ton propre bouclier (12 h avant de pouvoir le remettre).</p>';
+        h += '<button class="rz-btn rouge plein" data-a="trajet"' + (m.feu > now ? ' disabled' : '') + '>Choisir le trajet</button>';
+      }
+      h += '<div class="rz-erreur">' + (m.feu > now ? 'Ta base brûle : tu ne peux pas attaquer.' : '') + '</div></div>';
+    }
+    ouvrirFeuille('Base de <em>' + echap(b.pseudo) + '</em>', h, {
+      rouvrir: function () { var bb = S.vue.bases.find(function (x) { return x.id === b.id; }); if (bb) ouvrirCibleBase(bb, groupe); },
+      change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); }
+    });
+  }
+
+  /* --- le Bat B --- */
+  function ouvrirBatB(groupe) {
+    var v = S.vue, m = v.moi, R = v.regles;
+    S.envoi = { cible: { type: 'batb' }, groupe: groupe || null };
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">La Maison de la Radio. Les koalas qui la tiennent rapportent <b>' + (0.005).toLocaleString('fr-FR') + ' € par koala et par minute</b> à leur chef. ' +
+      'Si des koalas arrivent en plus grand nombre, ils prennent la place.</p>' +
+      '<div class="rz-chiffres"><div><small>Tenu par</small><b>' + (v.batb.occupants.length ? echap(v.batb.occupants.join(', ')) : 'Personne') + '</b></div><div><small>Koalas</small><b>' + v.batb.n + '</b></div></div></div>';
+    if (m.base) {
+      h += '<div class="rz-sec"><div class="rz-titre">Envoyer des koalas</div>' + (groupe ? '' : blocUnites(m.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
+        '<button class="rz-btn rouge plein" data-a="trajet"' + (m.feu > maintenant() ? ' disabled' : '') + '>Choisir le trajet</button><div class="rz-erreur"></div></div>';
+    }
+    ouvrirFeuille('Le <em>Bat B</em>', h, { rouvrir: function () { ouvrirBatB(groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
+  }
+
+  /* --- un groupe touche sur la carte --- */
+  function ouvrirGroupe(g) {
+    if (!g.mien) {
+      ouvrirFeuille('Groupe de <em>' + echap(g.pseudo) + '</em>', '<div class="rz-sec"><div class="rz-chiffres"><div><small>Koalas</small><b>' + g.n + '</b></div><div><small>Armes</small><b>' +
+        (g.armes && g.armes.length ? g.armes.map(function (a) { return a === 'diamant' ? 'Diamant' : 'Pistolet'; }).join(', ') : 'Aucune') + '</b></div></div>' +
+        '<p class="rz-note">' + (g.etat === 'poste' ? (g.cible.type === 'batb' ? 'Il tient le Bat B.' : 'Il attend dans la rue.') : 'Il est en route.') + '</p></div>');
+      return;
+    }
+    ouvrirGroupes();
+  }
+
+  /* ================= LES TRAJETS : vraies rues, ou le metro ================= */
+  function decime(c, max) {
+    if (c.length <= max) return c;
+    var pas = c.length / (max - 1), r = [];
+    for (var i = 0; i < max - 1; i++) r.push(c[Math.floor(i * pas)]);
+    r.push(c[c.length - 1]); return r;
+  }
+  async function aPied(a, b) {
+    if (dist(a, b) < 30) return [a, b];
+    try {
+      var ctl = new AbortController(), tm = setTimeout(function () { ctl.abort(); }, 7000);
+      var r = await fetch(ITINERAIRE + a[0].toFixed(6) + ',' + a[1].toFixed(6) + ';' + b[0].toFixed(6) + ',' + b[1].toFixed(6) + '?overview=full&geometries=geojson', { signal: ctl.signal });
+      clearTimeout(tm);
+      var j = await r.json();
+      var c = j && j.routes && j.routes[0] && j.routes[0].geometry.coordinates;
+      if (c && c.length >= 2) return decime(c.map(function (p) { return [Math.round(p[0] * 1e6) / 1e6, Math.round(p[1] * 1e6) / 1e6]; }), 400);
+    } catch (e) {}
+    return [a, b];      // pas de reseau : tout droit
+  }
+  function stationProche(p) {
+    var best = null, d = 1e9;
+    S.vue.regles.stations.forEach(function (s) { var x = dist(p, [s[1], s[2]]); if (x < d) { d = x; best = s; } });
+    return best;
+  }
+  function estimer(etapes) {
+    var t = 0;
+    etapes.forEach(function (e) {
+      if (e.type === 'pied') t += Math.max(longueur(e.coords), dist(e.coords[0], e.coords[e.coords.length - 1])) / 14;
+      else { var a = station(e.de), z = station(e.a); t += dist([a[1], a[2]], [z[1], z[2]]) * 1.25 / 30 + 15; }
+    });
+    return Math.min(540, t) * 1000;
+  }
+  function departEnvoi() {
+    if (S.envoi.groupe) { var g = S.vue.groupes.find(function (x) { return x.id === S.envoi.groupe; }); return g && g.pos ? g.pos : null; }
+    return [S.vue.moi.base.lon, S.vue.moi.base.lat];
+  }
+  function arriveeEnvoi() {
+    var c = S.envoi.cible;
+    if (c.type === 'base') { var b = S.vue.bases.find(function (x) { return x.id === c.pseudo; }); return b ? [b.lon, b.lat] : null; }
+    if (c.type === 'batb') return [S.vue.batb.lon, S.vue.batb.lat];
+    if (c.type === 'maison') return [S.vue.moi.base.lon, S.vue.moi.base.lat];
+    return [c.lon, c.lat];
+  }
+  async function calculer() {
+    var a = departEnvoi(), z = arriveeEnvoi();
+    if (!a || !z) return erreurFeuille('Trajet impossible.');
+    ouvrirFeuille('Le <em>trajet</em>', '<p class="rz-note" style="font-size:14px">Tes koalas cherchent les rues…</p>');
+    var opts = [];
+    var pied = await aPied(a, z);
+    opts.push({ nom: 'À pied', sous: 'Par les rues · ' + (longueur(pied) / 1000).toFixed(1).replace('.', ',') + ' km', etapes: [{ type: 'pied', coords: pied }] });
+    var sA = stationProche(a), sZ = stationProche(z);
+    if (sA && sZ && sA !== sZ && dist(a, z) > 1100 && dist(a, [sA[1], sA[2]]) + dist([sZ[1], sZ[2]], z) < dist(a, z) * 0.75) {
+      var p1 = await aPied(a, [sA[1], sA[2]]), p2 = await aPied([sZ[1], sZ[2]], z);
+      opts.push({ nom: 'Métro', sous: sA[0] + ' → ' + sZ[0] + ' · invisible sous terre', etapes: [{ type: 'pied', coords: p1 }, { type: 'metro', de: sA[0], a: sZ[0] }, { type: 'pied', coords: p2 }] });
+    }
+    opts.forEach(function (o) { o.duree = estimer(o.etapes); });
+    S.options = opts; S.optionChoisie = opts.length > 1 && opts[1].duree < opts[0].duree ? 1 : 0;
+    majTraces();
+    // cadrer le trajet
+    var tous = []; opts[S.optionChoisie].etapes.forEach(function (e) { if (e.type === 'pied') tous = tous.concat(e.coords); });
+    if (tous.length) {
+      var bb = tous.reduce(function (r, p) { return [[Math.min(r[0][0], p[0]), Math.min(r[0][1], p[1])], [Math.max(r[1][0], p[0]), Math.max(r[1][1], p[1])]]; }, [[tous[0][0], tous[0][1]], [tous[0][0], tous[0][1]]]);
+      S.carte.fitBounds(bb, { padding: { top: 90, bottom: Math.min(420, window.innerHeight * 0.5), left: 40, right: 40 }, maxZoom: 16.5, duration: 900 });
+    }
+    var c = S.envoi.cible, ou = c.type === 'base' ? 'la base de ' + echap((S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo) + ' · côté ' + NOM_COTE[c.cote].toLowerCase()
+      : c.type === 'batb' ? 'le Bat B' : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
+    var n = S.envoi.groupe ? (S.vue.groupes.find(function (g) { return g.id === S.envoi.groupe; }) || {}).n : total(S.envoi.unites);
+    var h = '<p class="rz-note" style="margin:0 0 10px;font-size:14px">' + n + ' koala' + (n > 1 ? 's' : '') + ' vers ' + ou + '.</p>' +
+      opts.map(function (o, i) { return '<button class="rz-option' + (i === S.optionChoisie ? ' choisi' : '') + '" data-a="option" data-i="' + i + '"><div><b>' + o.nom + '</b><span>' + echap(o.sous) + '</span></div><i>' + duree(o.duree) + '</i></button>'; }).join('') +
+      '<button class="rz-btn rouge plein" data-a="partir">' + (c.type === 'base' ? 'Lancer l\'attaque' : 'Envoyer') + '</button><div class="rz-erreur"></div>';
+    ouvrirFeuille('Le <em>trajet</em>', h);
+  }
+
+  /* ================= POSER SA BASE, CHOISIR UN ENDROIT ================= */
+  function consigne(html) { $('rzConsigne').innerHTML = html || ''; $('rzConsigne').hidden = !html; }
+  function entrerPose() {
+    S.mode = 'poser';
+    consigne('Touche un bâtiment dans la zone pour y poser ta base');
+    if (S.carte && S.pret && S.carte.getZoom() < 15.2) S.carte.flyTo({ center: [2.2745, 48.8575], zoom: 15.4 });
+  }
+  function entrerDestination() {
+    S.mode = 'destination';
+    $('rzFeuille').hidden = true;
+    consigne('Touche l\'endroit, une base ou le Bat B <button class="rz-btn mini" id="rzAnnuler">Annuler</button>');
+    $('rzAnnuler').onclick = function (e) { e.stopPropagation(); S.mode = 'normal'; S.envoi = null; consigne(''); };
+  }
+  function anneau(f) {
+    var g = f.geometry; if (!g) return null;
+    var r = g.type === 'Polygon' ? g.coordinates[0] : g.type === 'MultiPolygon' ? g.coordinates[0][0] : null;
+    if (!r || r.length < 4) return null;
+    r = r.slice(0, -1);
+    return decime(r.map(function (p) { return [Math.round(p[0] * 1e6) / 1e6, Math.round(p[1] * 1e6) / 1e6]; }), 60);
+  }
+  function poser(e) {
+    var fs = S.carte.queryRenderedFeatures(e.point, { layers: ['rz-bat'] });
+    if (!fs.length) { toast('Touche un bâtiment (les blocs gris).', 'info'); return; }
+    var forme = anneau(fs[0]);
+    var c = forme ? [forme.reduce(function (s, p) { return s + p[0]; }, 0) / forme.length, forme.reduce(function (s, p) { return s + p[1]; }, 0) / forme.length] : [e.lngLat.lng, e.lngLat.lat];
+    if (!dansZone(c, S.vue.regles.zone)) { toast('Ce bâtiment est hors de la zone (la ligne rouge).', 'mauvais'); return; }
+    var haut = Math.round(Math.max(6, Math.min(120, fs[0].properties.render_height || 18)));
+    S.pose = { lon: c[0], lat: c[1], forme: forme, haut: haut };
+    ouvrirFeuille('Poser ta <em>base</em> ici ?', '<p class="rz-note" style="font-size:14px;margin-top:0">Un bâtiment de ' + haut + ' mètres. Une fois posée, ta base ne bouge plus. Elle commence sous bouclier.</p>' +
+      '<div class="rz-grille" style="margin-top:12px"><button class="rz-btn" id="rzPoseNon">Un autre</button><button class="rz-btn rouge" id="rzPoseOui">Poser ma base</button></div><div class="rz-erreur"></div>');
+    $('rzPoseNon').onclick = function () { fermerFeuille(); };
+    $('rzPoseOui').onclick = async function () {
+      var r = await action('razzia-base', S.pose);
+      if (!r) return;
+      S.mode = 'normal'; consigne(''); fermerFeuille(); caisse();
+      toast('Ta base est posée. Achète des koalas à l\'armurerie.', 'bon');
+      S.carte.flyTo({ center: [S.pose.lon, S.pose.lat], zoom: 16.6 });
+    };
+  }
+
+  function toucher(x, y) {
+    var best = null, bd = 1e9;
+    cibles.forEach(function (c) { var d = Math.hypot(c.x - x, c.y - y) - (c.type === 'groupe' ? 8 : 0); if (d < c.r && d < bd) { bd = d; best = c; } });
+    return best;
+  }
+  function clicCarte(e) {
+    sonInit();
+    if (!S.vue) return;
+    if (S.mode === 'poser') return poser(e);
+    var x = e.point.x, y = e.point.y;
+    var fb = S.carte.queryRenderedFeatures(e.point, { layers: ['rz-bases'] });
+    var base = fb.length ? S.vue.bases.find(function (b) { return b.id === fb[0].properties.id; }) : null;
+    var t = toucher(x, y);
+    if (!base && t && t.type === 'base') base = t.b;
+    if (S.mode === 'destination') {
+      var groupe = S.envoi && S.envoi.groupe, unites = S.envoi && S.envoi.unites;
+      S.mode = 'normal'; consigne('');
+      if (base && !base.moi) { ouvrirCibleBase(base, groupe); if (S.envoi) S.envoi.unites = unites; return; }
+      if (base && base.moi) { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'maison' } }; if (!groupe) return toast('Ils sont déjà à la base.', 'info'); return calculer(); }
+      if (t && t.type === 'batb') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'batb' } }; return calculer(); }
+      var p = [e.lngLat.lng, e.lngLat.lat];
+      if (!dansZone(p, S.vue.regles.zone)) { toast('Hors de la zone.', 'mauvais'); S.mode = 'destination'; return entrerDestination(); }
+      S.envoi = { groupe: groupe, unites: unites, cible: { type: 'point', lon: Math.round(p[0] * 1e6) / 1e6, lat: Math.round(p[1] * 1e6) / 1e6 } };
+      return calculer();
+    }
+    if (t && t.type === 'groupe' && (!base || t.g.mien)) return ouvrirGroupe(t.g);
+    if (base) return ouvrirCibleBase(base);
+    if (t && t.type === 'batb') return ouvrirBatB();
+    if (!$('rzFeuille').hidden) fermerFeuille();
+  }
+
+  /* ================= OUVRIR / FERMER ================= */
+  Array.prototype.forEach.call(document.querySelectorAll('#rzBas button'), function (b) {
+    b.onclick = function () {
+      sonInit(); if (!S.vue) return;
+      if (S.mode === 'destination') { S.mode = 'normal'; consigne(''); }
+      var q = b.dataset.rz;
+      if (!S.vue.moi.base && q !== 'allies' && q !== 'journal') { entrerPose(); return toast('Pose d\'abord ta base sur un bâtiment.', 'info'); }
+      ({ base: ouvrirBase, armurerie: ouvrirArmurerie, defense: ouvrirDefense, groupes: ouvrirGroupes, allies: ouvrirAllies, journal: ouvrirJournal })[q]();
+    };
+  });
+  $('rzSon').onclick = function () {
+    S.son = !S.son; sonInit();
+    if (Son.maitre) Son.maitre.gain.value = S.son ? 0.55 : 0;
+    $('rzSon').textContent = S.son ? '♪' : '×';
+    try { localStorage.setItem('rzSon', S.son ? '1' : '0'); } catch (e) {}
+  };
+  try { if (localStorage.getItem('rzSon') === '0') { S.son = false; $('rzSon').textContent = '×'; } } catch (e) {}
+
+  RAZZIA.ouvrir = async function () {
+    RAZZIA.ouvert = true;
+    $('rzEcran').hidden = false;
+    document.body.classList.add('rz-actif');
+    sonInit();
+    if (!S.carte) {
+      $('rzChargement').hidden = false;
+      try { await chargerLib(); }
+      catch (e) { $('rzChargementTxt').textContent = 'Impossible de charger la carte. Vérifie ta connexion.'; return; }
+      if (!RAZZIA.ouvert) return;
+      S.carte = creerCarte();
+    } else S.carte.resize();
+    sonder();
+    clearInterval(S.sondage); S.sondage = setInterval(sonder, 2000);
+    if (!S.anim) S.anim = requestAnimationFrame(dessiner);
+  };
+  RAZZIA.fermer = function () {
+    RAZZIA.ouvert = false;
+    clearInterval(S.sondage); S.sondage = null;
+    if (S.anim) { cancelAnimationFrame(S.anim); S.anim = null; }
+    $('rzFeuille').hidden = true; S.feuille = null; S.options = null; S.envoi = null;
+    if (S.mode === 'destination') S.mode = 'normal';
+    consigne(S.mode === 'poser' ? $('rzConsigne').innerHTML : '');
+    $('rzEcran').hidden = true;
+    document.body.classList.remove('rz-actif');
+    if (Son.ctx && Son.ctx.state === 'running') Son.ctx.suspend();
+  };
+  $('rzQuitter').onclick = function () { RAZZIA.fermer(); };
+  RAZZIA.S = S;
+})();
+
+</script>
 </body>
 </html>

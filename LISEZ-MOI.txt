@@ -1,0 +1,252 @@
+CASINO MESSINA — version 7 : la boutique du périph
+=================================================
+
+Dans ce dossier il y a TROIS fichiers, qui doivent rester ensemble :
+
+   index.html      le site (design, sons, tables, pêche, penalty, périph)
+   serveur.js      le serveur (cartes, comptes, penaltys, courses)
+   package.json    la fiche qui dit comment démarrer le site
+
+Il n'y a toujours rien à installer.
+
+
+=====================================================================
+CE QU'IL Y A A FAIRE
+=====================================================================
+Rien d'autre que de remettre les trois fichiers sur GitHub.
+Upstash et Render sont déjà réglés, on n'y touche plus.
+
+1. Aller sur github.com, ouvrir le dépôt casino-messina.
+2. Cliquer sur "Add file" puis "Upload files".
+3. Glisser les trois fichiers index.html, serveur.js et package.json.
+   Ils remplacent les anciens, c'est normal et voulu.
+4. Cliquer sur "Commit changes".
+
+Render s'en aperçoit tout seul et remet le site à jour en une minute.
+
+Pour vérifier : ouvrir le site, l'onglet "Penalty" a disparu, il y a
+un onglet "Jeux" à la place. On clique dessus, deux cartes
+apparaissent : le penalty et le jeu du périph.
+
+
+=====================================================================
+CE QUI A CHANGE : L'ONGLET JEUX
+=====================================================================
+L'onglet Penalty est devenu l'onglet Jeux. Il présente maintenant
+deux cartes :
+
+   Le penalty          exactement comme avant, rien n'a bougé
+   Le jeu du périph    le nouveau
+
+On clique sur une carte, le jeu s'ouvre. Pour le penalty il y a un
+petit "← Les jeux" en haut pour revenir au menu. Le périph, lui,
+prend tout l'écran ; on en sort avec le bouton "Quitter" en haut à
+gauche.
+
+
+=====================================================================
+LE JEU DU PERIPH
+=====================================================================
+COMMENT ON JOUE
+  1. On règle sa mise, on choisit la couleur de sa voiture.
+  2. "Prendre le départ" : la mise part, on entre en salle d'attente.
+     Dix secondes, puis la course démarre. Les places libres sont
+     prises par des conducteurs du périph.
+  3. Quatre voitures sans permis partent de la Porte Dauphine.
+     Objectif : Saint-Denis.
+  4. Quatre commandes, dans le cadre : Gauche, Droite, Objet et
+     Accélérer. Au clavier : les flèches, Espace pour l'objet,
+     E pour encaisser.
+
+LA REGLE QUI FAIT TOUT
+  Il n'y a pas de frein. Quand on accélère, la vitesse ne redescend
+  jamais, même en relâchant. On monte jusqu'à 150 km/h, et plus on va
+  vite, moins on a le temps d'esquiver.
+
+LE PARCOURS ET LES GAINS
+  Douze portes, 7 800 mètres. Pour une mise de 10 € :
+
+     Porte Maillot          14 €      (×1,4)
+     Porte des Ternes       20 €      (×2)
+     Porte de Villiers      27 €      (×2,7)
+     Porte de Champerret    38 €      (×3,8)
+     Porte d'Asnières       53 €      (×5,3)
+     Porte de Clichy        75 €      (×7,5)
+     Porte de Saint-Ouen   104 €      (×10,4)
+     Porte de Clignancourt 146 €      (×14,6)
+     Porte de la Chapelle  204 €      (×20,4)
+     Porte d'Aubervilliers 285 €      (×28,5)
+     Porte de la Villette  398 €      (×39,8)
+     Saint-Denis           500 €      (×50)
+
+  Le multiplicateur final est toujours ×50, quelle que soit la mise.
+  Avec 1 € on arrive à 50 €, avec 100 € à 5 000 €.
+  Mise minimum 0,10 €, maximum 100 €.
+
+  A chaque porte franchie, cinq secondes pour encaisser ou continuer.
+  La course ne s'arrête pas pendant ces cinq secondes : on conduit
+  toujours. Si on ne fait rien, on continue.
+
+  A Saint-Denis la somme est encaissée d'office.
+
+LA CARROSSERIE
+  Chaque voiture a 100 points. A zéro, elle est détruite.
+     - percuter un véhicule du trafic : 80 points d'un coup.
+       On n'est pas mort, mais il ne reste plus grand-chose.
+     - taper un concurrent sur le côté : 10 points, pour les deux.
+     - frotter le mur : ça use doucement.
+     - une bombe : 20 points.
+
+LA BOUTIQUE
+  Sous le choix de couleur, une carte "GT Noire" à 1 200 € fictifs,
+  avec la vraie photo de la voiture (pas un dessin du jeu) : c'est
+  elle qu'on voit sur la carte d'achat. On clique "Acheter" : le
+  serveur retire 1 200 € du solde (refusé s'il n'y en a pas assez) et
+  la voiture est acquise pour toujours, elle n'est pas reperdue en
+  quittant la partie.
+
+  Une fois achetée, on clique dessus pour la choisir à la place d'une
+  des quatre couleurs. Sur la piste, elle garde son propre dessin (la
+  carrosserie large et noire, avec le liseré rouge) — seule la carte
+  d'achat, dans la boutique, montre la vraie photo. Elle change
+  quatre choses :
+     - elle monte jusqu'à 300 km/h au lieu de 150 ;
+     - elle a de vrais freins : relâcher l'accélérateur la ralentit
+       (les quatre voitures de base n'en ont toujours pas) ;
+     - elle encaisse 200 points de carrosserie au lieu de 100 : elle
+       encaisse donc deux fois plus de coups avant d'être détruite ;
+     - son moteur sonne comme un vrai V12 italien façon Aventador ou
+       Huracán : beaucoup plus fort, plus grave et plus rageur qu'un
+       moteur de voiture sans permis, surtout à fond d'accélérateur.
+       Ce bruit se joue sur l'appareil du joueur qui conduit la
+       voiture ; les adversaires, dans ce jeu, sont simulés localement
+       par chaque appareil (il n'y a pas encore de vrai son partagé
+       entre joueurs en direct).
+  C'est le serveur qui vérifie qu'on l'a bien achetée avant d'accepter
+  qu'une course s'en serve, et qui adapte son contrôle anti-triche à
+  sa vitesse : à 300 km/h les portes peuvent être franchies deux fois
+  plus vite sans être refusées.
+
+LES OBJETS
+  A chaque porte franchie, chaque voiture encore en course tire un
+  objet au sort.
+     Banane   on la lâche derrière soi. La voiture qui roule
+              dessus part en tête-à-queue et c'est fini pour elle.
+     Bombe    tout ce qui est près de vous prend 20 points de
+              dégâts et retombe à zéro kilomètre-heure.
+
+LA FIN DE COURSE
+  Dès qu'une voiture franchit Saint-Denis, la course s'arrête pour
+  tout le monde. Ceux qui roulaient encore perdent leur mise. C'est
+  ce qui rend l'encaissement intéressant : mieux vaut 146 € en poche
+  qu'un doublage à la dernière porte.
+
+LES QUARTIERS
+  On doit savoir où on est sans lire le panneau. Chaque quartier a
+  donc ses marqueurs : l'état des murs de la tranchée (propres au
+  16e, tagués à partir de Saint-Ouen), les voitures en stationnement
+  (berlines allemandes lustrées dans le 16e, utilitaires cabossés et
+  carcasses sur cales au nord), le mobilier (haies taillées et
+  massifs fleuris d'un côté, corbeilles, bennes, dépôts sauvages et
+  palissades de l'autre), la couleur des toitures et la lumière.
+
+  Les douze quartiers sont dessinés d'après les vrais :
+     Dauphine       le bois de Boulogne et le 16e haussmannien
+     Maillot        le Palais des Congrès, la tour Hyatt,
+                    l'immeuble qui enjambe le périph
+     Ternes         Notre-Dame-de-Compassion, haussmannien et
+                    barres des années 70
+     Villiers       résidentiel, les premières briques
+     Champerret     l'Espace Champerret et ses grandes halles
+     Asnières       les grands immeubles de brique orange de la
+                    ceinture, le parc neuf et les grues
+     Clichy         le Tribunal de Paris et ses gradins de verre
+     Saint-Ouen     l'hôpital Bichat, la ceinture de HBM en brique
+     Clignancourt   les Puces et leurs rangées de stands
+     La Chapelle    l'Arena, les faisceaux ferroviaires et leurs
+                    rames de fret, les palissades taguées, les
+                    dépôts sauvages et les friches
+     Aubervilliers  les entrepôts Calberson, le canal Saint-Denis,
+                    les conteneurs et les pylônes
+     La Villette    la Cité des Sciences, la Géode,
+                    et le Stade de France à l'arrivée
+
+
+=====================================================================
+L'ARGENT
+=====================================================================
+Comme pour le penalty, c'est le serveur qui compte. La mise part au
+départ, le gain n'est versé que par serveur.js, et le serveur refuse
+une porte annoncée trop tôt : même à 150 km/h il faut le temps de
+parcourir la distance. Un joueur qui bidouillerait sa page ne
+gagnerait rien.
+
+Pour changer l'échelle : une seule ligne en haut de serveur.js,
+ECHELLE_PERIPH. Le dernier chiffre est le multiplicateur final.
+Les longueurs des tronçons sont juste en dessous, LONGUEURS_PERIPH.
+Si vous changez l'une des deux, changez aussi la liste ZONES et
+PALIERS dans index.html, pour que la page et le serveur racontent la
+même chose.
+
+
+=====================================================================
+LE PETIT SECRET DU PENALTY  (à ne pas raconter)
+=====================================================================
+Il n'a pas bougé. Quand un joueur a perdu DEUX fois d'affilée, et
+seulement dans ce cas, viser la tête du gardien donne un but à coup
+sûr : le gardien encaisse, s'écroule et se met à pleurer.
+
+C'est le serveur qui vérifie la condition, pas la page.
+
+ATTENTION : ce secret est écrit dans serveur.js. Si le dépôt GitHub
+casino-messina est public, n'importe qui peut lire le fichier. Pour
+qu'il reste secret, il faut que le dépôt soit en "Private".
+
+
+=====================================================================
+CE QUI N'A PAS CHANGE
+=====================================================================
+- Les comptes, les mots de passe et les soldes fonctionnent comme
+  avant, et sont toujours conservés par Upstash.
+- Le blackjack, les tables, Don Koala et la pêche avec Jeffrey
+  n'ont pas bougé.
+- Le penalty non plus : mêmes règles, mêmes gains, même secret.
+
+
+=====================================================================
+BON A SAVOIR
+=====================================================================
+- Le profil compte maintenant les courses de périph et les portes
+  franchies, en plus des penaltys.
+- Si on quitte le périph au milieu d'une course, la mise est perdue :
+  c'est comme si la voiture était détruite.
+- Le jeu marche au doigt sur téléphone comme à la souris et au
+  clavier sur ordinateur.
+- Un joueur ne peut être connecté qu'à un seul endroit à la fois.
+- Il n'y a pas de "mot de passe oublié" : sans envoi d'e-mail,
+  c'est impossible. À noter quelque part.
+- Le site s'endort toujours après 15 minutes sans visiteur, et met
+  environ une minute à se réveiller. Ce n'est pas une panne.
+
+
+=====================================================================
+CE QUI EST NOUVEAU DANS CETTE VERSION
+=====================================================================
+La boutique du périph, avec sa voiture GT Noire à 1 200 €, plus
+rapide, avec de vrais freins et un moteur qui sonne différemment.
+Voir plus haut "LA BOUTIQUE" pour le détail.
+
+------------------------------------------------------------
+RAZZIA (nouveau jeu, menu "Les jeux")
+------------------------------------------------------------
+- La vraie carte de Paris (secteur ouest : 16e, Trocadéro, Boulogne,
+  bord du 15e). Chaque joueur pose sa base sur un vrai bâtiment.
+- Koalas : 100 €. Pistolet noir (armurerie niv. 1) : 600 €, force 4.
+  Pistolet diamant rouge (armurerie niv. 2) : 2 500 €, force 10.
+- Base pillée : elle perd 25 % du solde et brûle 30 minutes.
+  Bouclier : 12 h d'attente avant de pouvoir le remettre.
+- Bat B (Maison de la Radio) : 0,005 € par koala et par minute.
+- Rien à configurer en plus : la carte, les rues et les trajets
+  viennent de services gratuits (OpenFreeMap, OSRM), chargés par
+  le navigateur du joueur. Le monde est gardé dans Upstash
+  (clé "razzia:monde").
