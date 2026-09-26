@@ -14128,36 +14128,334 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   }
   var ROUTES = ['in', ['get', 'class'], ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor', 'service']]];
 
-  /* ---- les couleurs de Paris (memes teintes que les facades du periph) ----
-     La carte ne dit pas "haussmannien" ou "tour" : on le devine a la hauteur.
-     Dans chaque famille, 7 teintes voisines tirees d'apres la hauteur exacte,
-     pour que deux immeubles cote a cote n'aient presque jamais la meme. */
+  /* ================= PARIS EN 3D : facades dessinees et toits en zinc =================
+     Les murs recoivent une "photo" de facade dessinee ici (fenetres, balcons en fer forge,
+     boutiques au rez-de-chaussee), les toits du zinc gris-bleu avec lucarnes et cheminees.
+     Chaque image est dessinee a la bonne taille pour chaque niveau de zoom, pour que
+     les etages fassent toujours ~3 metres, de pres comme de loin.                        */
+  var P3D = (function () {
+    var MPX16 = 40075016.686 * Math.cos(48.85 * Math.PI / 180) / (512 * 65536);   // metres par pixel (horizontal) au zoom 16
+    var DPR = Math.min(2, window.devicePixelRatio || 1);
+    var NIVEAUX = [15, 16, 17, 18, 19];
+
+    function hasard(graine) { var s = graine % 2147483647 || 7; return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; }
+    function num(t) { var n = 0; for (var i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) % 100003; return n + 11; }
+
+    /* --- un petit "pinceau" en metres : x vers la droite, z = hauteur depuis le sol --- */
+    function pinceau(ctx, W, H, sx, sz) {
+      return {
+        W: W, H: H,
+        rect: function (x, z, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x * sx, (H - z - h) * sz, w * sx, h * sz); },
+        degrade: function (x, z, w, h, haut, bas) {
+          var g = ctx.createLinearGradient(0, (H - z - h) * sz, 0, (H - z) * sz); g.addColorStop(0, haut); g.addColorStop(1, bas);
+          ctx.fillStyle = g; ctx.fillRect(x * sx, (H - z - h) * sz, w * sx, h * sz);
+        },
+        rond: function (x, z, r, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x * sx, (H - z) * sz, r * sx, r * sz, 0, 0, 7); ctx.fill(); },
+        grain: function (c, n, taille, alea) {
+          ctx.fillStyle = c;
+          for (var i = 0; i < n; i++) { var t = taille * (0.5 + alea()); ctx.fillRect(alea() * W * sx, alea() * H * sz, Math.max(1, t * sx), Math.max(1, t * sz)); }
+        }
+      };
+    }
+
+    /* une fenetre parisienne : encadrement clair, deux battants, vitre sombre qui reflete le ciel */
+    function fenetre(p, x, z, w, h, cadre, vitreHaut, vitreBas) {
+      p.rect(x - 0.1, z - 0.1, w + 0.2, h + 0.2, 'rgba(0,0,0,0.16)');
+      p.rect(x, z, w, h, cadre);
+      var e = Math.min(0.09, w * 0.08);
+      p.degrade(x + e, z + e, w - 2 * e, h - 2 * e, vitreHaut, vitreBas);
+      p.rect(x + w / 2 - e / 2, z + e, e, h - 2 * e, cadre);
+      p.rect(x + e, z + h * 0.72, w - 2 * e, e, cadre);
+      p.rect(x + e, z + h - e - h * 0.1, (w - 2 * e) * 0.5, h * 0.08, 'rgba(255,255,255,0.12)');
+    }
+    function gardeCorps(p, x, z, w, h, fer) {
+      p.rect(x, z + h - 0.06, w, 0.06, fer); p.rect(x, z, w, 0.05, fer);
+      for (var i = 0.12; i < w; i += 0.16) p.rect(x + i, z, 0.035, h, fer);
+      for (var j = 0.25; j < w - 0.2; j += 0.5) p.rond(x + j + 0.15, z + h * 0.55, 0.11, 'rgba(30,32,34,0.55)');
+    }
+
+    var BOUTIQUES = ['#7c1d26', '#1d3a5c', '#2c4a34', '#35383c', '#8a6a2c', '#5a2342', '#b24a1e', '#20555a'];
+
+    /* ------------- les facades ------------- */
+    var FACADES = {
+      /* immeuble haussmannien : rez-de-chaussee boutiques, balcons filants aux 2e et 5e */
+      haus: function (p, alea, v) {
+        var pierre = ['#e8dfcc', '#e0dacd', '#ece2cd'][v], joint = 'rgba(120,100,70,0.10)';
+        p.rect(0, 0, p.W, p.H, pierre);
+        p.grain('rgba(255,255,255,0.10)', 90, 0.35, alea); p.grain('rgba(110,95,70,0.05)', 90, 0.3, alea);
+        var bay = p.W / 3;
+        for (var zz = 0.5; zz < 4.2; zz += 0.5) p.rect(0, zz, p.W, 0.05, joint);            // bossage du rez-de-chaussee
+        for (var b = 0; b < 3; b++) {
+          var x0 = b * bay;
+          if (b === (v + 1) % 3) {                                                          // porte cochere
+            p.rect(x0 + 0.7, 0, bay - 1.4, 3.6, '#e4d6b8');
+            p.rect(x0 + 0.85, 0, bay - 1.7, 3.35, ['#2f4536', '#3b2a1f', '#1f2f45'][v]);
+            p.rect(x0 + bay / 2 - 0.03, 0, 0.06, 3.35, 'rgba(0,0,0,0.35)');
+            p.rect(x0 + 0.85, 2.5, bay - 1.7, 0.08, 'rgba(255,220,150,0.35)');
+          } else {                                                                           // vitrine
+            var c = BOUTIQUES[Math.floor(alea() * BOUTIQUES.length)];
+            p.rect(x0 + 0.3, 0, bay - 0.6, 3.9, 'rgba(0,0,0,0.18)');
+            p.rect(x0 + 0.35, 3.15, bay - 0.7, 0.6, c);                                     // enseigne
+            p.rect(x0 + 0.5, 3.35, (bay - 1) * (0.4 + alea() * 0.5), 0.18, 'rgba(255,245,220,0.75)');
+            p.degrade(x0 + 0.35, 0.25, bay - 0.7, 2.9, '#57636c', '#232a30');
+            p.rect(x0 + 0.35, 0.25, bay - 0.7, 1.1, 'rgba(255,214,150,0.18)');
+            p.rect(x0 + 0.35, 0, bay - 0.7, 0.25, '#3a3d40');
+            if (alea() < 0.5) { p.rect(x0 + 0.25, 2.85, bay - 0.5, 0.35, c); p.rect(x0 + 0.25, 2.85, bay - 0.5, 0.08, 'rgba(0,0,0,0.3)'); } // store banne
+          }
+        }
+        p.rect(0, 4.2, p.W, 0.3, '#f3ead6'); p.rect(0, 4.12, p.W, 0.08, 'rgba(0,0,0,0.22)');   // corniche du 1er
+        for (var f = 1; f <= 9; f++) {
+          var z = 4.5 + (f - 1) * 3.05;
+          if (z + 2.8 > p.H) break;
+          p.rect(0, z, p.W, 0.07, 'rgba(90,75,55,0.14)');
+          for (b = 0; b < 3; b++) {
+            var fx = b * bay + (bay - 1.2) / 2;
+            if (f === 1) p.rect(fx - 0.2, z + 2.75, 1.6, 0.22, '#d9cdb2');                  // fronton au-dessus des fenetres nobles
+            fenetre(p, fx, z + 0.45, 1.2, f === 1 ? 2.3 : 2.1, '#f2ede2', '#8997a2', '#39424b');
+            if (f !== 1 && f !== 4) gardeCorps(p, fx + 0.02, z + 0.45, 1.16, 0.75, '#25282b');
+          }
+          if (f === 1 || f === 4) {                                                        // balcon filant en fer forge
+            p.rect(0, z + 0.3, p.W, 0.17, '#d4c7ab'); p.rect(0, z + 0.22, p.W, 0.08, 'rgba(0,0,0,0.25)');
+            gardeCorps(p, 0, z + 0.47, p.W, 0.85, '#222528');
+          }
+        }
+      },
+      /* HBM des annees 30 : brique rouge, bandeaux de pierre */
+      brique: function (p, alea) {
+        p.rect(0, 0, p.W, p.H, '#b35f3f');
+        for (var z = 0; z < p.H; z += 0.3) {
+          p.rect(0, z, p.W, 0.04, 'rgba(230,210,190,0.35)');
+          for (var x = (z * 10 % 2) * 0.25; x < p.W; x += 0.5) p.rect(x, z, 0.03, 0.3, 'rgba(230,210,190,0.25)');
+        }
+        p.grain('rgba(80,25,10,0.18)', 160, 0.25, alea); p.grain('rgba(230,150,110,0.15)', 120, 0.25, alea);
+        p.rect(0, 0, p.W, 3.8, '#dccfb4');
+        var bay = p.W / 3;
+        for (var b = 0; b < 3; b++) fenetre(p, b * bay + (bay - 1.3) / 2, 0.8, 1.3, 2.2, '#f4f1ea', '#7b8893', '#353d45');
+        for (var f = 0; f < 10; f++) {
+          var zf = 3.8 + f * 2.9;
+          if (zf + 2.6 > p.H) break;
+          p.rect(0, zf, p.W, 0.28, '#dccfb4');
+          for (b = 0; b < 3; b++) {
+            fenetre(p, b * bay + (bay - 1.3) / 2, zf + 0.7, 1.3, 1.7, '#f4f1ea', '#7b8893', '#353d45');
+            p.rect(b * bay + (bay - 1.3) / 2 - 0.1, zf + 0.55, 1.5, 0.15, '#dccfb4');
+          }
+        }
+      },
+      /* immeuble des annees 60-70 : beton clair et bandeaux de fenetres */
+      moderne: function (p, alea, v) {
+        var beton = ['#cfccc3', '#c3c7c8'][v];
+        p.rect(0, 0, p.W, p.H, beton);
+        p.grain('rgba(0,0,0,0.05)', 140, 0.3, alea);
+        p.degrade(0, 0.2, p.W, 3.5, '#4e5a63', '#1f262c');
+        for (var x = 0; x < p.W; x += 3) p.rect(x, 0, 0.35, 3.9, '#9fa2a0');
+        for (var f = 0; f < 30; f++) {
+          var z = 4 + f * 2.9;
+          if (z + 2.9 > p.H + 0.01) break;
+          if (v === 1) {                                                                    // loggias
+            p.rect(0, z, p.W, 0.28, '#e3e2dc'); p.rect(0, z - 0.1, p.W, 0.1, 'rgba(0,0,0,0.25)');
+            p.degrade(0, z + 0.28, p.W, 2.4, '#7d8a93', '#3a444c');
+            p.rect(0, z + 0.28, p.W, 1.0, 'rgba(200,215,225,0.45)');
+            for (x = 0; x < p.W; x += 1.5) p.rect(x, z + 0.28, 0.08, 2.6, '#e3e2dc');
+          } else {
+            p.degrade(0, z + 0.95, p.W, 1.45, '#8795a0', '#3d4750');
+            for (x = 0; x < p.W; x += 1.5) p.rect(x, z + 0.95, 0.09, 1.45, '#dddcd6');
+            p.rect(0, z + 0.85, p.W, 0.1, 'rgba(0,0,0,0.18)');
+          }
+        }
+      },
+      /* tour du Front de Seine : mur-rideau de verre */
+      verre: function (p, alea) {
+        p.degrade(0, 0, p.W, p.H, '#9fb4c2', '#4c6273');
+        p.rect(0, 0, p.W, 0.9, '#3f4f5b');
+        p.rect(0, 0.9, p.W * 0.45, p.H - 0.9, 'rgba(255,255,255,0.08)');
+        for (var x = 0; x < p.W; x += 1.5) p.rect(x, 0, 0.08, p.H, '#2f3a42');
+        p.rect(0, p.H - 0.08, p.W, 0.08, '#2f3a42');
+      },
+      /* pavillons d'Auteuil : enduit clair, meuliere ou brique, volets colores */
+      pav: function (p, alea, v) {
+        var mur = ['#ebe1cd', '#c9a57a', '#ad5c3e'][v];
+        p.rect(0, 0, p.W, p.H, mur);
+        if (v === 1) { p.grain('#a8784c', 260, 0.35, alea); p.grain('#dcc096', 200, 0.3, alea); p.grain('rgba(240,230,210,0.6)', 120, 0.12, alea); }
+        else if (v === 2) { for (var z = 0; z < p.H; z += 0.3) p.rect(0, z, p.W, 0.04, 'rgba(230,210,190,0.35)'); p.grain('rgba(70,20,10,0.2)', 140, 0.25, alea); }
+        else p.grain('rgba(120,100,70,0.08)', 150, 0.3, alea);
+        var volet = ['#5c7d8c', '#4f6b4a', '#eae5da', '#8c3b2f'][Math.floor(alea() * 4)];
+        p.rect(0, 0, p.W, 0.5, 'rgba(0,0,0,0.12)');
+        p.rect(1.0, 0, 1.1, 2.3, '#e6ddc9'); p.rect(1.1, 0, 0.9, 2.2, ['#6b4a32', '#304b3a', '#2d3d52'][v]);
+        for (var f = 0; f < 3; f++) {
+          var zf = 0.9 + f * 3.0 + (f ? 0.3 : 0);
+          for (var i = (f ? 0 : 1); i < 2; i++) {
+            var x = 1.2 + i * 3.3 + (f ? 0 : 1.2);
+            p.rect(x - 0.55, zf, 0.5, 1.6, volet); p.rect(x + 1.05, zf, 0.5, 1.6, volet);
+            for (var l = zf + 0.1; l < zf + 1.6; l += 0.18) { p.rect(x - 0.55, l, 0.5, 0.04, 'rgba(0,0,0,0.18)'); p.rect(x + 1.05, l, 0.5, 0.04, 'rgba(0,0,0,0.18)'); }
+            fenetre(p, x, zf, 1.0, 1.6, '#f5f2ea', '#8795a0', '#3a434b');
+          }
+          p.rect(0, zf + 2.3, p.W, 0.15, 'rgba(255,255,255,0.25)');
+        }
+      },
+      annexe: function (p, alea) {
+        p.rect(0, 0, p.W, p.H, '#cdc4b3'); p.grain('rgba(0,0,0,0.07)', 120, 0.3, alea);
+        p.rect(2, 0, 3, 2.4, '#8b9094');
+        for (var z = 0.2; z < 2.4; z += 0.3) p.rect(2, z, 3, 0.05, 'rgba(0,0,0,0.2)');
+      },
+      pierre: function (p, alea) {
+        p.rect(0, 0, p.W, p.H, '#ddd2b8');
+        for (var z = 0; z < p.H; z += 0.6) p.rect(0, z, p.W, 0.05, 'rgba(120,100,70,0.16)');
+        p.grain('rgba(255,255,255,0.12)', 80, 0.4, alea);
+      },
+      bronze: function (p, alea) { p.rect(0, 0, p.W, p.H, '#6e5845'); p.grain('rgba(0,0,0,0.12)', 60, 0.4, alea); }
+    };
+    var TAILLES = { haus: [11, 32], brique: [11, 32], moderne: [6, 64], verre: [3, 3.6], pav: [8, 12], annexe: [8, 6], pierre: [6, 6], bronze: [4, 4] };
+
+    /* ------------- les toits (vus du dessus) ------------- */
+    var TOITS = {
+      zinc: function (p, alea, v) {
+        var base = ['#aab3bb', '#9ea9b2', '#b5bdc3'][v];
+        p.rect(0, 0, p.W, p.H, base);
+        for (var x = 0; x < p.W; x += 0.5) { p.rect(x, 0, 0.05, p.H, 'rgba(60,70,80,0.18)'); if (alea() < 0.3) p.rect(x, 0, 0.5, p.H, 'rgba(255,255,255,0.06)'); }
+        p.grain('rgba(255,255,255,0.08)', 40, 0.6, alea);
+        for (var i = 0; i < 2; i++) {                                                       // lucarnes
+          var lx = 1 + alea() * (p.W - 2.5), lz = 1 + alea() * (p.H - 2.5);
+          p.rect(lx - 0.1, lz - 0.15, 1.3, 1.6, 'rgba(0,0,0,0.2)');
+          p.rect(lx, lz, 1.1, 1.4, '#e4e2dc'); p.rect(lx + 0.2, lz + 0.2, 0.7, 0.8, '#3c454d');
+        }
+        var cx = alea() * (p.W - 3), cz = alea() * (p.H - 1);                                 // souche de cheminee
+        p.rect(cx + 0.25, cz - 0.3, 2.2, 0.75, 'rgba(0,0,0,0.22)');
+        p.rect(cx, cz, 2.2, 0.7, '#a98372'); p.rect(cx, cz + 0.5, 2.2, 0.2, '#bb9888');
+        for (var k = 0; k < 3; k++) { p.rond(cx + 0.4 + k * 0.7, cz + 0.35, 0.17, '#8e6656'); p.rond(cx + 0.4 + k * 0.7, cz + 0.35, 0.08, '#2a2320'); }
+      },
+      tuile: function (p, alea, v) {
+        p.rect(0, 0, p.W, p.H, ['#a9583f', '#5f676f', '#9a4d37'][v]);
+        for (var z = 0; z < p.H; z += 0.35) { p.rect(0, z, p.W, 0.07, 'rgba(0,0,0,0.2)'); for (var x = (z * 20 % 2) * 0.12; x < p.W; x += 0.25) p.rect(x, z, 0.03, 0.35, 'rgba(0,0,0,0.1)'); }
+        p.grain('rgba(255,210,170,0.12)', 90, 0.4, alea); p.grain('rgba(0,0,0,0.1)', 90, 0.4, alea);
+      },
+      plat: function (p, alea) {
+        p.rect(0, 0, p.W, p.H, '#a6a59e'); p.grain('rgba(255,255,255,0.18)', 300, 0.12, alea); p.grain('rgba(0,0,0,0.12)', 300, 0.12, alea);
+        p.rect(0, 0, p.W, 0.3, '#d2d1cb'); p.rect(0, 0, 0.3, p.H, '#d2d1cb');
+        var x = 1 + alea() * 4, z = 1 + alea() * 4;
+        p.rect(x + 0.2, z - 0.2, 2.2, 1.6, 'rgba(0,0,0,0.25)'); p.rect(x, z, 2.2, 1.6, '#cfd3d4'); p.rond(x + 1.1, z + 0.8, 0.5, '#8c9295');
+      },
+      herbe: function (p, alea) {                                                           // parcs : pelouse et bouquets d'arbres
+        p.rect(0, 0, p.W, p.H, '#6f9451'); p.grain('rgba(40,70,30,0.15)', 260, 0.5, alea); p.grain('rgba(170,200,110,0.14)', 200, 0.4, alea);
+        for (var i = 0; i < 16; i++) {
+          var x = alea() * p.W, z = alea() * p.H, r = 2.4 + alea() * 2.4;
+          for (var dx = -p.W; dx <= p.W; dx += p.W) for (var dz = -p.H; dz <= p.H; dz += p.H) arbre(p, x + dx, z + dz, r, hasard(i * 97 + 5));
+        }
+      }
+    };
+    var TAILLES_TOIT = { zinc: [9, 9], tuile: [6, 6], plat: [8, 8], herbe: [30, 30] };
+    function arbre(p, x, z, r, alea) {
+      p.rond(x + r * 0.35, z - r * 0.35, r, 'rgba(20,30,15,0.35)');
+      p.rond(x, z, r, '#3f6431');
+      for (var i = 0; i < 6; i++) p.rond(x + (alea() - 0.5) * r, z + (alea() - 0.5) * r, r * (0.35 + alea() * 0.3), ['#46703a', '#557f42', '#62904b'][i % 3]);
+      p.rond(x - r * 0.3, z + r * 0.3, r * 0.3, 'rgba(200,230,140,0.25)');
+    }
+
+    /* dessine une image "famille-variante@zoom" a la demande de la carte */
+    function dessiner(id) {
+      var m = /^p3d-(\w+)-(\d)@(\d+)$/.exec(id); if (!m) return null;
+      var fam = m[1], v = +m[2], z = +m[3], toit = !!TOITS[fam];
+      var t = toit ? TAILLES_TOIT[fam] : TAILLES[fam]; if (!t) return null;
+      var d = z >= 19 ? 1 : DPR;                                                            // tout pres, une image plus legere suffit
+      var k = Math.pow(2, z - 15) * d;                                                      // mesure sur la carte : 1 m de haut = 2 px au zoom 16
+      var sx = k / MPX16, sz = toit ? sx : k;
+      var cw = Math.max(2, Math.round(t[0] * sx)), ch = Math.max(2, Math.round(t[1] * sz));
+      var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      var ctx = cv.getContext('2d');
+      var p = pinceau(ctx, t[0], t[1], cw / t[0], ch / t[1]);
+      (toit ? TOITS : FACADES)[fam](p, hasard(num(fam) * 7 + v * 131), v);
+      return ctx.getImageData(0, 0, cw, ch);
+    }
+    function brancher(carte) {
+      carte.on('styleimagemissing', function (e) {
+        if (!e.id || e.id.indexOf('p3d-') !== 0 || carte.hasImage(e.id)) return;
+        var img = dessiner(e.id);
+        if (img) carte.addImage(e.id, img, { pixelRatio: /@19$/.test(e.id) ? 1 : DPR });
+      });
+      var a = document.createElement('canvas'); a.width = a.height = 64;                   // l'arbre d'alignement
+      var ca = a.getContext('2d'), pa = pinceau(ca, 10, 10, 6.4, 6.4);
+      arbre(pa, 4.6, 5.4, 3.6, hasard(99));
+      carte.addImage('p3d-platane', ca.getImageData(0, 0, 64, 64), { pixelRatio: 1 });
+    }
+
+    /* l'expression "quelle image pour ce zoom" : les etages gardent leur taille en metres */
+    function parZoom(nom) {
+      var e = ['step', ['zoom']];
+      NIVEAUX.forEach(function (z, i) { var img = ['image', ['concat', 'p3d-', nom, '@' + z]]; if (i) e.push(z); e.push(img); });
+      return e;
+    }
+    return { brancher: brancher, parZoom: parZoom, dessiner: dessiner };
+  })();
+
+  /* quel genre d'immeuble ? on le devine a la hauteur, et une "graine" tiree de l'identifiant
+     fait que deux voisins n'ont presque jamais la meme facade */
   var H_BAT = ['coalesce', ['get', 'render_height'], 12];
   var B_BAT = ['coalesce', ['get', 'render_min_height'], 0];
-  var PAVILLONS = ['#e2d6bd', '#d8c2a0', '#c99a78', '#e6dcc8', '#b98a6c', '#d9ccb0', '#cfb892'];   // villas d'Auteuil, Boulogne : enduit, meuliere, brique
-  var PIERRE    = ['#e4dac2', '#dccfb3', '#e9e0cb', '#d6cbb1', '#bf8c6e', '#e0d2b5', '#cfc3a6'];   // pierre de taille haussmannienne (+ brique des annees 30)
-  var BETON     = ['#b9c0c4', '#a9b4bb', '#c4c6c2', '#98a6b1', '#b3b8b5', '#a4afb8', '#c9ccc9'];   // immeubles modernes
-  var VERRE     = ['#7f97a8', '#8fa3b1', '#6f8797', '#9aabb6', '#86969f', '#7b8f9c', '#93a5ad'];   // tours du Front de Seine
-  function teintes(l) { var m = ['match', ['var', 'v']]; for (var i = 1; i < l.length; i++) m.push(i, l[i]); m.push(l[0]); return m; }
-  var COULEUR_BAT = ['let', 'h', H_BAT, 'b', B_BAT,
-    ['let', 'v', ['%', ['floor', ['*', ['+', ['var', 'h'], ['var', 'b']], 13.7]], 7],
-      ['case',
-        ['>=', ['var', 'b'], 25], '#7d6652',                                           // morceaux perches en hauteur (Tour Eiffel)
-        ['all', ['>=', ['var', 'h'], 49.5], ['<', ['var', 'h'], 50.5]], '#ddd2b8',     // l'Arc de Triomphe fait 50 m pile
-        ['<', ['var', 'h'], 6], '#bdb3a2',                                             // garages, annexes
-        ['<', ['var', 'h'], 13], teintes(PAVILLONS),
-        ['<', ['var', 'h'], 32], teintes(PIERRE),
-        ['<', ['var', 'h'], 70], teintes(BETON),
-        teintes(VERRE)]]];
-  /* un batiment qui a des "morceaux" detailles est dessine par ses morceaux,
-     pas par sa grosse boite englobante (c'est ce qui faisait l'Arc en cube) */
+  var GRAINE = ['%', ['floor', ['abs', ['+', ['*', H_BAT, 13.7], ['*', ['to-number', ['coalesce', ['id'], 0], 0], 0.7071]]]], 20];
+  var FAMILLE = ['let', 'h', H_BAT, 'b', B_BAT, 'g', GRAINE,
+    ['case',
+      ['>=', ['var', 'b'], 25], 'bronze-0',                                            // morceaux perches (Tour Eiffel)
+      ['all', ['>=', ['var', 'h'], 49.5], ['<', ['var', 'h'], 50.5]], 'pierre-0',      // l'Arc de Triomphe
+      ['<', ['var', 'h'], 6], 'annexe-0',
+      ['<', ['var', 'h'], 13], ['match', ['%', ['var', 'g'], 3], 0, 'pav-0', 1, 'pav-1', 'pav-2'],
+      ['<', ['var', 'h'], 32], ['match', ['var', 'g'], [0, 1], 'brique-0', [2, 3, 4], 'moderne-0', 5, 'moderne-1',
+        ['match', ['%', ['var', 'g'], 3], 0, 'haus-0', 1, 'haus-1', 'haus-2']],
+      ['<', ['var', 'h'], 70], ['match', ['%', ['var', 'g'], 2], 0, 'moderne-0', 'moderne-1'],
+      'verre-0']];
+  var FAMILLE_TOIT = ['let', 'h', H_BAT, 'g', GRAINE,
+    ['case',
+      ['<', ['var', 'h'], 13], ['match', ['%', ['var', 'g'], 3], 0, 'tuile-0', 1, 'tuile-1', 'tuile-2'],
+      ['<', ['var', 'h'], 32], ['match', ['var', 'g'], [2, 3, 4, 5], 'plat-0', ['match', ['%', ['var', 'g'], 3], 0, 'zinc-0', 1, 'zinc-1', 'zinc-2']],
+      'plat-0']];
+  /* de loin (zoom < 15) : de simples couleurs, les memes que de pres */
+  var COULEUR_LOIN = ['let', 'h', H_BAT, 'b', B_BAT,
+    ['case', ['>=', ['var', 'b'], 25], '#6e5845', ['<', ['var', 'h'], 13], '#d8c7a8', ['<', ['var', 'h'], 32], '#e3d8c2', ['<', ['var', 'h'], 70], '#c8c8c1', '#8ea3b1']];
+  var COULEUR_TOIT_LOIN = ['case', ['<', H_BAT, 13], '#9a5a44', ['<', H_BAT, 32], '#a9b2ba', '#a6a59e'];
+  /* un batiment qui a des "morceaux" detailles est dessine par ses morceaux, pas par sa boite englobante */
   var PAS_ENGLOBANT = ['!=', ['get', 'hide_3d'], true];
-  /* le toit : zinc gris-bleu sur les haussmanniens, tuile ou ardoise sur les maisons */
-  var TOITS = ['all', PAS_ENGLOBANT, ['has', 'render_height'],
-    ['>=', ['get', 'render_height'], 6], ['<', ['get', 'render_height'], 32], ['<', B_BAT, 1]];
-  var COULEUR_TOIT = ['let', 'h', H_BAT, ['let', 'v', ['%', ['floor', ['*', ['var', 'h'], 13.7]], 7],
-    ['case', ['<', ['var', 'h'], 13], ['match', ['var', 'v'], [0, 2, 4, 6], '#9f6a55', '#7d8288'],
-      ['match', ['var', 'v'], [1, 4], '#9aa2a8', '#8a949c']]]];
+  var AVEC_TOIT = ['all', PAS_ENGLOBANT, ['>=', H_BAT, 4], ['<', B_BAT, 25],
+    ['!', ['all', ['>=', H_BAT, 49.5], ['<', H_BAT, 50.5]]]];
+  var HAUT_TOIT = ['+', H_BAT, ['case', ['<', H_BAT, 13], 1.8, ['<', H_BAT, 32], 3.2, 0.7]];
+
+  /* les couches des batiments (ajoutees une fois la carte prete, pour que les dessins soient branches) */
+  function couchesBatiments(src, srcLayer) {
+    function c(o) { o.source = src; if (srcLayer) o['source-layer'] = srcLayer; return o; }
+    return [
+      c({ id: 'rz-bat-loin', type: 'fill-extrusion', minzoom: 13, maxzoom: 15, filter: PAS_ENGLOBANT,
+        paint: { 'fill-extrusion-color': COULEUR_LOIN, 'fill-extrusion-height': H_BAT, 'fill-extrusion-base': B_BAT, 'fill-extrusion-vertical-gradient': true } }),
+      c({ id: 'rz-toits-loin', type: 'fill-extrusion', minzoom: 13, maxzoom: 15, filter: AVEC_TOIT,
+        paint: { 'fill-extrusion-color': COULEUR_TOIT_LOIN, 'fill-extrusion-base': H_BAT, 'fill-extrusion-height': HAUT_TOIT, 'fill-extrusion-vertical-gradient': false } }),
+      c({ id: 'rz-bat', type: 'fill-extrusion', minzoom: 15, filter: PAS_ENGLOBANT,
+        paint: { 'fill-extrusion-pattern': P3D.parZoom(FAMILLE), 'fill-extrusion-height': H_BAT, 'fill-extrusion-base': B_BAT, 'fill-extrusion-vertical-gradient': true } }),
+      c({ id: 'rz-toits', type: 'fill-extrusion', minzoom: 15, filter: AVEC_TOIT,
+        paint: { 'fill-extrusion-pattern': P3D.parZoom(FAMILLE_TOIT), 'fill-extrusion-base': H_BAT, 'fill-extrusion-height': HAUT_TOIT, 'fill-extrusion-vertical-gradient': false } })
+    ];
+  }
+  /* platanes le long des boulevards et avenues (des deux cotes) */
+  function couchesArbres(src, srcLayer) {
+    var TAILLE = ['interpolate', ['exponential', 2], ['zoom'], 15, 0.09, 19, 1.44];         // ~10 m de feuillage (platane)
+    function cote(s) {
+      // decalage en "pixels d'icone" pour tomber sur le trottoir (meme calcul que la largeur des routes)
+      var e = ['interpolate', ['linear'], ['zoom']];
+      for (var z = 15; z <= 19; z += 0.5) {
+        var larg = z <= 16 ? 0.9 + 5.1 * (Math.pow(1.6, z - 12) - 1) / (Math.pow(1.6, 4) - 1)
+                           : 6 + 28 * (Math.pow(1.6, z - 16) - 1) / (Math.pow(1.6, 3) - 1);
+        var taille = 0.09 * Math.pow(2, z - 15);
+        e.push(z, ['literal', [0, s * 0.64 * 1.35 * larg / taille]]);
+      }
+      return e;
+    }
+    function couche(id, s) {
+      var o = { id: id, type: 'symbol', source: src, minzoom: 15.5,
+        filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary']]],
+        layout: { 'symbol-placement': 'line', 'symbol-spacing': ['interpolate', ['exponential', 2], ['zoom'], 15, 5, 19, 80],
+          'icon-image': 'p3d-platane', 'icon-size': TAILLE, 'icon-offset': cote(s),
+          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-pitch-alignment': 'map', 'icon-rotation-alignment': 'map' } };
+      if (srcLayer) o['source-layer'] = srcLayer;
+      return o;
+    }
+    return [couche('rz-arbres-g', -1), couche('rz-arbres-d', 1)];
+  }
+
 
   var STYLE = {
     version: 8, glyphs: POLICES,
@@ -14177,21 +14475,12 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
         layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#3a3c40', 'line-width': largeur(1) } },
       { id: 'lignes', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 16.5,
         filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary', 'trunk']]],
-        paint: { 'line-color': '#e9e9e9', 'line-opacity': 0.55, 'line-width': 1, 'line-dasharray': [3, 4] } },
-      { id: 'rz-bat', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 13, filter: PAS_ENGLOBANT,
-        paint: { 'fill-extrusion-color': COULEUR_BAT,
-                 'fill-extrusion-height': H_BAT,
-                 'fill-extrusion-base': B_BAT,
-                 'fill-extrusion-vertical-gradient': true } },
-      { id: 'rz-toits', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14.5, filter: TOITS,
-        paint: { 'fill-extrusion-color': COULEUR_TOIT,
-                 'fill-extrusion-base': H_BAT,
-                 'fill-extrusion-height': ['+', H_BAT, ['case', ['<', H_BAT, 13], 1.6, 2.6]],
-                 'fill-extrusion-vertical-gradient': false } },
+        paint: { 'line-color': '#e9e9e9', 'line-opacity': 0.55, 'line-width': 1, 'line-dasharray': [3, 4] } }
+    ].concat(couchesBatiments('omt', 'building')).concat(couchesArbres('omt', 'transportation')).concat([
       { id: 'noms', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 15.5,
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11.5, 'text-letter-spacing': 0.04 },
         paint: { 'text-color': '#f1f1f1', 'text-halo-color': '#2b2d31', 'text-halo-width': 1.4 } }
-    ]
+    ])
   };
 
   function chargerLib() {
@@ -14211,6 +14500,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       dragRotate: true, pitchWithRotate: true, maxPitch: 65
     });
     c.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+    P3D.brancher(c);
     c.on('load', function () {
       c.addSource('rz-masque', { type: 'geojson', data: vide() });
       c.addLayer({ id: 'rz-masque', type: 'fill', source: 'rz-masque', paint: { 'fill-color': '#08090b', 'fill-opacity': 0.62 } }, 'rz-bat');
