@@ -13,6 +13,7 @@ const http   = require('http');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+const https  = require('https');
 
 const PORT    = process.env.PORT || 3000;
 const DOSSIER = __dirname;
@@ -2200,41 +2201,169 @@ const serveur = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const route = url.pathname;
 
+  /* Codes de verification email - stockes en memoire avec expiration */
+  const codesVerification = new Map();  // pseudo -> { code, email, expire }
+
+  async function envoyerEmailVerification(email, pseudo, code) {
+    const apiKey = process.env.SENDGRID_API_KEY;
+    if (!apiKey) {
+      console.log(‘SENDGRID_API_KEY non configurée, email non envoyé’);
+      return true;  // on laisse passer quand même
+    }
+
+    const message = {
+      personalizations: [{
+        to: [{ email: email }]
+      }],
+      from: { email: ‘noreply@casinomessina.com’, name: ‘Casino Messina’ },
+      subject: ‘Vérifiez votre compte Casino Messina’,
+      html: `
+        <h2>Bienvenue sur Casino Messina !</h2>
+        <p>Votre code de vérification est : <strong style="font-size: 24px; color: #d4af37;">${code}</strong></p>
+        <p>Veuillez entrer ce code pour activer votre compte.</p>
+        <p>Ce code expire dans 10 minutes.</p>
+      `
+    };
+
+    try {
+      const response = await new Promise((resolve, reject) => {
+        const options = {
+          hostname: ‘api.sendgrid.com’,
+          port: 443,
+          path: ‘/v3/mail/send’,
+          method: ‘POST’,
+          headers: {
+            ‘Authorization’: ‘Bearer ‘ + apiKey,
+            ‘Content-Type’: ‘application/json’
+          }
+        };
+
+        const req = https.request(options, (res) => {
+          let body = ‘’;
+          res.on(‘data’, (chunk) => { body += chunk; });
+          res.on(‘end’, () => { resolve({ status: res.statusCode, body }); });
+        });
+
+        req.on(‘error’, reject);
+        req.write(JSON.stringify(message));
+        req.end();
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        console.log(‘Email de verification envoye a’, email);
+        return true;
+      } else {
+        console.log(‘SendGrid erreur:’, response.status, response.body);
+        return false;
+      }
+    } catch (e) {
+      console.log(‘Erreur envoi email:’, e.message);
+      return false;
+    }
+  }
+
+  /* Nettoyage periodique des codes expires */
+  setInterval(() => {
+    const now = Date.now();
+    for (const [pseudo, data] of codesVerification.entries()) {
+      if (data.expire < now) codesVerification.delete(pseudo);
+    }
+  }, 60000);  // toutes les minutes
+
   /* ---------------- API ---------------- */
-  if (route.startsWith('/api/')) {
+  if (route.startsWith(‘/api/’)) {
 
     // --- créer un compte ---
-    if (route === '/api/inscription' && req.method === 'POST') {
+    if (route === ‘/api/inscription’ && req.method === ‘POST’) {
       const body   = await corpsJSON(req);
-      const pseudo = String(body.pseudo || '').trim().slice(0, 16);
-      const mdp    = String(body.motDePasse || '');
+      const pseudo = String(body.pseudo || ‘’).trim().slice(0, 16);
+      const mdp    = String(body.motDePasse || ‘’);
+      const email  = String(body.email || ‘’).trim().toLowerCase();
 
       if (pseudo.length < 3) {
-        return repondre(res, 400, { erreur: 'Choisissez un pseudo d’au moins 3 caractères.' });
+        return repondre(res, 400, { erreur: ‘Choisissez un pseudo d’au moins 3 caractères.’ });
       }
-      if (!/^[\p{L}\p{N} _.'-]+$/u.test(pseudo)) {
-        return repondre(res, 400, { erreur: 'Pseudo : lettres, chiffres et espaces uniquement.' });
+      if (!/^[\p{L}\p{N} _.’-]+$/u.test(pseudo)) {
+        return repondre(res, 400, { erreur: ‘Pseudo : lettres, chiffres et espaces uniquement.’ });
       }
       if (mdp.length < 4) {
-        return repondre(res, 400, { erreur: 'Mot de passe trop court (4 caractères minimum).' });
+        return repondre(res, 400, { erreur: ‘Mot de passe trop court (4 caractères minimum).’ });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return repondre(res, 400, { erreur: ‘Email invalide.’ });
       }
 
       const pseudoBas = pseudo.toLowerCase();
       if (await Carnet.lire(pseudoBas)) {
-        return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
+        return repondre(res, 409, { erreur: ‘Ce pseudo est déjà pris. Choisissez-en un autre.’ });
       }
 
+      // Generer un code de verification 6 chiffres
+      const code = String(crypto.randomInt(100000, 999999));
+      const expire = Date.now() + 10 * 60 * 1000;  // expire dans 10 minutes
+
+      // Stocker temporairement le code et les donnees d’inscription
+      codesVerification.set(pseudoBas, {
+        code,
+        email,
+        pseudo,
+        mdp,
+        expire
+      });
+
+      // Envoyer l’email
+      await envoyerEmailVerification(email, pseudo, code);
+
+      return repondre(res, 200, {
+        message: ‘Code de verification envoye. Verifiez votre email.’,
+        pseudo: pseudo
+      });
+    }
+
+    // --- verifier le code email et creer le compte ---
+    if (route === ‘/api/verifier-email’ && req.method === ‘POST’) {
+      const body   = await corpsJSON(req);
+      const pseudo = String(body.pseudo || ‘’).trim();
+      const code   = String(body.code || ‘’).trim();
+
+      if (!pseudo || !code) {
+        return repondre(res, 400, { erreur: ‘Pseudo et code requis.’ });
+      }
+
+      const pseudoBas = pseudo.toLowerCase();
+      const data = codesVerification.get(pseudoBas);
+
+      if (!data) {
+        return repondre(res, 400, { erreur: ‘Aucune inscription en attente pour ce pseudo.’ });
+      }
+
+      if (data.expire < Date.now()) {
+        codesVerification.delete(pseudoBas);
+        return repondre(res, 400, { erreur: ‘Code expire. Recommencez l’inscription.’ });
+      }
+
+      if (data.code !== code) {
+        return repondre(res, 400, { erreur: ‘Code incorrect.’ });
+      }
+
+      // Code valide : creer le compte
       const fiche = {
-        pseudoBas, pseudo,
-        motDePasse: await chiffrer(mdp),
+        pseudoBas,
+        pseudo: data.pseudo,
+        email: data.email,
+        motDePasse: await chiffrer(data.mdp),
         solde: SOLDE_DEPART,
         mains: 0, gagnees: 0, perdues: 0, poissons: 0,
         penaltys: 0, buts: 0, defaitesPenalty: 0, periphs: 0, portes: 0, periph: null, perso: null,
-        voiturePremium: false, codesUtilises: [], tower: null, tours: 0, banni: false
+        voiturePremium: false, codesUtilises: [], tower: null, tours: 0, banni: false,
+        emailVerifie: true
       };
+
       if (!await Carnet.creer(fiche)) {
-        return repondre(res, 409, { erreur: 'Ce pseudo est déjà pris. Choisissez-en un autre.' });
+        return repondre(res, 409, { erreur: ‘Ce pseudo est déjà pris. Recommencez l’inscription.’ });
       }
+
+      codesVerification.delete(pseudoBas);
       return repondre(res, 200, ouvrirSession(fiche));
     }
 
