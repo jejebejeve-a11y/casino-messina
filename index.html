@@ -10278,16 +10278,16 @@ function finirCourse(v){
    sont comptés que par le serveur : chaque choc et chaque balle lui
    sont annoncés, et c'est lui qui verse le gain.
    ===================================================================== */
-const BOIS_VIE=600, BOIS_MULT=100, BOIS_DEPART_POLICE=3000, DIST_BOIS=3000;
+const BOIS_VIE=600, BOIS_MULT=100, BOIS_DEPART_POLICE=3000, DIST_BOIS=3500;
 const BOIS_SORTIE_DEBUT=470, BOIS_SORTIE_FIN=650;
-const BOIS_VMAX=220, BOIS_VMAX_PREMIUM=228, BOIS_ACCEL=40, BOIS_TURBO=45;
+const BOIS_VMAX=220, BOIS_VMAX_PREMIUM=300, BOIS_ACCEL=40, BOIS_TURBO=45;
 let ZONES_PERIPH=null, PALIERS_PERIPH=null, ZONE_BOIS=null;
 
 function planToledo(graine){
   let s=graine>>>0;
   const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
     t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
-  const PAS=50, VOIE=3.5, DIST=3000;
+  const PAS=50, VOIE=3.5, DIST=3500;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
   for(let d=260; d<DIST-160; d+=380+r()*140)
@@ -15498,7 +15498,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     var v = S.vue, m = (v.murs || []).find(function (x) { return x.id === murId; });
     if (!m) return;
     S.envoi = { cible: { type: 'mur', id: m.id }, groupe: groupe || null };
-    var remb = Math.round(v.regles.murCout / 2);
+    var remb = v.regles.murRembours;
     var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Ta muraille, résistance actuelle <b>' + m.vie + '</b>. Envoie des koalas pour la renforcer : ils y restent définitivement en garnison.</p>' +
       '<button class="rz-btn mini" data-a="murDemolir" data-m="' + m.id + '">Démolir · +' + eur(remb) + ' · la garnison rentre</button></div>' +
       '<div class="rz-sec"><div class="rz-titre">Renforcer</div>' + (groupe ? '' : blocUnites(v.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +

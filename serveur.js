@@ -1981,13 +1981,13 @@ const BOIS_SORTIE_MIN    = 460;       // metres depuis la Porte Dauphine
 const BOIS_DEGAT_CHOC    = 25;
 const BOIS_DEGAT_BALLE   = 40;
 const BOIS_BALLES        = 5;
-const BOIS_VITESSE_MAX   = 270 / 3.6; // metres par seconde, turbo compris
+const BOIS_VITESSE_MAX   = 330 / 3.6; // metres par seconde, turbo compris (marge au-dessus des 300 km/h de la voiture premium)
 
 function planToledo(graine){
   let s=graine>>>0;
   const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
     t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
-  const PAS=50, VOIE=3.5, DIST=3000;
+  const PAS=50, VOIE=3.5, DIST=3500;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
   for(let d=260; d<DIST-160; d+=380+r()*140)
@@ -2625,10 +2625,11 @@ function rzMultDefense(j) { return 1 + 0.25 * ((j.defense || 1) - 1); }
    definitif), plus il resiste. */
 const RZ_MURS = {};                 // id -> { id, proprio, a:[lon,lat], b:[lon,lat], garnison }
 let   rzMurCompteur = 1;
-const RZ_MUR_COUT        = 1500;    // EUR le tronçon
-const RZ_MUR_LONGUEUR_MIN = 39;     // m (x3,5)
-const RZ_MUR_LONGUEUR_MAX = 277;    // m (x3,5)
-const RZ_MUR_CHAINE_MAX  = 300;     // m : doit se relier a la base ou a un mur deja pose
+const RZ_MUR_COUT        = 500;     // EUR le tronçon
+const RZ_MUR_REMBOURS    = 350;     // EUR rendus quand on demolit sa propre muraille
+const RZ_MUR_LONGUEUR_MIN = 66;     // m (x1,7 de plus)
+const RZ_MUR_LONGUEUR_MAX = 471;    // m (x1,7 de plus)
+const RZ_MUR_CHAINE_MAX  = 510;     // m : doit se relier a la base ou a un mur deja pose
 const RZ_MUR_VIE_BASE    = 30;      // force de base, meme sans renfort
 function rzMurForce(m) { return RZ_MUR_VIE_BASE + rzPuissance(m.garnison); }
 /* intersection de segments (formule standard, orientation des triplets) */
@@ -3175,7 +3176,7 @@ function rzVue(compte, depuis) {
     regles: { prix: RZ_PRIX, force: RZ_FORCE, niveauArme: RZ_NIV_ARME, prixArmurerie: RZ_PRIX_ARMURERIE,
               armurerieMax: RZ_ARMURERIE_MAX, prixDefense: RZ_PRIX_DEFENSE, maxGroupes: RZ_MAX_GROUPES, reparation: RZ_REPARATION,
               stations: RZ_STATIONS, zone: RZ_ZONE, banditForce: RZ_BANDIT_FORCE, banditGain: RZ_BANDIT_GAIN,
-              murCout: RZ_MUR_COUT, murLongueurMin: RZ_MUR_LONGUEUR_MIN, murLongueurMax: RZ_MUR_LONGUEUR_MAX, murChaineMax: RZ_MUR_CHAINE_MAX }
+              murCout: RZ_MUR_COUT, murRembours: RZ_MUR_REMBOURS, murLongueurMin: RZ_MUR_LONGUEUR_MIN, murLongueurMax: RZ_MUR_LONGUEUR_MAX, murChaineMax: RZ_MUR_CHAINE_MAX }
   };
 }
 
@@ -4028,7 +4029,7 @@ const serveur = http.createServer(async (req, res) => {
         const possible = Math.max(0, now - g.depart - BOIS_DEPART_POLICE) / 1000 * BOIS_VITESSE_MAX + 30;
         m.d = Math.max(0, Math.min(possible, Number(body.d) || 0));
         m.x = Math.max(-7, Math.min(7, Number(body.x) || 0));
-        m.v = Math.max(0, Math.min(270, Number(body.v) || 0));
+        m.v = Math.max(0, Math.min(330, Number(body.v) || 0));
         m.mesure = now - Math.max(0, Math.min(1500, Number(body.lat) || 0));
         m.maj = now;
       }
@@ -4721,7 +4722,7 @@ const serveur = http.createServer(async (req, res) => {
         const m = RZ_MURS[String(body.id || '')];
         if (!m) return repondre(res, 404, { erreur: 'Muraille introuvable.' });
         if (m.proprio !== pb) return repondre(res, 409, { erreur: 'Ce n\'est pas ta muraille.' });
-        const remboursement = Math.round(RZ_MUR_COUT / 2);
+        const remboursement = RZ_MUR_REMBOURS;
         RZ_TYPES.forEach(t => { moi.stock[t] += m.garnison[t] | 0; });   // la garnison rentre a la base, saine et sauve
         delete RZ_MURS[m.id];
         compte.solde = sous(compte.solde + remboursement);
