@@ -15042,16 +15042,36 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       } });
     });
 
-    // les murailles : tronçons de mur qui bloquent le passage tant qu'ils tiennent
+    // les murailles : de vrais murs de pierre crenelés (façon prison), pas des traits de couleur
     (v.murs || []).forEach(function (m) {
       var qma = ecran(m.a), qmb = ecran(m.b);
       if (Math.max(qma[0], qmb[0]) < -200 || Math.min(qma[0], qmb[0]) > W + 200 || Math.max(qma[1], qmb[1]) < -300 || Math.min(qma[1], qmb[1]) > H + 200) return;
       var mx = (qma[0] + qmb[0]) / 2, my = (qma[1] + qmb[1]) / 2, lpx = Math.hypot(qmb[0] - qma[0], qmb[1] - qma[1]);
       cibles.push({ x: mx, y: my, r: Math.max(16, lpx / 2), type: 'mur', id: m.id });
       acteurs.push({ y: 1e9 + my, f: function () {
-        cx.strokeStyle = m.mien ? '#4d7cff' : '#8a5a1f'; cx.lineWidth = 6; cx.lineCap = 'round';
-        cx.beginPath(); cx.moveTo(qma[0], qma[1]); cx.lineTo(qmb[0], qmb[1]); cx.stroke();
-        if (z >= 15.0) pastille(mx, my - 14, (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo) + ' · ' + m.vie, m.mien ? '#4d7cff' : '#8a5a1f', 'rgba(20,20,26,.9)');
+        var dx = qmb[0] - qma[0], dy = qmb[1] - qma[1], L = Math.hypot(dx, dy) || 1;
+        var ux = dx / L, uy = dy / L, px = -uy, py = ux;               // perpendiculaire (cote crenelé)
+        var ep = Math.max(3.5, k * 0.85);                              // demi-epaisseur du corps de pierre
+        var pierre = m.mien ? '#8a8f98' : '#5a5e66', ombre = m.mien ? '#3f434a' : '#232529';
+        // le corps du mur, en pierre grise
+        cx.fillStyle = pierre;
+        cx.beginPath();
+        cx.moveTo(qma[0] + px * ep, qma[1] + py * ep); cx.lineTo(qmb[0] + px * ep, qmb[1] + py * ep);
+        cx.lineTo(qmb[0] - px * ep, qmb[1] - py * ep); cx.lineTo(qma[0] - px * ep, qma[1] - py * ep);
+        cx.closePath(); cx.fill();
+        cx.strokeStyle = ombre; cx.lineWidth = 1.5; cx.stroke();
+        // les creneaux (merlons noirs) le long du sommet, façon muraille de prison
+        var pas = Math.max(1, ep * 2.4), nb = Math.max(2, Math.round(L / pas));
+        cx.fillStyle = ombre;
+        for (var i = 0; i < nb; i += 2) {
+          var t0 = i / nb, t1 = Math.min(1, (i + 1) / nb);
+          var xa = qma[0] + dx * t0, ya = qma[1] + dy * t0, xb = qma[0] + dx * t1, yb = qma[1] + dy * t1;
+          cx.beginPath();
+          cx.moveTo(xa + px * ep, ya + py * ep); cx.lineTo(xb + px * ep, yb + py * ep);
+          cx.lineTo(xb + px * ep * 2, yb + py * ep * 2); cx.lineTo(xa + px * ep * 2, ya + py * ep * 2);
+          cx.closePath(); cx.fill();
+        }
+        if (z >= 15.0) pastille(mx, my - ep * 3.2, (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo) + ' · ' + m.vie, m.mien ? '#c7cbd1' : '#9a9ea4', 'rgba(20,20,22,.94)');
       } });
     });
 
@@ -15211,6 +15231,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     groupes: function () { ouvrirGroupes(); },
     murPoser: function () { S.mode = 'mur-a'; S.murA = null; fermerFeuille(); consigne('Touche le premier point de la nouvelle muraille sur la carte.'); },
     murRenfort: function (el) { S.envoi = { cible: { type: 'mur', id: el.dataset.m } }; ouvrirMurRenfort(el.dataset.m); },
+    murDemolir: function (el) { action('razzia-mur-demolir', { id: el.dataset.m }, function (r) { toast('Muraille démolie : +' + eur(r.remboursement) + ', tes koalas sont rentrés.', 'bon'); ouvrirMurailles(); caisse(); }); },
     cote: function (el) {
       Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('.rz-cote'), function (x) { x.classList.toggle('choisi', x === el); });
       if (S.envoi && S.envoi.cible) S.envoi.cible.cote = el.dataset.c;
@@ -15477,7 +15498,9 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     var v = S.vue, m = (v.murs || []).find(function (x) { return x.id === murId; });
     if (!m) return;
     S.envoi = { cible: { type: 'mur', id: m.id }, groupe: groupe || null };
-    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Ta muraille, résistance actuelle <b>' + m.vie + '</b>. Envoie des koalas pour la renforcer : ils y restent définitivement en garnison.</p></div>' +
+    var remb = Math.round(v.regles.murCout / 2);
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Ta muraille, résistance actuelle <b>' + m.vie + '</b>. Envoie des koalas pour la renforcer : ils y restent définitivement en garnison.</p>' +
+      '<button class="rz-btn mini" data-a="murDemolir" data-m="' + m.id + '">Démolir · +' + eur(remb) + ' · la garnison rentre</button></div>' +
       '<div class="rz-sec"><div class="rz-titre">Renforcer</div>' + (groupe ? '' : blocUnites(v.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
       '<button class="rz-btn rouge plein" data-a="trajet">Choisir le trajet</button><div class="rz-erreur"></div></div>';
     ouvrirFeuille('Ta muraille', h, { rouvrir: function () { ouvrirMurRenfort(murId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });

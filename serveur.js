@@ -2626,9 +2626,9 @@ function rzMultDefense(j) { return 1 + 0.25 * ((j.defense || 1) - 1); }
 const RZ_MURS = {};                 // id -> { id, proprio, a:[lon,lat], b:[lon,lat], garnison }
 let   rzMurCompteur = 1;
 const RZ_MUR_COUT        = 1500;    // EUR le tronçon
-const RZ_MUR_LONGUEUR_MIN = 6;      // m
-const RZ_MUR_LONGUEUR_MAX = 45;     // m (taille d'un batiment ou deux)
-const RZ_MUR_CHAINE_MAX  = 60;      // m : doit se relier a la base ou a un mur deja pose
+const RZ_MUR_LONGUEUR_MIN = 11;     // m
+const RZ_MUR_LONGUEUR_MAX = 79;     // m (75 % plus grand qu'au depart)
+const RZ_MUR_CHAINE_MAX  = 100;     // m : doit se relier a la base ou a un mur deja pose
 const RZ_MUR_VIE_BASE    = 30;      // force de base, meme sans renfort
 function rzMurForce(m) { return RZ_MUR_VIE_BASE + rzPuissance(m.garnison); }
 /* intersection de segments (formule standard, orientation des triplets) */
@@ -4715,6 +4715,19 @@ const serveur = http.createServer(async (req, res) => {
         const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
         return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-mur-demolir' && req.method === 'POST') {
+        const m = RZ_MURS[String(body.id || '')];
+        if (!m) return repondre(res, 404, { erreur: 'Muraille introuvable.' });
+        if (m.proprio !== pb) return repondre(res, 409, { erreur: 'Ce n\'est pas ta muraille.' });
+        const remboursement = Math.round(RZ_MUR_COUT / 2);
+        RZ_TYPES.forEach(t => { moi.stock[t] += m.garnison[t] | 0; });   // la garnison rentre a la base, saine et sauve
+        delete RZ_MURS[m.id];
+        compte.solde = sous(compte.solde + remboursement);
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte); rzSauver();
+        return repondre(res, 200, Object.assign(rzVue(compte, now), { remboursement }));
       }
 
       if (route === '/api/razzia-envoyer' && req.method === 'POST') {
