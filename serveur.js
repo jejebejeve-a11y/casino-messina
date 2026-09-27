@@ -2536,7 +2536,7 @@ const RZ_POSTES = [
   { id: 'nordest', nom: 'Poste Nord-Est', lon: 2.28900, lat: 48.88900 },  // vers Porte Maillot
   { id: 'sudest',  nom: 'Poste Sud-Est',  lon: 2.28500, lat: 48.82300 },  // vers Auteuil-sud
   { id: 'sudouest',nom: 'Poste Sud-Ouest',lon: 2.23500, lat: 48.81900 },  // vers Boulogne-sud
-  { id: 'centre',  nom: 'Poste Centre',   lon: 2.26700, lat: 48.86300 },  // au milieu du bois
+  { id: 'centre',  nom: 'Poste Centre',   lon: 2.23000, lat: 48.86200 },  // dans le bois, cote Boulogne-Billancourt
 ];
 function rzPoste(id) { return RZ_POSTES.find(p => p.id === id) || RZ_POSTES[0]; }
 

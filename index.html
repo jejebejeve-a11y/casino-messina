@@ -15046,8 +15046,10 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     (v.murs || []).forEach(function (m) {
       var qma = ecran(m.a), qmb = ecran(m.b);
       if (Math.max(qma[0], qmb[0]) < -200 || Math.min(qma[0], qmb[0]) > W + 200 || Math.max(qma[1], qmb[1]) < -300 || Math.min(qma[1], qmb[1]) > H + 200) return;
-      var mx = (qma[0] + qmb[0]) / 2, my = (qma[1] + qmb[1]) / 2, lpx = Math.hypot(qmb[0] - qma[0], qmb[1] - qma[1]);
-      cibles.push({ x: mx, y: my, r: Math.max(16, lpx / 2), type: 'mur', id: m.id });
+      var mx = (qma[0] + qmb[0]) / 2, my = (qma[1] + qmb[1]) / 2;
+      /* zone cliquable = pres du trait reel (segment), pas un cercle qui grandit avec la longueur a l'ecran :
+         sinon, une muraille tres etiree par la perspective (vue presque de face) devient cliquable partout. */
+      cibles.push({ x: mx, y: my, r: Math.max(16, k * 0.9 + 12), type: 'mur', id: m.id, ax: qma[0], ay: qma[1], bx: qmb[0], by: qmb[1] });
       acteurs.push({ y: 1e9 + my, f: function () {
         var dx = qmb[0] - qma[0], dy = qmb[1] - qma[1], L = Math.hypot(dx, dy) || 1;
         var ux = dx / L, uy = dy / L, px = -uy, py = ux;               // perpendiculaire (cote crenelé)
@@ -15746,9 +15748,18 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     };
   }
 
+  function distSegment(x, y, ax, ay, bx, by) {
+    var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    var t = L2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)) : 0;
+    var px = ax + dx * t, py = ay + dy * t;
+    return Math.hypot(x - px, y - py);
+  }
   function toucher(x, y) {
     var best = null, bd = 1e9;
-    cibles.forEach(function (c) { var d = Math.hypot(c.x - x, c.y - y) - (c.type === 'groupe' ? 8 : 0); if (d < c.r && d < bd) { bd = d; best = c; } });
+    cibles.forEach(function (c) {
+      var d = c.type === 'mur' ? distSegment(x, y, c.ax, c.ay, c.bx, c.by) : Math.hypot(c.x - x, c.y - y) - (c.type === 'groupe' ? 8 : 0);
+      if (d < c.r && d < bd) { bd = d; best = c; }
+    });
     return best;
   }
   function clicCarte(e) {
