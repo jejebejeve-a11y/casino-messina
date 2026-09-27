@@ -15052,16 +15052,39 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
         var dx = qmb[0] - qma[0], dy = qmb[1] - qma[1], L = Math.hypot(dx, dy) || 1;
         var ux = dx / L, uy = dy / L, px = -uy, py = ux;               // perpendiculaire (cote crenelé)
         var ep = Math.max(3.5, k * 0.85);                              // demi-epaisseur du corps de pierre
-        var ouvert = m.portail && m.ouvert;
         var pierre = m.mien ? '#8a8f98' : '#5a5e66', ombre = m.mien ? '#3f434a' : '#232529';
-        cx.globalAlpha = ouvert ? 0.4 : 1;
-        // le corps du mur (ou du portail), en pierre grise
+        if (m.portail) {
+          // un vrai portail a deux battants de pierre, sur charnieres, qui pivotent visiblement a l'ouverture/fermeture
+          var depuis = now - (m.basculeLe || 0), pAnim = Math.max(0, Math.min(1, depuis / 650));
+          var frac = m.ouvert ? pAnim : (1 - pAnim);    // 0 = ferme (les 2 battants se rejoignent au milieu), 1 = grand ouvert
+          function battant(hinge) {
+            var tipFerme = [mx, my];
+            var tipOuvert = [hinge[0] + px * (L / 2) * 0.92, hinge[1] + py * (L / 2) * 0.92];
+            var tip = [tipFerme[0] + (tipOuvert[0] - tipFerme[0]) * frac, tipFerme[1] + (tipOuvert[1] - tipFerme[1]) * frac];
+            var vx = tip[0] - hinge[0], vy = tip[1] - hinge[1], vl = Math.hypot(vx, vy) || 1, nx = -vy / vl, ny = vx / vl;
+            cx.fillStyle = pierre;
+            cx.beginPath();
+            cx.moveTo(hinge[0] + nx * ep, hinge[1] + ny * ep); cx.lineTo(tip[0] + nx * ep, tip[1] + ny * ep);
+            cx.lineTo(tip[0] - nx * ep, tip[1] - ny * ep); cx.lineTo(hinge[0] - nx * ep, hinge[1] - ny * ep);
+            cx.closePath(); cx.fill();
+            cx.strokeStyle = ombre; cx.lineWidth = 1.5; cx.stroke();
+          }
+          battant(qma); battant(qmb);
+          // les 2 piliers du portail (charnieres), toujours en place
+          cx.fillStyle = ombre;
+          [qma, qmb].forEach(function (h) { cx.beginPath(); cx.arc(h[0], h[1], ep * 1.15, 0, 7); cx.fill(); });
+          var libelle = 'PORTAIL · ' + (m.ouvert ? 'OUVERT' : 'FERMÉ') + (m.mien ? '' : ' · ' + m.pseudo);
+          var teinte = m.ouvert ? '#8ee08a' : '#e0b23a';
+          if (z >= 15.0) pastille(mx, my - ep * 3.2, libelle + ' · ' + m.vie, teinte, 'rgba(20,20,22,.94)');
+          return;
+        }
+        // le corps du mur, en pierre grise
         cx.fillStyle = pierre;
         cx.beginPath();
         cx.moveTo(qma[0] + px * ep, qma[1] + py * ep); cx.lineTo(qmb[0] + px * ep, qmb[1] + py * ep);
         cx.lineTo(qmb[0] - px * ep, qmb[1] - py * ep); cx.lineTo(qma[0] - px * ep, qma[1] - py * ep);
         cx.closePath(); cx.fill();
-        cx.strokeStyle = ombre; cx.lineWidth = 1.5; if (ouvert) cx.setLineDash([ep, ep]); cx.stroke(); cx.setLineDash([]);
+        cx.strokeStyle = ombre; cx.lineWidth = 1.5; cx.stroke();
         // les creneaux (merlons noirs) le long du sommet, façon muraille de prison
         var pas = Math.max(1, ep * 2.4), nb = Math.max(2, Math.round(L / pas));
         cx.fillStyle = ombre;
@@ -15073,10 +15096,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
           cx.lineTo(xb + px * ep * 2, yb + py * ep * 2); cx.lineTo(xa + px * ep * 2, ya + py * ep * 2);
           cx.closePath(); cx.fill();
         }
-        cx.globalAlpha = 1;
-        var libelle = m.portail ? 'PORTAIL · ' + (m.ouvert ? 'OUVERT' : 'FERMÉ') + (m.mien ? '' : ' · ' + m.pseudo) : (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo);
-        var teinte = m.portail ? (m.ouvert ? '#8ee08a' : '#e0b23a') : (m.mien ? '#c7cbd1' : '#9a9ea4');
-        if (z >= 15.0) pastille(mx, my - ep * 3.2, libelle + ' · ' + m.vie, teinte, 'rgba(20,20,22,.94)');
+        if (z >= 15.0) pastille(mx, my - ep * 3.2, (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo) + ' · ' + m.vie, m.mien ? '#c7cbd1' : '#9a9ea4', 'rgba(20,20,22,.94)');
       } });
     });
 

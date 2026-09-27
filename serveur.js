@@ -2632,7 +2632,8 @@ const RZ_MUR_LONGUEUR_MAX = 471;    // m (x1,7 de plus)
 const RZ_MUR_CHAINE_MAX  = 510;     // m : doit se relier a la base ou a un mur deja pose
 const RZ_MUR_VIE_BASE    = 30;      // force de base, meme sans renfort
 const RZ_PORTAIL_COUT    = 1500;    // EUR : un tronçon qu'on peut ouvrir/fermer
-function rzMurForce(m) { return RZ_MUR_VIE_BASE + rzPuissance(m.garnison); }
+const RZ_PORTAIL_VIE_BASE = 60;     // le portail encaisse plus qu'une simple muraille
+function rzMurForce(m) { return (m.portail ? RZ_PORTAIL_VIE_BASE : RZ_MUR_VIE_BASE) + rzPuissance(m.garnison); }
 /* intersection de segments (formule standard, orientation des triplets) */
 function rzOrientation(a, b, c) { return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]); }
 function rzSegCroise(p1, p2, p3, p4) {
@@ -3163,7 +3164,7 @@ function rzVue(compte, depuis) {
              revientDans: b.mortJusqua ? Math.max(0, b.mortJusqua - now) : 0 };
   });
   const murs = Object.values(RZ_MURS).map(m => ({ id: m.id, pseudo: RZJ[m.proprio] ? RZJ[m.proprio].pseudo : '?',
-    a: m.a, b: m.b, vie: Math.round(rzMurForce(m)), mien: m.proprio === pb, portail: !!m.portail, ouvert: !!m.ouvert }));
+    a: m.a, b: m.b, vie: Math.round(rzMurForce(m)), mien: m.proprio === pb, portail: !!m.portail, ouvert: !!m.ouvert, basculeLe: m.basculeLe || 0 }));
   const evts = moi.evenements.filter(e => e.t > (Number(depuis) || 0));
   return {
     now, solde: compte.solde, postes, bandits, murs, bases, groupes, alertes, evenements: evts,
@@ -4716,7 +4717,7 @@ const serveur = http.createServer(async (req, res) => {
         const cout = portail ? RZ_PORTAIL_COUT : RZ_MUR_COUT;
         if (compte.solde < cout) return repondre(res, 409, { erreur: 'Il faut ' + cout.toLocaleString('fr-FR') + ' € pour poser ' + (portail ? 'un portail' : 'une muraille') + '.' });
         compte.solde = sous(compte.solde - cout);
-        const m = { id: 'm' + (rzMurCompteur++), proprio: pb, a, b, garnison: rzVide(), portail, ouvert: false };
+        const m = { id: 'm' + (rzMurCompteur++), proprio: pb, a, b, garnison: rzVide(), portail, ouvert: false, basculeLe: 0 };
         RZ_MURS[m.id] = m;
         const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
@@ -4728,7 +4729,7 @@ const serveur = http.createServer(async (req, res) => {
         if (!m) return repondre(res, 404, { erreur: 'Portail introuvable.' });
         if (m.proprio !== pb) return repondre(res, 409, { erreur: 'Ce n\'est pas ton portail.' });
         if (!m.portail) return repondre(res, 409, { erreur: 'Ce n\'est pas un portail.' });
-        m.ouvert = !m.ouvert;
+        m.ouvert = !m.ouvert; m.basculeLe = now;
         rzSauver();
         return repondre(res, 200, rzVue(compte, now));
       }
