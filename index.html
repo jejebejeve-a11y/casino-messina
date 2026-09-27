@@ -2499,7 +2499,7 @@ body.pont-actif{overflow:hidden}
           </button>
           <button class="carte-jeu" data-jeu="razzia">
             <div class="cj-titre serif">Razzia</div>
-            <div class="cj-texte">La vraie carte de Paris. Pose ta base sur un vrai bâtiment, arme tes koalas, tiens un poste (Bat B ou l'un des quatre autres, éparpillés sur la carte), et va piller les autres joueurs par les rues ou par le métro.</div>
+            <div class="cj-texte">La vraie carte de Paris. Pose ta base sur un vrai bâtiment, arme tes koalas, tiens un poste (Bat B ou l'un des quatre autres, éparpillés sur la carte), attaque des camps de bandits pour du butin, et va piller les autres joueurs par les rues ou par le métro.</div>
             <div class="cj-pied">Jouer</div>
           </button>
         </div>
@@ -8436,7 +8436,7 @@ window.addEventListener('error', function (ev) {
         <li>L'étage se balance sous la grue. Appuyez sur <b>BUILD</b> quand il passe au-dessus de son ombre, au sommet de la tour.</li>
         <li>La tour ne tombe que si vous posez <b>mal</b> : un lâcher trop imprécis fait tomber l'étage à côté et la tour est perdue (x0). Bien visé, l'étage tient toujours — vous pouvez monter très haut sans risque si vous avez le coup en main.</li>
         <li>Plus vous montez, plus la grue balance vite et sur une amplitude réduite : viser juste devient plus difficile en hauteur.</li>
-        <li>Une cote est tirée à chaque étage bien posé et se <b>multiplie</b> avec les précédentes. Elle peut aussi être <b>inférieure à x1</b> (par exemple x0,50) : la malchance peut réduire vos gains, mais elle ne fait jamais tomber la tour.</li>
+        <li>Une cote est tirée à chaque étage bien posé et se <b>multiplie</b> avec les précédentes. Elle est <b>plus souvent inférieure à x1</b> qu'au-dessus de x2 ou x3 : la cote fait perdre une partie du gain bien plus souvent qu'elle n'en rapporte gros. C'est ce qui rend la tour difficile à faire grossir, jamais la tour elle-même qui s'effondre pour ça.</li>
         <li>La tour reste toujours <b>bien droite</b> : elle ne penche pas et ne glisse jamais, quelle que soit sa hauteur.</li>
         <li><b>CASHOUT</b> encaisse à tout moment mise × multiplicateur cumulé.</li>
         <li>Le sommet est au <b>30ᵉ niveau</b> ou au plafond <b>x5000</b> : gain encaissé d'office. L'atteindre demande d'enchaîner de nombreux lâchers bien visés.</li>
@@ -15002,6 +15002,17 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       } });
     });
 
+    // les bandits (camps fixes, façon "barbares")
+    v.bandits.forEach(function (b) {
+      var qb = ecran([b.lon, b.lat]), hb = hauteurPx(b.lat, 18);
+      if (qb[0] < -200 || qb[1] < -200 || qb[0] > W + 200 || qb[1] > H + 300) return;
+      if (b.vivant) cibles.push({ x: qb[0], y: qb[1] - hb / 2, r: Math.max(30, 80 / metresParPixel(b.lat)), type: 'bandit', id: b.id });
+      acteurs.push({ y: 1e9 + qb[1], f: function () {
+        var txt = b.vivant ? 'BANDITS · NIV. ' + b.niveau : 'VAINCUS · revient dans ' + duree(b.revientDans);
+        pastille(qb[0], qb[1] - hb - 16, txt, b.vivant ? '#e0212e' : '#6b6f76', 'rgba(30,10,10,.9)');
+      } });
+    });
+
     // les groupes
     var occPoste = {};
     v.groupes.forEach(function (g) {
@@ -15187,7 +15198,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       if (S.envoi.groupe) d.groupe = S.envoi.groupe; else d.unites = S.envoi.unites;
       action('razzia-envoyer', d, function () {
         tut(520, 0.1, 0.1); setTimeout(function () { tut(780, 0.14, 0.1); }, 110);
-        toast(S.envoi.cible.type === 'base' ? 'Tes koalas partent à l\'attaque.' : 'Tes koalas sont en route.', 'info');
+        toast((S.envoi.cible.type === 'base' || S.envoi.cible.type === 'bandit' || S.envoi.cible.type === 'groupe') ? 'Tes koalas partent à l\'attaque.' : 'Tes koalas sont en route.', 'info');
         S.envoi = null; fermerFeuille();
       });
     },
@@ -15217,7 +15228,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       '<div class="rz-sec rz-grille"><button class="rz-btn" data-a="armurerie">Armurerie</button><button class="rz-btn" data-a="defense">Défense</button></div>' +
       '<div class="rz-sec"><div class="rz-titre">Envoyer des koalas quelque part</div>' + blocUnites(m.stock) +
       (total(m.stock) ? '<button class="rz-btn rouge plein" data-a="pointCarte">Choisir l\'endroit sur la carte</button>' : '') + '<div class="rz-erreur"></div>' +
-      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur sur la carte. Pour gagner de l\'argent sans attaquer, touche un poste (Bat B ou l\'un des quatre autres).</p></div>' +
+      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur, un de ses groupes (posté ou en déplacement), ou un camp de bandits sur la carte. Pour gagner de l\'argent sans attaquer, touche un poste (Bat B ou l\'un des quatre autres).</p></div>' +
       '<div class="rz-sec"><div class="rz-titre">Emplacement</div>' +
       (m.deplaceUtilise
         ? '<p class="rz-note">Tu as déjà changé ta base d\'emplacement une fois.</p>'
@@ -15372,12 +15383,38 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     ouvrirFeuille('Le <em>' + echap(pt.nom) + '</em>', h, { rouvrir: function () { ouvrirPoste(posteId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
   }
 
+  /* --- un camp de bandits touche sur la carte --- */
+  function ouvrirBandit(banditId, groupe) {
+    var v = S.vue, m = v.moi;
+    var b = v.bandits.find(function (x) { return x.id === banditId; });
+    if (!b) return;
+    if (!b.vivant) {
+      ouvrirFeuille('Bandits', '<div class="rz-sec"><p class="rz-note" style="margin-top:0">Ce camp a été vaincu. Il revient dans <b>' + duree(b.revientDans) + '</b>, avec un nouveau niveau tiré au sort.</p></div>');
+      return;
+    }
+    var R = v.regles, force = R.banditForce[b.niveau - 1], gain = R.banditGain[b.niveau - 1];
+    S.envoi = { cible: { type: 'bandit', id: b.id }, groupe: groupe || null };
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Un groupe d\'hommes cagoulés, niveau <b>' + b.niveau + '</b> / 5. Les battre rapporte de l\'argent, mais ils se défendent — tu perdras des koalas, même en gagnant.</p>' +
+      '<div class="rz-chiffres"><div><small>Défense</small><b>' + force + '</b></div><div><small>Butin si victoire</small><b>' + eur(gain[0]) + ' – ' + eur(gain[1]) + '</b></div></div></div>';
+    if (m.base) {
+      h += '<div class="rz-sec"><div class="rz-titre">Attaquer</div>' + (groupe ? '' : blocUnites(m.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
+        '<button class="rz-btn rouge plein" data-a="trajet"' + (m.feu > maintenant() ? ' disabled' : '') + '>Choisir le trajet</button><div class="rz-erreur"></div></div>';
+    }
+    ouvrirFeuille('Bandits <em>· niveau ' + b.niveau + '</em>', h, { rouvrir: function () { ouvrirBandit(banditId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
+  }
+
   /* --- un groupe touche sur la carte --- */
-  function ouvrirGroupe(g) {
+  function ouvrirGroupe(g, groupe) {
     if (!g.mien) {
-      ouvrirFeuille('Groupe de <em>' + echap(g.pseudo) + '</em>', '<div class="rz-sec"><div class="rz-chiffres"><div><small>Koalas</small><b>' + g.n + '</b></div><div><small>Armes</small><b>' +
+      S.envoi = { cible: { type: 'groupe', id: g.id }, groupe: groupe || null };
+      var h = '<div class="rz-sec"><div class="rz-chiffres"><div><small>Koalas</small><b>' + g.n + '</b></div><div><small>Armes</small><b>' +
         (g.armes && g.armes.length ? g.armes.map(function (a) { return a === 'diamant' ? 'Diamant' : 'Pistolet'; }).join(', ') : 'Aucune') + '</b></div></div>' +
-        '<p class="rz-note">' + (g.etat === 'poste' ? (g.cible.type === 'poste' ? 'Il tient ' + echap((S.vue.postes.find(function (p) { return p.id === g.cible.id; }) || { nom: 'un poste' }).nom) + '.' : 'Il attend dans la rue.') : 'Il est en route.') + '</p></div>');
+        '<p class="rz-note">' + (g.etat === 'poste' ? (g.cible.type === 'poste' ? 'Il tient ' + echap((S.vue.postes.find(function (p) { return p.id === g.cible.id; }) || { nom: 'un poste' }).nom) + '.' : 'Il attend dans la rue.') : 'Il se déplace.') + '</p></div>';
+      if (S.vue.moi.base) {
+        h += '<div class="rz-sec"><div class="rz-titre">Attaquer ce groupe</div>' + (groupe ? '' : blocUnites(S.vue.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
+          '<button class="rz-btn rouge plein" data-a="trajet"' + (S.vue.moi.feu > maintenant() ? ' disabled' : '') + '>Choisir le trajet</button><div class="rz-erreur"></div></div>';
+      }
+      ouvrirFeuille('Groupe de <em>' + echap(g.pseudo) + '</em>', h, { rouvrir: function () { var gg = S.vue.groupes.find(function (x) { return x.id === g.id; }); if (gg) ouvrirGroupe(gg, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
       return;
     }
     ouvrirGroupes();
@@ -15423,6 +15460,8 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     var c = S.envoi.cible;
     if (c.type === 'base') { var b = S.vue.bases.find(function (x) { return x.id === c.pseudo; }); return b ? [b.lon, b.lat] : null; }
     if (c.type === 'poste') { var pt = S.vue.postes.find(function (x) { return x.id === c.id; }); return pt ? [pt.lon, pt.lat] : null; }
+    if (c.type === 'bandit') { var bd = S.vue.bandits.find(function (x) { return x.id === c.id; }); return bd ? [bd.lon, bd.lat] : null; }
+    if (c.type === 'groupe') { var cg = S.vue.groupes.find(function (x) { return x.id === c.id; }); if (!cg) return null; var ps = position(cg, maintenant()); return ps.p || null; }
     if (c.type === 'maison') return [S.vue.moi.base.lon, S.vue.moi.base.lat];
     return [c.lon, c.lat];
   }
@@ -15448,11 +15487,15 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       S.carte.fitBounds(bb, { padding: { top: 90, bottom: Math.min(420, window.innerHeight * 0.5), left: 40, right: 40 }, maxZoom: 16.5, duration: 900 });
     }
     var c = S.envoi.cible, ou = c.type === 'base' ? 'la base de ' + echap((S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo) + ' · côté ' + NOM_COTE[c.cote].toLowerCase()
-      : c.type === 'poste' ? 'le ' + echap((S.vue.postes.find(function (p) { return p.id === c.id; }) || { nom: 'poste' }).nom) : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
+      : c.type === 'poste' ? 'le ' + echap((S.vue.postes.find(function (p) { return p.id === c.id; }) || { nom: 'poste' }).nom)
+      : c.type === 'bandit' ? 'le camp de bandits'
+      : c.type === 'groupe' ? 'le groupe de ' + echap((S.vue.groupes.find(function (g) { return g.id === c.id; }) || { pseudo: '?' }).pseudo)
+      : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
+    var estAttaque = c.type === 'base' || c.type === 'bandit' || c.type === 'groupe';
     var n = S.envoi.groupe ? (S.vue.groupes.find(function (g) { return g.id === S.envoi.groupe; }) || {}).n : total(S.envoi.unites);
     var h = '<p class="rz-note" style="margin:0 0 10px;font-size:14px">' + n + ' koala' + (n > 1 ? 's' : '') + ' vers ' + ou + '.</p>' +
       opts.map(function (o, i) { return '<button class="rz-option' + (i === S.optionChoisie ? ' choisi' : '') + '" data-a="option" data-i="' + i + '"><div><b>' + o.nom + '</b><span>' + echap(o.sous) + '</span></div><i>' + duree(o.duree) + '</i></button>'; }).join('') +
-      '<button class="rz-btn rouge plein" data-a="partir">' + (c.type === 'base' ? 'Lancer l\'attaque' : 'Envoyer') + '</button><div class="rz-erreur"></div>';
+      '<button class="rz-btn rouge plein" data-a="partir">' + (estAttaque ? 'Lancer l\'attaque' : 'Envoyer') + '</button><div class="rz-erreur"></div>';
     ouvrirFeuille('Le <em>trajet</em>', h);
   }
 
@@ -15466,7 +15509,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   function entrerDestination() {
     S.mode = 'destination';
     $('rzFeuille').hidden = true;
-    consigne('Touche l\'endroit, une base ou un poste <button class="rz-btn mini" id="rzAnnuler">Annuler</button>');
+    consigne('Touche l\'endroit, une base, un poste, un camp de bandits ou un groupe ennemi <button class="rz-btn mini" id="rzAnnuler">Annuler</button>');
     $('rzAnnuler').onclick = function (e) { e.stopPropagation(); S.mode = 'normal'; S.envoi = null; consigne(''); };
   }
   function anneau(f) {
@@ -15519,6 +15562,8 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       if (base && !base.moi) { ouvrirCibleBase(base, groupe); if (S.envoi) S.envoi.unites = unites; return; }
       if (base && base.moi) { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'maison' } }; if (!groupe) return toast('Ils sont déjà à la base.', 'info'); return calculer(); }
       if (t && t.type === 'poste') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'poste', id: t.id } }; return calculer(); }
+      if (t && t.type === 'bandit') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'bandit', id: t.id } }; return calculer(); }
+      if (t && t.type === 'groupe' && !t.g.mien) { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'groupe', id: t.g.id } }; return calculer(); }
       var p = [e.lngLat.lng, e.lngLat.lat];
       if (!dansZone(p, S.vue.regles.zone)) { toast('Hors de la zone.', 'mauvais'); S.mode = 'destination'; return entrerDestination(); }
       S.envoi = { groupe: groupe, unites: unites, cible: { type: 'point', lon: Math.round(p[0] * 1e6) / 1e6, lat: Math.round(p[1] * 1e6) / 1e6 } };
@@ -15527,6 +15572,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (t && t.type === 'groupe' && (!base || t.g.mien)) return ouvrirGroupe(t.g);
     if (base) return ouvrirCibleBase(base);
     if (t && t.type === 'poste') return ouvrirPoste(t.id);
+    if (t && t.type === 'bandit') return ouvrirBandit(t.id);
     if (!$('rzFeuille').hidden) fermerFeuille();
   }
 

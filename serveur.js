@@ -89,39 +89,40 @@ const EXPIRATION_COURSE_MULTI    = 5 * 60000;   // filet de securite
 const MISE_MINI_TOWER = 0.10;
 const MISE_MAXI_TOWER = 500;
 
-function towerAmpFor(n)    { return Math.max(17, 48 - n * 2.1); }
-function towerPeriodFor(n) { return Math.max(0.68, 1.5 - n * 0.04); }
+function towerAmpFor(n)    { return Math.max(15, 48 - n * 2.3); }
+function towerPeriodFor(n) { return Math.max(0.55, 1.5 - n * 0.045); }
 function towerRand(a, b) { return a + Math.random() * (b - a); }
 function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-/* ---------- Tower Rush : les cotes (refonte) ----------
-   La seule facon de perdre la tour, c\'est un lacher mal vise : rien
-   d\'autre. Si l\'etage est pose dans la zone sans risque du balancement,
-   il tient a coup sur, quel que soit le niveau deja atteint - un joueur
-   qui a le coup en main peut monter tres haut sans jamais risquer
-   l\'effondrement.
-   Le seul hasard qui reste porte sur le multiplicateur de l\'etage POSE :
-   il suit en moyenne TOWER_ECHELLE (progression ~x1,35 par etage), mais
-   peut retomber sous x1 (par exemple x0,50) - c\'est de la malchance sur
-   le gain, jamais sur la tour elle-meme.
+/* ---------- Tower Rush : les cotes (refonte v2, casino beaucoup plus dur) ----------
+   La seule facon de perdre la tour reste un lacher mal vise. Mais la cote
+   tiree a chaque etage bien pose est maintenant tres majoritairement
+   defavorable : bien plus souvent en dessous de x1 qu'au-dessus de x2/x3.
+   Repartition (independante a chaque etage) :
+     62 % : x0,25 a x0,95  (perte partielle, le cas de loin le plus frequent)
+     25 % : x0,95 a x1,30  (quasi neutre)
+     10 % : x1,30 a x2,00  (bon coup)
+      3 % : x2,00 a x3,60  (gros coup, rare)
+   Esperance ~0,90 par etage : monter beaucoup exige d'enchainer plusieurs
+   bons coups d'affilee, ce qui devient vite tres improbable (simulation :
+   multiplier une mise par plus de x32, comme un x0,10€->16 000 €, arrive
+   environ 1 tour sur 4 000 a 5 000, quel que soit le niveau de jeu).
    Plus on monte, plus le balancement est rapide (towerPeriodFor) et
    l\'amplitude reduite (towerAmpFor) : viser juste devient plus dur en
-   hauteur, ce qui suffit a garder un risque qui grimpe avec l\'audace du
-   joueur, sans avoir besoin d\'un effondrement tire au sort.
+   hauteur, ce qui ajoute un risque d\'echec qui grimpe avec l\'audace du
+   joueur, en plus de l\'esperance deja negative du multiplicateur.
    Plafond de securite : niveau 30 ou x5000, encaisse d\'office (au-dela
-   c\'est purement theorique).                                          */
+   c\'est purement theorique - avec cette esperance, personne n\'en approche
+   sans une serie de coups exceptionnelle).                              */
 const TOWER_NIVEAUX  = 30;
 const TOWER_MULT_MAX = 5000;
-const TOWER_ECHELLE  = [1.13, 1.36, 1.71, 2.26, 3.13, 4.5, 7.0, 10.5, 15.5, 22, 30,
-                         40.5, 54.68, 73.81, 99.65, 134.52, 181.6, 245.16, 330.97,
-                         446.81, 603.2, 814.32, 1099.33, 1484.09, 2003.52, 2704.75,
-                         3651.42, 4929.41, 5000, 5000];
 
-function towerRollFactor(niveau) {
-  const k = Math.min(niveau, TOWER_ECHELLE.length - 1);
-  const ratio = k === 0 ? TOWER_ECHELLE[0] : TOWER_ECHELLE[k] / TOWER_ECHELLE[k - 1];
-  const a = k === 0 ? 0.40 : 0.15;                    // hasard de moyenne 1
-  return ratio * towerRand(1 - a, 1 + a);
+function towerRollFactor() {
+  const r = Math.random();
+  if (r < 0.62) return towerRand(0.25, 0.95);   // perte partielle : le cas le plus frequent
+  if (r < 0.87) return towerRand(0.95, 1.30);   // quasi neutre
+  if (r < 0.97) return towerRand(1.30, 2.00);   // bon coup
+  return towerRand(2.00, 3.60);                  // gros coup, rare
 }
 
 /* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l\'issue :
@@ -143,7 +144,7 @@ function towerTirer(tour, angle) {
   const missChance = etaitGele ? 0 : edgeT * edgeT;
   if (Math.random() < missChance) return { issue: 'rate', angle: angle };
 
-  const facteur = etaitGele ? towerRand(0.92, 1.06) : towerRollFactor(niveau);
+  const facteur = etaitGele ? towerRand(0.92, 1.06) : towerRollFactor();
   if (etaitGele) tour.frozenLeft--;
   else tour.niveau = niveau + 1;
   const parfait = !etaitGele && errRatio < 0.1 && facteur >= 1;
@@ -2529,6 +2530,38 @@ const RZ_POSTES = [
   { id: 'ouest', nom: 'Poste Ouest',  lon: 2.23800, lat: 48.83210 },   // vers Boulogne-Billancourt
 ];
 function rzPoste(id) { return RZ_POSTES.find(p => p.id === id) || RZ_POSTES[0]; }
+
+/* ---- les bandits (façon "barbares" de RoK) : des camps fixes, éparpillés
+   dans toute la zone, à attaquer pour de l'argent. Niveau 1 à 5 : plus le
+   niveau est haut, plus ils se défendent, plus le butin est gros. Battus,
+   ils reviennent (niveau retiré au hasard) après RZ_BANDIT_RESPAWN. */
+const RZ_BANDIT_FORCE   = [8, 20, 40, 65, 100];                                   // defense par niveau (1 a 5)
+const RZ_BANDIT_GAIN    = [[900, 1000], [2300, 2500], [4600, 5000], [7500, 8200], [11500, 12500]];
+const RZ_BANDIT_RESPAWN = 10 * 60 * 1000;                                         // 10 minutes avant de reformer un camp vaincu
+const RZ_BANDIT_POS = [
+  [2.2743,48.8472], [2.2962,48.8656], [2.2372,48.8537], [2.2458,48.8619], [2.2973,48.8492],
+  [2.2869,48.8355], [2.2817,48.8607], [2.2452,48.8151], [2.2644,48.8771], [2.2498,48.8473],
+  [2.2704,48.8595], [2.2402,48.8352], [2.2863,48.8813], [2.2662,48.8269], [2.2467,48.8343],
+  [2.2812,48.8675], [2.2534,48.8500], [2.2752,48.8847], [2.2835,48.8249], [2.2598,48.8580],
+];
+const RZ_BANDIT_NIVEAUX_INIT = [1,1,1,1,1,1,1, 2,2,2,2,2,2, 3,3,3,3, 4,4, 5];      // repartition de depart
+const RZ_BANDITS = RZ_BANDIT_POS.map((p, i) => ({
+  id: 'b' + i, lon: p[0], lat: p[1], niveau: RZ_BANDIT_NIVEAUX_INIT[i], mortJusqua: 0,
+}));
+function rzBanditNiveauAleatoire() {
+  const r = Math.random();
+  if (r < 0.35) return 1;
+  if (r < 0.63) return 2;
+  if (r < 0.83) return 3;
+  if (r < 0.95) return 4;
+  return 5;
+}
+function rzBanditVivant(b, now) { return !b.mortJusqua || b.mortJusqua <= now; }
+/* revient tout seul, avec un niveau retire au hasard, une fois le delai passe */
+function rzBanditRafraichir(b, now) {
+  if (b.mortJusqua && b.mortJusqua <= now) { b.mortJusqua = 0; b.niveau = rzBanditNiveauAleatoire(); }
+  return b;
+}
 const RZ_COTES       = ['devant', 'derriere', 'gauche', 'droite'];
 const RZ_ZONE = [
   [2.2330,48.8680],[2.2500,48.8830],[2.2740,48.8900],[2.2960,48.8925],[2.3060,48.8790],
@@ -2597,6 +2630,35 @@ function rzDist(a, b) {           // a, b = [lon, lat], en metres
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 function rzLongueur(coords) { let s = 0; for (let i = 1; i < coords.length; i++) s += rzDist(coords[i - 1], coords[i]); return s; }
+/* la position actuelle d'un groupe, meme en route (interpole le long de ses
+   etapes) : sert a intercepter des koalas qui se baladent, pas seulement
+   ceux qui sont postes quelque part. Miroir exact de la fonction du meme
+   nom cote client (position()), pour que le point d'attaque envoye colle
+   a ce que le joueur voit sur sa carte. */
+function rzPositionActuelle(g, now) {
+  if (g.etat !== 'route' || !g.etapes || !g.etapes.length) return g.pos || null;
+  const es = g.etapes;
+  for (let i = 0; i < es.length; i++) {
+    const e = es[i];
+    if (now < e.t0) return e.type === 'pied' ? e.coords[0] : e.depuis;
+    if (now <= e.t1) {
+      const f = (now - e.t0) / Math.max(1, e.t1 - e.t0);
+      if (e.type === 'metro') return [e.depuis[0] + (e.vers[0] - e.depuis[0]) * f, e.depuis[1] + (e.vers[1] - e.depuis[1]) * f];
+      const L = rzLongueur(e.coords), vise = f * L; let fait = 0;
+      for (let j = 1; j < e.coords.length; j++) {
+        const d = rzDist(e.coords[j - 1], e.coords[j]);
+        if (fait + d >= vise) {
+          const h = d ? (vise - fait) / d : 0, a = e.coords[j - 1], b = e.coords[j];
+          return [a[0] + (b[0] - a[0]) * h, a[1] + (b[1] - a[1]) * h];
+        }
+        fait += d;
+      }
+      return e.coords[e.coords.length - 1];
+    }
+  }
+  const der = es[es.length - 1];
+  return der.type === 'pied' ? der.coords[der.coords.length - 1] : der.vers;
+}
 function rzDansZone(p) {
   let dedans = false;
   for (let i = 0, j = RZ_ZONE.length - 1; i < RZ_ZONE.length; j = i++) {
@@ -2686,7 +2748,8 @@ async function rzSauverMaintenant(sansVerif) {
       }
     }
     const v = Math.max(Date.now(), rzVersion + 1);
-    await Carnet.commande(['MSET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur, v }), 'razzia:version', String(v)]);
+    const bandits = RZ_BANDITS.map(b => ({ id: b.id, niveau: b.niveau, mortJusqua: b.mortJusqua }));
+    await Carnet.commande(['MSET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur, v, bandits }), 'razzia:version', String(v)]);
     rzVersion = v;
     rzADIRTY = false;
     return true;
@@ -2723,6 +2786,12 @@ function rzAppliquerMonde(d) {
   });
   rzCompteur = Math.max(rzCompteur, d.n || 1);
   rzVersion = Number(d.v) || 0;
+  // les bandits : positions et niveaux de depart restent fixes dans le code,
+  // seuls l'etat vaincu/niveau actuel sont restaures (par id)
+  (d.bandits || []).forEach(sb => {
+    const b = RZ_BANDITS.find(x => x.id === sb.id);
+    if (b) { b.niveau = sb.niveau || b.niveau; b.mortJusqua = sb.mortJusqua || 0; }
+  });
 }
 /* se remettre a jour si un autre serveur a sauvegarde plus recent que nous.
    force = on va poser/supprimer une base : on verifie a coup sur. Sinon, au
@@ -2860,6 +2929,55 @@ async function rzArrivee(g) {
     return;
   }
 
+  if (c.type === 'bandit') {
+    const b = RZ_BANDITS.find(x => x.id === c.id);
+    if (!b) { rzRetour(g, now); return; }
+    rzBanditRafraichir(b, now);
+    if (!rzBanditVivant(b, now)) {
+      rzEvenement(g.proprio, 'Ce camp de bandits vient d\'être vaincu par quelqu\'un d\'autre : plus rien à combattre pour l\'instant.', 'info');
+      rzRetour(g, now); return;
+    }
+    const D = RZ_BANDIT_FORCE[b.niveau - 1];
+    const r = rzCombat(g.unites, 1, { nu: D, pistolet: 0, diamant: 0 }, 1);
+    if (r.gagnant === 'A') {
+      g.unites = r.A;
+      const [mn, mx] = RZ_BANDIT_GAIN[b.niveau - 1];
+      const gain = sous(mn + Math.random() * (mx - mn));
+      b.mortJusqua = now + RZ_BANDIT_RESPAWN;
+      await rzAjouter(g.proprio, gain);
+      rzEvenement(g.proprio, 'Bandits niveau ' + b.niveau + ' vaincus : +' + gain.toLocaleString('fr-FR') + ' €. Il te reste ' + rzTotal(r.A) + ' koalas.', 'bon');
+    } else {
+      rzEvenement(g.proprio, 'Attaque des bandits (niveau ' + b.niveau + ') ratée : tes ' + rzTotal(g.unites) + ' koalas sont tombés.', 'mauvais');
+      delete RZG[g.id];
+      return;
+    }
+    rzRetour(g, now);
+    return;
+  }
+
+  if (c.type === 'groupe') {
+    const cg = RZG[c.id];
+    if (!cg || cg.proprio === g.proprio) {
+      rzEvenement(g.proprio, 'Ce groupe a disparu avant que tu ne l\'atteignes.', 'info');
+      rzRetour(g, now); return;
+    }
+    const nomCible = RZJ[cg.proprio] ? RZJ[cg.proprio].pseudo : '?';
+    const r = rzCombat(g.unites, 1, cg.unites, 1);
+    if (r.gagnant === 'A') {
+      g.unites = r.A;
+      delete RZG[cg.id];
+      rzEvenement(cg.proprio, moi.pseudo + ' a attaqué ton groupe en déplacement : tes koalas sont tous tombés.', 'mauvais');
+      rzEvenement(g.proprio, 'Groupe de ' + nomCible + ' détruit. Il te reste ' + rzTotal(r.A) + ' koalas.', 'bon');
+    } else {
+      rzEvenement(g.proprio, 'Attaque ratée contre le groupe de ' + nomCible + ' : tes ' + rzTotal(g.unites) + ' koalas sont tombés.', 'mauvais');
+      rzEvenement(cg.proprio, moi.pseudo + ' a attaqué ton groupe en déplacement et a perdu. Tes koalas tiennent toujours.', 'bon');
+      delete RZG[g.id];
+      return;
+    }
+    rzRetour(g, now);
+    return;
+  }
+
   if (c.type === 'base') {
     const cible = RZJ[c.pseudo];
     if (!cible || !cible.base) { rzRetour(g, now); return; }
@@ -2949,7 +3067,7 @@ function rzVue(compte, depuis) {
     const mien = g.proprio === pb;
     const o = { id: g.id, proprio: g.proprio, pseudo: RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?', mien,
                 etat: g.etat, n: rzTotal(g.unites), etapes: g.etat === 'route' ? g.etapes : null, pos: g.pos || null,
-                armes: RZ_TYPES.filter(t => t !== 'nu' && g.unites[t] > 0), cible: { type: g.cible.type, pseudo: g.cible.pseudo } };
+                armes: RZ_TYPES.filter(t => t !== 'nu' && g.unites[t] > 0), cible: { type: g.cible.type, pseudo: g.cible.pseudo, id: g.cible.id } };
     if (mien) { o.unites = g.unites; o.cibleCote = g.cible.cote; o.gagne = g.gagne || 0; o.fin = g.fin; }
     return o;
   });
@@ -2961,9 +3079,14 @@ function rzVue(compte, depuis) {
              occupants: [...new Set(occ.map(g => RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?'))],
              n: occ.reduce((s, g) => s + rzTotal(g.unites), 0) };
   });
+  const bandits = RZ_BANDITS.map(b => {
+    rzBanditRafraichir(b, now);
+    return { id: b.id, lon: b.lon, lat: b.lat, niveau: b.niveau, vivant: rzBanditVivant(b, now),
+             revientDans: b.mortJusqua ? Math.max(0, b.mortJusqua - now) : 0 };
+  });
   const evts = moi.evenements.filter(e => e.t > (Number(depuis) || 0));
   return {
-    now, solde: compte.solde, postes, bases, groupes, alertes, evenements: evts,
+    now, solde: compte.solde, postes, bandits, bases, groupes, alertes, evenements: evts,
     moi: {
       base: moi.base, deplaceUtilise: !!moi.deplaceUtilise, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
       feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock,
@@ -2974,7 +3097,7 @@ function rzVue(compte, depuis) {
     },
     regles: { prix: RZ_PRIX, force: RZ_FORCE, niveauArme: RZ_NIV_ARME, prixArmurerie: RZ_PRIX_ARMURERIE,
               armurerieMax: RZ_ARMURERIE_MAX, prixDefense: RZ_PRIX_DEFENSE, maxGroupes: RZ_MAX_GROUPES, reparation: RZ_REPARATION,
-              stations: RZ_STATIONS, zone: RZ_ZONE }
+              stations: RZ_STATIONS, zone: RZ_ZONE, banditForce: RZ_BANDIT_FORCE, banditGain: RZ_BANDIT_GAIN }
   };
 }
 
@@ -4524,6 +4647,19 @@ const serveur = http.createServer(async (req, res) => {
           const poste = RZ_POSTES.find(p => p.id === (cible.type === 'batb' ? 'batb' : String(cible.id || '')));
           if (!poste) return repondre(res, 404, { erreur: 'Poste introuvable.' });
           arrivee = [poste.lon, poste.lat]; c = { type: 'poste', id: poste.id };
+        } else if (cible.type === 'bandit') {
+          const b = RZ_BANDITS.find(x => x.id === String(cible.id || ''));
+          if (!b) return repondre(res, 404, { erreur: 'Bandits introuvables.' });
+          rzBanditRafraichir(b, now);
+          if (!rzBanditVivant(b, now)) return repondre(res, 409, { erreur: 'Ce camp a été vaincu récemment. Il revient bientôt.' });
+          arrivee = [b.lon, b.lat]; c = { type: 'bandit', id: b.id };
+        } else if (cible.type === 'groupe') {
+          const cg = RZG[String(cible.id || '')];
+          if (!cg || cg.proprio === pb) return repondre(res, 404, { erreur: 'Groupe introuvable.' });
+          if (rzAllies(pb, cg.proprio)) return repondre(res, 409, { erreur: 'Tu ne peux pas attaquer un allié.' });
+          const p = rzPositionActuelle(cg, now);
+          if (!p) return repondre(res, 404, { erreur: 'Groupe introuvable.' });
+          arrivee = p; c = { type: 'groupe', id: cg.id };
         } else if (cible.type === 'maison') {
           arrivee = [moi.base.lon, moi.base.lat]; c = { type: 'maison' };
         } else {
@@ -4705,7 +4841,7 @@ function quitterTable(compte) {
 
 /* pour la simulation des cotes de Tower Rush (node -e "require('./serveur.js')") :
    rien n\'est exporte d\'autre, et le site demarre exactement comme avant */
-module.exports = { towerTirer, towerAmpFor, towerPeriodFor, TOWER_NIVEAUX, TOWER_MULT_MAX, TOWER_ECHELLE };
+module.exports = { towerTirer, towerAmpFor, towerPeriodFor, towerRollFactor, TOWER_NIVEAUX, TOWER_MULT_MAX };
 
 Carnet.demarrer().then(() => {
   if (require.main !== module) return;
