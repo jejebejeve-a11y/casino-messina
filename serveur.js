@@ -207,6 +207,12 @@ function compter(main) {
 }
 function estBlackjack(main) { return main.length === 2 && compter(main) === 21; }
 function sous(n) { return Math.round(n * 100) / 100; }
+/* cote du Poulet apres k poulets trouves avec nbOs os caches (25 cases) */
+function pouletMult(nbOs, k) {
+  let m = 0.99;
+  for (let i = 0; i < k; i++) m *= (25 - i) / (25 - i - nbOs);
+  return m;   // brut : le gain est arrondi au centime, l'affichage tronque a 2 decimales
+}
 
 /* ===================================================================
    LE CARNET DES JOUEURS
@@ -4110,6 +4116,78 @@ const serveur = http.createServer(async (req, res) => {
       const k = fileBois.indexOf(compte.jetonRef); if (k >= 0) fileBois.splice(k, 1);
       abandonnerBois(compte);
       return repondre(res, 200, { ok: true, solde: compte.solde });
+    }
+
+    /* ===============================================================
+       LE POULET
+       ---------------------------------------------------------------
+       25 cloches, de 1 a 24 os caches dessous. Les os sont tires ICI et
+       ne quittent le serveur qu'a la fin de la manche. Cote :
+       0,99 x (cases restantes / (cases restantes - os)) a chaque poulet,
+       soit 0,99 x C(25,k) / C(25-os,k). Mini x1,03 (1 os), maxi x24,75
+       (24 os). Gain plafonne a 10 000 EUR : encaisse d'office.
+       =============================================================== */
+    if (route === '/api/poulet-demarrer' && req.method === 'POST') {
+      if (compte.poulet) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
+      const mise = sous(Number(body.mise) || 0);
+      const nbOs = Number(body.os) | 0;
+      if (!(nbOs >= 1 && nbOs <= 24)) return repondre(res, 400, { erreur: 'Choisissez entre 1 et 24 os.' });
+      if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const cases = []; for (let i = 0; i < 25; i++) cases.push(i);
+      for (let i = 24; i > 0; i--) { const j = crypto.randomInt(i + 1); const t = cases[i]; cases[i] = cases[j]; cases[j] = t; }
+      compte.solde = sous(compte.solde - mise);
+      compte.poulet = { mise: mise, nbOs: nbOs, os: cases.slice(0, nbOs), ouverts: [] };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise: mise, os: nbOs, solde: compte.solde });
+    }
+
+    if (route === '/api/poulet-ouvrir' && req.method === 'POST') {
+      const p = compte.poulet;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      const c = Number(body.case);
+      if (!(Number.isInteger(c) && c >= 0 && c < 25)) return repondre(res, 400, { erreur: 'Case inconnue.' });
+      if (p.ouverts.includes(c)) return repondre(res, 400, { erreur: 'Case deja ouverte.' });
+      if (p.os.includes(c)) {
+        compte.poulet = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, os: true, case: c, tousLesOs: p.os, perdu: p.mise, solde: compte.solde });
+      }
+      p.ouverts.push(c);
+      const k = p.ouverts.length;
+      const mult = pouletMult(p.nbOs, k);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      if (k >= 25 - p.nbOs || gain >= 10000) {          // tout trouve, ou plafond : on encaisse d\'office
+        compte.solde = sous(compte.solde + gain);
+        compte.poulet = null;
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, os: false, case: c, mult: mult, gain: gain, fini: true, tousLesOs: p.os, solde: compte.solde });
+      }
+      return repondre(res, 200, { ok: true, os: false, case: c, mult: mult, gain: gain, suivant: pouletMult(p.nbOs, k + 1), solde: compte.solde });
+    }
+
+    if (route === '/api/poulet-encaisser' && req.method === 'POST') {
+      const p = compte.poulet;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      if (!p.ouverts.length) return repondre(res, 400, { erreur: 'Trouvez au moins un poulet avant d\'encaisser.' });
+      const mult = pouletMult(p.nbOs, p.ouverts.length);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      compte.solde = sous(compte.solde + gain);
+      compte.poulet = null;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gain: gain, mult: mult, tousLesOs: p.os, solde: compte.solde });
+    }
+
+    // une partie restee ouverte (page fermee) : on la reprend telle quelle
+    if (route === '/api/poulet-etat' && req.method === 'POST') {
+      const p = compte.poulet;
+      if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
+      return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, os: p.nbOs, ouverts: p.ouverts,
+        mult: p.ouverts.length ? pouletMult(p.nbOs, p.ouverts.length) : 0, solde: compte.solde });
     }
 
     /* ===============================================================
