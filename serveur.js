@@ -138,14 +138,18 @@ function towerTirer(tour, angle) {
   if (etaitGele) angle *= 0.2;
 
   const errRatio = Math.abs(angle) / amp;
-  const safeT = 0.44, missT = Math.max(0.6, 0.92 - n * 0.016);
+  /* zone de lacher sans risque plus large qu'avant : il faut vraiment mal
+     viser (pres du bout du balancement) pour que l'etage parte a cote */
+  const safeT = 0.60, missT = Math.max(0.85, 1.08 - n * 0.012);
   const edgeT = towerClamp((errRatio - safeT) / Math.max(0.001, missT - safeT), 0, 1);
   const missChance = etaitGele ? 0 : edgeT * edgeT;
   if (Math.random() < missChance) return { issue: 'rate', angle: angle };
 
   // le risque propre au niveau, meme avec un lacher parfait
+  /* la tour elle-meme ne glisse et ne penche jamais : quand le risque du
+     niveau tombe, c'est l'etage qu'on vient de lacher qui part a cote */
   const tombe = !etaitGele && Math.random() >= TOWER_SURVIE[Math.min(niveau, TOWER_NIVEAUX - 1)];
-  if (tombe && errRatio > 0.25) return { issue: 'rate', angle: angle };
+  if (tombe) return { issue: 'rate', angle: angle, casse: errRatio < 0.6 };   // bien vise : l'etage se brise en se posant
 
   const facteur = etaitGele ? towerRand(0.92, 1.06) : towerRollFactor(niveau);
   if (etaitGele) tour.frozenLeft--;
@@ -154,12 +158,10 @@ function towerTirer(tour, angle) {
 
   // pas d\'arrondi ici : seul le gain final (mise x totalMult) est arrondi
   tour.totalMult = Math.min(TOWER_MULT_MAX, tour.totalMult * facteur);
-  const nouveauLean = tour.leanSum + angle * 0.58;
-  const glisse = tombe || ((tour.frozenLeft <= 0) && Math.abs(nouveauLean) > 58);
-  tour.leanSum = nouveauLean;
-  tour.visOffset = towerClamp(tour.visOffset + towerClamp(angle * 0.34, -22, 22), -74, 74);
-  tour.floors.push({ mult: facteur, lean: tour.visOffset });
-  if (glisse) return { issue: 'glisse', angle: angle, facteur: facteur };
+  // les etages s'empilent bien droits : plus d'inclinaison qui s'accumule
+  tour.leanSum = 0;
+  tour.visOffset = 0;
+  tour.floors.push({ mult: facteur, lean: 0 });
 
   // etage gele une fois toutes les ~14 etages en moyenne, pour souffler un peu
   if (!etaitGele && Math.random() < 0.07) tour.frozenLeft = 2 + (Math.random() < 0.5 ? 0 : 1);
@@ -1983,7 +1985,7 @@ const BOIS_ATTENTE       = 15000;
 const BOIS_MAX           = 4;
 const BOIS_DEPART_POLICE = 3000;      // les policiers partent 3 s apres Toledo
 const BOIS_SORTIE_MIN    = 460;       // metres depuis la Porte Dauphine
-const BOIS_DEGAT_CHOC    = 15;
+const BOIS_DEGAT_CHOC    = 25;
 const BOIS_DEGAT_BALLE   = 40;
 const BOIS_BALLES        = 5;
 const BOIS_VITESSE_MAX   = 270 / 3.6; // metres par seconde, turbo compris
@@ -1992,7 +1994,7 @@ function planToledo(graine){
   let s=graine>>>0;
   const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
     t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
-  const PAS=50, VOIE=3.5, DIST=2300;
+  const PAS=50, VOIE=3.5, DIST=3000;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
   for(let d=260; d<DIST-160; d+=380+r()*140)
@@ -2007,12 +2009,12 @@ function planToledo(graine){
   let k=0, tFin=0;
   while(k<12000){
     const t=k*PAS;
-    if(t<9000){ vCible=t/9000*135; freinage=false; }
+    if(t<9000){ vCible=t/9000*175; freinage=false; }
     else if(t>=tEv){
-      const a=r(), base=150+40*Math.min(1,(t-9000)/30000);
+      const a=r(), base=196+20*Math.min(1,(t-9000)/25000);
       freinage=false;
-      if(a<0.18){ vCible=base+50+r()*10; tEv=t+1000+r()*600; }                  // il accélère d'un coup
-      else if(a<0.36){ vCible=base-50+r()*10; tEv=t+700+r()*600; freinage=true; } // il ralentit
+      if(a<0.18){ vCible=base+40+r()*10; tEv=t+1000+r()*600; }                  // il accélère d'un coup
+      else if(a<0.30){ vCible=base-40+r()*10; tEv=t+800+r()*500; freinage=true; } // il ralentit
       else { vCible=base-8+r()*16; tEv=t+1500+r()*1500; }                        // croisière
     }
     if(t>=tVoie){
@@ -2145,6 +2147,23 @@ function battementBois() {
   }
   groupesBois.forEach((g, id) => {
     if (g.statut === 'course' && etatToledo(g.plan, now - g.depart - 400, g.boosts).d >= g.plan.DIST) perdreBois(g);
+    /* Toledo ne se laisse pas doubler : si un policier passe devant lui de plus
+       de quelques metres, il remet un coup d'accelerateur pour repasser devant (annonce a
+       toutes les pages 0,7 s a l'avance, pour que tout le monde le voie pareil) */
+    if (g.statut === 'course') {
+      const ecoule = now - g.depart;
+      const enCourse = Object.values(g.membres).filter(m => m.statut === 'course');
+      if (enCourse.length && ecoule > BOIS_DEPART_POLICE + 4000) {
+        const enTete = Math.max(...enCourse.map(m => dBoisEstimee(m, now)));
+        const T = etatToledo(g.plan, ecoule, g.boosts);
+        const ecart = enTete - (T.d + 2.3);
+        const dejaEnBoost = g.boosts.some(b => ecoule < b.t + b.dur);
+        if (ecart > 3 && !dejaEnBoost && now - (g.derniereFuite || 0) > 2500 && T.d < g.plan.DIST - 150) {
+          g.boosts.push({ t: ecoule + 600, dur: 2600, dv: Math.min(100, 55 + ecart * 1.6) });
+          g.derniereFuite = now;
+        }
+      }
+    }
     // un policier qui ne donne plus signe de vie pendant la course est hors course
     Object.keys(g.membres).forEach(j => {
       const m = g.membres[j];
@@ -2636,19 +2655,38 @@ async function rzAjouter(pb, delta) {
 }
 
 /* ---- sauvegarde du monde ----
-   Avant, un echec reseau vers la base (Upstash) etait juste ignore : si le
-   serveur redemarrait ensuite sans qu'aucune autre sauvegarde n'ait reussi
-   entre-temps, on rechargeait un monde perime (une base supprimee par un
-   admin pouvait ainsi "revenir" au redemarrage). Maintenant, tant que la
-   derniere sauvegarde n'a pas vraiment reussi, on retente tout seul. */
+   Deux soucis corriges ici :
+   1) un echec reseau vers la base (Upstash) etait ignore sans nouvel essai ;
+   2) pendant une mise en ligne (ou un redemarrage), Render fait tourner
+      DEUX serveurs en meme temps, chacun avec sa copie du monde en memoire.
+      L'admin supprimait la base sur l'un, le joueur tombait sur l'autre...
+      et l'ancienne base revenait, impossible a deplacer.
+   Maintenant chaque sauvegarde porte un numero de version, et un serveur
+   qui voit dans la base une version plus recente que la sienne recharge
+   le monde avant de repondre (toujours avant de poser ou supprimer une base). */
 let rzSauvePrevue = null;
 let rzADIRTY = false;      // il y a des changements pas encore confirmes sauvegardes
 let rzEnCours = false;     // une tentative de sauvegarde est en cours
-async function rzSauverMaintenant() {
-  if (rzEnCours || !Carnet.pret) return false;
+let rzVersion = 0;         // version du monde qu'on a en memoire
+let rzDerniereSync = 0;
+async function rzSauverMaintenant(sansVerif) {
+  if (!Carnet.pret) { rzADIRTY = false; return true; }   // pas de base configuree : tout reste en memoire
+  if (rzEnCours) { await new Promise(r => setTimeout(r, 300)); if (rzEnCours) return false; }
   rzEnCours = true;
   try {
-    await Carnet.commande(['SET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur })]);
+    /* un autre serveur a ecrit plus recent que ce qu'on a vu : notre copie est
+       perimee, on ne l'ecrase pas par-dessus, on recharge la sienne */
+    if (!sansVerif) {
+      const rv = await Carnet.commande(['GET', 'razzia:version']);
+      if ((Number(rv && rv.result) || 0) > rzVersion) {
+        const r = await Carnet.commande(['GET', 'razzia:monde']);
+        if (r && r.result) { rzAppliquerMonde(JSON.parse(r.result)); rzADIRTY = false;
+          console.log('Razzia : copie perimee abandonnee, monde recharge.'); return true; }
+      }
+    }
+    const v = Math.max(Date.now(), rzVersion + 1);
+    await Carnet.commande(['MSET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur, v }), 'razzia:version', String(v)]);
+    rzVersion = v;
     rzADIRTY = false;
     return true;
   } catch (e) {
@@ -2666,27 +2704,50 @@ function rzSauver() {
     await rzSauverMaintenant();
   }, 1500);
 }
-// filet de securite : si une sauvegarde a echoue et qu'aucune autre action
-// n'en a redeclenche une, on reessaie tout seul toutes les 20 secondes.
+// filet de securite : une sauvegarde ratee est retentee toute seule
 setInterval(() => { if (rzADIRTY && rzCharge) rzSauverMaintenant(); }, 20000);
+
+function rzAppliquerMonde(d) {
+  Object.keys(RZJ).forEach(k => delete RZJ[k]);
+  Object.keys(RZG).forEach(k => delete RZG[k]);
+  Object.assign(RZJ, d.joueurs || {}); Object.assign(RZG, d.groupes || {});
+  // anciennes armes -> nouvelles (couteau = sans arme, grosses armes = diamant)
+  const conv = u => { if (!u) return rzVide(); const r = rzVide();
+    r.nu = (u.nu | 0) + (u.couteau | 0); r.pistolet = u.pistolet | 0; r.diamant = (u.diamant | 0) + (u.kalach | 0) + (u.roquette | 0); return r; };
+  Object.values(RZJ).forEach(j => { j.stock = conv(j.stock); j.armurerie = Math.min(RZ_ARMURERIE_MAX, j.armurerie | 0); });
+  Object.values(RZG).forEach(g => { g.unites = conv(g.unites); });
+  rzCompteur = Math.max(rzCompteur, d.n || 1);
+  rzVersion = Number(d.v) || 0;
+}
+/* se remettre a jour si un autre serveur a sauvegarde plus recent que nous.
+   force = on va poser/supprimer une base : on verifie a coup sur. Sinon, au
+   plus une verification toutes les 4 s (pour ne pas epuiser le quota Upstash). */
+async function rzSynchroniser(force) {
+  if (!Carnet.pret || !rzCharge) return;
+  const now = Date.now();
+  if (!force && now - rzDerniereSync < 4000) return;
+  rzDerniereSync = now;
+  try {
+    const rv = await Carnet.commande(['GET', 'razzia:version']);
+    const distante = Number(rv && rv.result) || 0;
+    if (distante <= rzVersion) { if (rzADIRTY) await rzSauverMaintenant(true); return; }
+    const r = await Carnet.commande(['GET', 'razzia:monde']);
+    if (r && r.result) {
+      rzAppliquerMonde(JSON.parse(r.result)); rzADIRTY = false;
+      console.log('Razzia : monde recharge (version plus recente trouvee dans la base).');
+    }
+  } catch (e) { console.log('Razzia : synchronisation impossible (' + e.message + ')'); }
+}
 (async function rzCharger() {
   for (let i = 0; i < 30 && !Carnet.pret; i++) await new Promise(r => setTimeout(r, 1000));
   if (Carnet.pret) {
     try {
       const r = await Carnet.commande(['GET', 'razzia:monde']);
-      if (r && r.result) {
-        const d = JSON.parse(r.result);
-        Object.assign(RZJ, d.joueurs || {}); Object.assign(RZG, d.groupes || {});
-        // anciennes armes -> nouvelles (couteau = sans arme, grosses armes = diamant)
-        const conv = u => { if (!u) return rzVide(); const r = rzVide();
-          r.nu = (u.nu | 0) + (u.couteau | 0); r.pistolet = u.pistolet | 0; r.diamant = (u.diamant | 0) + (u.kalach | 0) + (u.roquette | 0); return r; };
-        Object.values(RZJ).forEach(j => { j.stock = conv(j.stock); j.armurerie = Math.min(RZ_ARMURERIE_MAX, j.armurerie | 0); });
-        Object.values(RZG).forEach(g => { g.unites = conv(g.unites); });
-        rzCompteur = Math.max(rzCompteur, d.n || 1);
-      }
+      if (r && r.result) rzAppliquerMonde(JSON.parse(r.result));
     } catch (e) { console.log('Razzia : lecture du monde impossible (' + e.message + ')'); }
   }
   rzCharge = true;
+  rzDerniereSync = Date.now();
   console.log('Razzia : monde pret (' + Object.keys(RZJ).length + ' joueurs).');
 })();
 
@@ -2896,7 +2957,7 @@ function rzVue(compte, depuis) {
   return {
     now, solde: compte.solde, batb, bases, groupes, alertes, evenements: evts,
     moi: {
-      base: moi.base, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
+      base: moi.base, deplaceUtilise: !!moi.deplaceUtilise, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
       feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock,
       repartition: moi.repartition, cotes: rzRepartir(moi.stock, moi.repartition),
       allies: moi.allies.map(k => ({ id: k, pseudo: RZJ[k] ? RZJ[k].pseudo : k })),
@@ -4042,7 +4103,7 @@ const serveur = http.createServer(async (req, res) => {
         compte.tower = null;
         Carnet.enregistrer(compte);
         return repondre(res, 200, {
-          ok: true, rate: true, angle: r.angle, perdu: perdu, solde: compte.solde
+          ok: true, rate: true, casse: !!r.casse, angle: r.angle, perdu: perdu, solde: compte.solde
         });
       }
 
@@ -4283,6 +4344,7 @@ const serveur = http.createServer(async (req, res) => {
         return repondre(res, 403, { erreur: 'Code invalide.' });
       }
       if (!rzCharge) return repondre(res, 503, { erreur: 'La carte se prépare, réessaie dans quelques secondes.' });
+      await rzSynchroniser(true);
 
       const cibleRz = String(body.pseudo || '').trim().toLowerCase();
       if (!cibleRz) return repondre(res, 400, { erreur: 'Pseudo manquant.' });
@@ -4304,8 +4366,8 @@ const serveur = http.createServer(async (req, res) => {
       // dans la base avant de dire "ok" (sinon un redemarrage du serveur
       // pourrait faire revenir l'ancienne base, comme avant ce correctif)
       rzADIRTY = true;
-      let ecrite = await rzSauverMaintenant();
-      for (let essai = 0; !ecrite && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); ecrite = await rzSauverMaintenant(); }
+      let ecrite = await rzSauverMaintenant(true);
+      for (let essai = 0; !ecrite && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); ecrite = await rzSauverMaintenant(true); }
       if (!ecrite) return repondre(res, 503, { erreur: 'La base a bien ete enlevee ici, mais je n\'arrive pas a l\'enregistrer durablement (souci reseau). Reessaie dans une minute.' });
       return repondre(res, 200, { ok: true, pseudo: j.pseudo });
     }
@@ -4314,6 +4376,7 @@ const serveur = http.createServer(async (req, res) => {
     /* ================= RAZZIA ================= */
     if (route.startsWith('/api/razzia-')) {
       if (!rzCharge) return repondre(res, 503, { erreur: 'La carte se prépare, réessaie dans quelques secondes.' });
+      await rzSynchroniser(route === '/api/razzia-base' || route === '/api/razzia-deplacer-base');
       const moi = rzJoueur(compte);
       const pb = compte.pseudoBas;
       const now = Date.now();
@@ -4336,13 +4399,37 @@ const serveur = http.createServer(async (req, res) => {
         // action sensible (une fois posee, on veut etre sur qu'elle survit a
         // un redemarrage du serveur) : on attend une vraie confirmation
         rzADIRTY = true;
-        let poseeOk = await rzSauverMaintenant();
-        for (let essai = 0; !poseeOk && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); poseeOk = await rzSauverMaintenant(); }
+        let poseeOk = await rzSauverMaintenant(true);
+        for (let essai = 0; !poseeOk && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); poseeOk = await rzSauverMaintenant(true); }
         if (!poseeOk) { moi.base = null; return repondre(res, 503, { erreur: 'Souci reseau, ta base n\'a pas pu etre enregistree. Reessaie.' }); }
         return repondre(res, 200, rzVue(compte, now));
       }
 
       if (!moi.base && route !== '/api/razzia-alliance') return repondre(res, 409, { erreur: 'Pose d\'abord ta base.' });
+
+      /* changer sa base d'emplacement : une seule fois par compte */
+      if (route === '/api/razzia-deplacer-base' && req.method === 'POST') {
+        if (moi.deplaceUtilise) return repondre(res, 409, { erreur: 'Tu as déjà utilisé ton changement d\'emplacement.' });
+        if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
+        if (Object.values(RZG).some(g => g.etat === 'route' && g.cible && g.cible.type === 'base' && g.cible.pseudo === pb))
+          return repondre(res, 409, { erreur: 'Des koalas sont en train d\'attaquer ta base : attends qu\'ils arrivent.' });
+        const p = rzPoint([body.lon, body.lat]);
+        if (!p || !rzDansZone(p)) return repondre(res, 400, { erreur: 'Cet endroit est hors de la zone ouverte.' });
+        if (rzDist([moi.base.lon, moi.base.lat], p) < 25) return repondre(res, 409, { erreur: 'C\'est déjà là que se trouve ta base.' });
+        if (Object.keys(RZJ).some(k => k !== pb && RZJ[k].base && rzDist([RZJ[k].base.lon, RZJ[k].base.lat], p) < 25))
+          return repondre(res, 409, { erreur: 'Ce bâtiment est déjà la base de quelqu\'un.' });
+        const forme = (Array.isArray(body.forme) ? body.forme : []).slice(0, 80).map(rzPoint).filter(Boolean);
+        const ancienne = moi.base;
+        moi.base = { lon: p[0], lat: p[1], forme: forme.length >= 3 ? forme : null,
+                     haut: Math.max(6, Math.min(120, Number(body.haut) || 18)) };
+        moi.deplaceUtilise = true;
+        rzADIRTY = true;
+        let ok = await rzSauverMaintenant(true);
+        for (let essai = 0; !ok && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); ok = await rzSauverMaintenant(true); }
+        if (!ok) { moi.base = ancienne; moi.deplaceUtilise = false; return repondre(res, 503, { erreur: 'Souci réseau, ta base n\'a pas pu être déplacée. Réessaie.' }); }
+        rzEvenement(pb, 'Ta base a changé d\'emplacement.', 'info');
+        return repondre(res, 200, rzVue(compte, now));
+      }
 
       if (route === '/api/razzia-acheter' && req.method === 'POST') {
         if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });

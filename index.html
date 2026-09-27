@@ -8436,8 +8436,8 @@ window.addEventListener('error', function (ev) {
         <li>L'étage se balance sous la grue. Appuyez sur <b>BUILD</b> quand il passe au-dessus de son ombre, au sommet de la tour.</li>
         <li>Une cote est tirée à chaque étage posé et se <b>multiplie</b> avec les précédentes. Elle peut aussi être <b>inférieure à x1</b> : vous pouvez perdre une partie de vos gains même en jouant bien.</li>
         <li>Un lâcher trop imprécis fait tomber l'étage à côté : la tour entière s'effondre (x0).</li>
-        <li>Même bien posée, la tour peut <b>glisser</b> si elle penche trop du même côté plusieurs fois de suite.</li>
-        <li>Chaque niveau a aussi son propre risque d'effondrement, même bien visé, et ce risque grandit en montant.</li>
+        <li>La tour reste toujours <b>bien droite</b> : elle ne penche pas et ne glisse jamais, quelle que soit sa hauteur.</li>
+        <li>Chaque niveau a aussi son propre risque : même bien visé, l'étage peut <b>tomber à côté</b>, et ce risque grandit en montant.</li>
         <li><b>CASHOUT</b> encaisse à tout moment mise × multiplicateur cumulé.</li>
         <li>Le sommet est au <b>12ᵉ niveau</b> : gain maximum <b>x100</b>, encaissé d'office. L'atteindre est très rare (environ 1 tour sur 1 000).</li>
         <li><b>❄ Étage Gelé</b> : de temps en temps, deux ou trois étages sans risque d'effondrement, mais la cote y reste proche de x1.</li>
@@ -10278,7 +10278,7 @@ function finirCourse(v){
    sont comptés que par le serveur : chaque choc et chaque balle lui
    sont annoncés, et c'est lui qui verse le gain.
    ===================================================================== */
-const BOIS_VIE=600, BOIS_MULT=100, BOIS_DEPART_POLICE=3000, DIST_BOIS=2300;
+const BOIS_VIE=600, BOIS_MULT=100, BOIS_DEPART_POLICE=3000, DIST_BOIS=3000;
 const BOIS_SORTIE_DEBUT=470, BOIS_SORTIE_FIN=650;
 const BOIS_VMAX=220, BOIS_VMAX_PREMIUM=228, BOIS_ACCEL=40, BOIS_TURBO=45;
 let ZONES_PERIPH=null, PALIERS_PERIPH=null, ZONE_BOIS=null;
@@ -10287,7 +10287,7 @@ function planToledo(graine){
   let s=graine>>>0;
   const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
     t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
-  const PAS=50, VOIE=3.5, DIST=2300;
+  const PAS=50, VOIE=3.5, DIST=3000;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
   for(let d=260; d<DIST-160; d+=380+r()*140)
@@ -10302,12 +10302,12 @@ function planToledo(graine){
   let k=0, tFin=0;
   while(k<12000){
     const t=k*PAS;
-    if(t<9000){ vCible=t/9000*135; freinage=false; }
+    if(t<9000){ vCible=t/9000*175; freinage=false; }
     else if(t>=tEv){
-      const a=r(), base=150+40*Math.min(1,(t-9000)/30000);
+      const a=r(), base=196+20*Math.min(1,(t-9000)/25000);
       freinage=false;
-      if(a<0.18){ vCible=base+50+r()*10; tEv=t+1000+r()*600; }                  // il accélère d'un coup
-      else if(a<0.36){ vCible=base-50+r()*10; tEv=t+700+r()*600; freinage=true; } // il ralentit
+      if(a<0.18){ vCible=base+40+r()*10; tEv=t+1000+r()*600; }                  // il accélère d'un coup
+      else if(a<0.30){ vCible=base-40+r()*10; tEv=t+800+r()*500; freinage=true; } // il ralentit
       else { vCible=base-8+r()*16; tEv=t+1500+r()*1500; }                        // croisière
     }
     if(t>=tVoie){
@@ -10408,15 +10408,23 @@ function arreterSonsBois(){
   try{ if(sirene) sirene.o.stop(); }catch(e){}
   srcToledo=null; gainToledo=null; sirene=null;
 }
-/* le son de Toledo : on l'entend bien à 30-40 m, à peine à 120 m, plus du tout au-delà de 160 m */
+/* le son de Toledo selon la distance :
+   10-20 m : on l'entend bien · 30 m : normal · 50 m : très peu · 100 m : presque rien · au-delà de 130 m : plus rien */
+const SON_TOLEDO_PALIERS=[[0,1],[20,1],[30,0.55],[50,0.12],[100,0.035],[130,0]];
+function volumeToledo(dist){
+  const P=SON_TOLEDO_PALIERS;
+  if(dist<=P[0][0]) return P[0][1];
+  for(let i=1;i<P.length;i++){
+    if(dist<=P[i][0]){ const a=(dist-P[i-1][0])/(P[i][0]-P[i-1][0]); return P[i-1][1]+(P[i][1]-P[i-1][1])*a; }
+  }
+  return 0;
+}
 function majSonBois(){
   const B=J.boisEtat; if(!B||!Son.ctx||!J.moi||!B.T) return;
   if(!srcToledo) lancerMusiqueToledo();
   if(!gainToledo) return;
   const dist=Math.abs(B.T.d-J.moi.d);
-  let vol=dist<=35?1:dist>=160?0:(160-dist)/125;
-  vol=vol*vol*vol;
-  gainToledo.gain.setTargetAtTime(vol*0.95, Son.ctx.currentTime, 0.15);
+  gainToledo.gain.setTargetAtTime(volumeToledo(dist)*0.95, Son.ctx.currentTime, 0.15);
 }
 
 /* ---------- la sortie : panneau pendant le périph, puis le décompte ---------- */
@@ -10574,7 +10582,7 @@ function coupBois(type,t){
   const m=J.moi, B=J.boisEtat;
   envoyer('bois-coup',{type,tc:Math.round(t),d:m.d,x:m.x}).then(rep=>{
     if(!rep||J.boisEtat!==B) return;
-    if(rep.touche&&B.T){ popup(B.T.x,B.T.d+4.5,type==='balle'?'-40':'-15','#ffcf6a'); B.flash=.2; }
+    if(rep.touche&&B.T){ popup(B.T.x,B.T.d+4.5,type==='balle'?'-40':'-25','#ffcf6a'); B.flash=.2; }
     appliquerEtatBois(rep,0);
   });
 }
@@ -12746,7 +12754,7 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
       d.className='floor' + ((justLanded && idx===S.floors.length-1) ? ' impact' : '');
       d.style.width=f.px+'px';
       d.style.marginTop = (idx===0 ? -3 : -(S.floors[idx-1].roofGap||3)) + 'px';
-      d.style.transform='translateX('+f.lean+'px)';
+      d.style.transform='none';
       d.innerHTML=f.svg;
       var badge=document.createElement('div');
       badge.className='floor-mult'+(f.mult<1?' down':'');
@@ -12886,6 +12894,25 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
       var payRect=payload.getBoundingClientRect();
       var targetDY=(retRect.top-payRect.top)+(payRect.height*0.1);
 
+      if (r.rate && r.casse){
+        /* bien visé mais le niveau n'a pas tenu : l'étage se pose droit sur la tour
+           et se brise sur place. La tour, elle, ne bouge pas. */
+        var casseDur=clamp(0.34+Math.abs(targetDY)/1050, 0.34, 0.6);
+        payload.style.transition='transform '+casseDur.toFixed(2)+'s cubic-bezier(.45,0,.8,1)';
+        payload.style.transform='translate(calc(-50% + '+(angle*0.3).toFixed(1)+'px), '+targetDY.toFixed(0)+'px)';
+        setTimeout(function(){
+          Sound.crash(); shakeStage(); flashRed();
+          var stR2=$('trStage').getBoundingClientRect();
+          burst(stR2.width/2, retRect.top-stageRect.top+14, 22, ['#c9c2b4','#8d877c','#ffffff'], 52, 7);
+          payload.style.transition='transform .5s cubic-bezier(.4,0,1,1), opacity .5s';
+          payload.style.transform='translate(-50%, '+(targetDY+90).toFixed(0)+'px) scale(.92,.6)';
+          payload.style.opacity='0';
+          toast('L’étage s’est brisé en se posant — tour perdue.','lose');
+          pushResult(0,true);
+          setTimeout(function(){ S.animBusy=false; endRound(); }, 560);
+        }, casseDur*1000+30);
+        return;
+      }
       if (r.rate){
         var missDur=0.52;
         payload.style.transition='transform '+missDur+'s cubic-bezier(.4,0,1,1)';
@@ -12925,16 +12952,7 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
         renderTower(true); renderCurrent(true);
         $('trCashoutAmt').textContent=fmt(S.bet*S.totalMult);
 
-        if (r.glisse){
-          pushResult(0,true);
-          setTimeout(function(){
-            Sound.crash(); flashRed(); shakeStage();
-            collapseSlide(dir);
-            toast('La tour penche trop et glisse — tour perdue.','lose');
-            setTimeout(function(){ S.animBusy=false; endRound(); }, 640);
-          }, 280);
-          return;
-        }
+        /* (la tour ne glisse plus jamais : plus de cas "glisse" ici) */
 
         /* le sommet (12e niveau ou plafond x100) : le serveur a deja encaisse */
         if (r.sommet){
@@ -13850,7 +13868,7 @@ body.rz-actif{overflow:hidden}
 #rzCarte{position:absolute;inset:0}
 #rzCalque{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
 #rzEcran .maplibregl-ctrl-bottom-right{bottom:calc(74px + env(safe-area-inset-bottom,0px))}
-#rzEcran .maplibregl-ctrl-attrib{font-family:Inter,sans-serif;font-size:10px}
+#rzEcran .maplibregl-ctrl-attrib{display:none!important}
 
 /* --- le haut --- */
 #rzHaut{position:absolute;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top,0px));display:flex;flex-wrap:wrap;gap:7px;align-items:stretch;pointer-events:none;z-index:5}
@@ -14508,7 +14526,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   function creerCarte() {
     var c = new maplibregl.Map({
       container: 'rzCarte', style: STYLE, center: [2.2789, 48.8527], zoom: 14.3, pitch: 48, bearing: -18,
-      minZoom: 12.5, maxZoom: 19.6, maxBounds: [[2.17, 48.79], [2.35, 48.91]], attributionControl: { compact: true },
+      minZoom: 12.5, maxZoom: 19.6, maxBounds: [[2.17, 48.79], [2.35, 48.91]], attributionControl: false,
       dragRotate: true, pitchWithRotate: true, maxPitch: 65
     });
     c.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
@@ -15183,7 +15201,15 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     rentrer: function (el) { S.envoi = { groupe: el.dataset.g, cible: { type: 'maison' } }; calculer(); },
     ailleurs: function (el) { S.envoi = { groupe: el.dataset.g }; entrerDestination(); },
     voir: function (el) { var g = S.vue.groupes.find(function (x) { return x.id === el.dataset.g; }); if (g) { var p = position(g, maintenant()).p; if (p) volerVers(p, 17.2); } },
-    viserBase: function () { if (S.vue.moi.base) volerVers([S.vue.moi.base.lon, S.vue.moi.base.lat], 16.8); }
+    viserBase: function () { if (S.vue.moi.base) volerVers([S.vue.moi.base.lon, S.vue.moi.base.lat], 16.8); },
+    demenager: function () {
+      if (S.vue.moi.deplaceUtilise) return erreurFeuille('Tu as déjà changé ta base d\'emplacement.');
+      fermerFeuille();
+      S.mode = 'poser'; S.demenage = true;
+      consigne('Touche le bâtiment où déplacer ta base <button class="rz-btn mini" id="rzAnnuler">Annuler</button>');
+      $('rzAnnuler').onclick = function (e) { e.stopPropagation(); S.mode = 'normal'; S.demenage = false; consigne(''); fermerFeuille(); };
+      if (S.carte.getZoom() < 15.2) S.carte.easeTo({ zoom: 15.6 });
+    }
   };
 
   /* --- ma base --- */
@@ -15198,7 +15224,12 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       '<div class="rz-sec rz-grille"><button class="rz-btn" data-a="armurerie">Armurerie</button><button class="rz-btn" data-a="defense">Défense</button></div>' +
       '<div class="rz-sec"><div class="rz-titre">Envoyer des koalas quelque part</div>' + blocUnites(m.stock) +
       (total(m.stock) ? '<button class="rz-btn rouge plein" data-a="pointCarte">Choisir l\'endroit sur la carte</button>' : '') + '<div class="rz-erreur"></div>' +
-      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur sur la carte. Pour gagner de l\'argent sans attaquer, touche le Bat B.</p></div>';
+      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur sur la carte. Pour gagner de l\'argent sans attaquer, touche le Bat B.</p></div>' +
+      '<div class="rz-sec"><div class="rz-titre">Emplacement</div>' +
+      (m.deplaceUtilise
+        ? '<p class="rz-note">Tu as déjà changé ta base d\'emplacement une fois.</p>'
+        : '<button class="rz-btn plein" data-a="demenager">Changer d\'emplacement</button><p class="rz-note">Une seule fois par compte : choisis bien le nouveau bâtiment.</p>') +
+      '</div>';
     ouvrirFeuille('Ma <em>base</em>', h, { rouvrir: ouvrirBase });
   }
 
@@ -15450,21 +15481,24 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     return decime(r.map(function (p) { return [Math.round(p[0] * 1e6) / 1e6, Math.round(p[1] * 1e6) / 1e6]; }), 60);
   }
   function poser(e) {
-    var fs = S.carte.queryRenderedFeatures(e.point, { layers: ['rz-bat'] });
+    var fs = S.carte.queryRenderedFeatures(e.point, { layers: ['rz-bat', 'rz-bat-loin'].filter(function (l) { return S.carte.getLayer(l); }) });
     if (!fs.length) { toast('Touche un bâtiment (les blocs gris).', 'info'); return; }
     var forme = anneau(fs[0]);
     var c = forme ? [forme.reduce(function (s, p) { return s + p[0]; }, 0) / forme.length, forme.reduce(function (s, p) { return s + p[1]; }, 0) / forme.length] : [e.lngLat.lng, e.lngLat.lat];
     if (!dansZone(c, S.vue.regles.zone)) { toast('Ce bâtiment est hors de la zone (la ligne rouge).', 'mauvais'); return; }
     var haut = Math.round(Math.max(6, Math.min(120, fs[0].properties.render_height || 18)));
     S.pose = { lon: c[0], lat: c[1], forme: forme, haut: haut };
-    ouvrirFeuille('Poser ta <em>base</em> ici ?', '<p class="rz-note" style="font-size:14px;margin-top:0">Un bâtiment de ' + haut + ' mètres. Une fois posée, ta base ne bouge plus. Elle commence sous bouclier.</p>' +
-      '<div class="rz-grille" style="margin-top:12px"><button class="rz-btn" id="rzPoseNon">Un autre</button><button class="rz-btn rouge" id="rzPoseOui">Poser ma base</button></div><div class="rz-erreur"></div>');
+    var dem = !!(S.demenage && S.vue.moi.base);
+    ouvrirFeuille(dem ? 'Déplacer ta <em>base</em> ici ?' : 'Poser ta <em>base</em> ici ?',
+      '<p class="rz-note" style="font-size:14px;margin-top:0">Un bâtiment de ' + haut + ' mètres. ' +
+      (dem ? 'Tes koalas et tes améliorations te suivent. Tu ne pourras plus la déplacer ensuite.' : 'Une fois posée, ta base ne bouge plus. Elle commence sous bouclier.') + '</p>' +
+      '<div class="rz-grille" style="margin-top:12px"><button class="rz-btn" id="rzPoseNon">Un autre</button><button class="rz-btn rouge" id="rzPoseOui">' + (dem ? 'Déplacer ma base' : 'Poser ma base') + '</button></div><div class="rz-erreur"></div>');
     $('rzPoseNon').onclick = function () { fermerFeuille(); };
     $('rzPoseOui').onclick = async function () {
-      var r = await action('razzia-base', S.pose);
+      var r = await action(dem ? 'razzia-deplacer-base' : 'razzia-base', S.pose);
       if (!r) return;
-      S.mode = 'normal'; consigne(''); fermerFeuille(); caisse();
-      toast('Ta base est posée. Achète des koalas à l\'armurerie.', 'bon');
+      S.mode = 'normal'; S.demenage = false; consigne(''); fermerFeuille(); caisse();
+      toast(dem ? 'Ta base a changé d\'emplacement.' : 'Ta base est posée. Achète des koalas à l\'armurerie.', 'bon');
       S.carte.flyTo({ center: [S.pose.lon, S.pose.lat], zoom: 16.6 });
     };
   }
