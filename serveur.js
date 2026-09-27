@@ -208,6 +208,21 @@ function compter(main) {
 function estBlackjack(main) { return main.length === 2 && compter(main) === 21; }
 function sous(n) { return Math.round(n * 100) / 100; }
 /* cote du Poulet apres k poulets trouves avec nbOs os caches (25 cases) */
+/* cotes du Plinko (risque -> rangees -> case), identiques a la page */
+const PLINKO_TABLES = {
+  faible: { 8:[5.6,2.1,1.1,1,.5,1,1.1,2.1,5.6], 9:[5.6,2,1.6,1,.7,.7,1,1.6,2,5.6], 10:[8.9,3,1.4,1.1,1,.5,1,1.1,1.4,3,8.9],
+    11:[8.4,3,1.9,1.3,1,.7,.7,1,1.3,1.9,3,8.4], 12:[10,3,1.6,1.4,1.1,1,.5,1,1.1,1.4,1.6,3,10], 13:[8.1,4,3,1.9,1.2,.9,.7,.7,.9,1.2,1.9,3,4,8.1],
+    14:[7.1,4,1.9,1.4,1.3,1.1,1,.5,1,1.1,1.3,1.4,1.9,4,7.1], 15:[15,8,3,2,1.5,1.1,1,.7,.7,1,1.1,1.5,2,3,8,15],
+    16:[16,9,2,1.4,1.4,1.2,1.1,1,.5,1,1.1,1.2,1.4,1.4,2,9,16] },
+  moyen: { 8:[13,3,1.3,.7,.4,.7,1.3,3,13], 9:[18,4,1.7,.9,.5,.5,.9,1.7,4,18], 10:[22,5,2,1.4,.6,.4,.6,1.4,2,5,22],
+    11:[24,6,3,1.8,.7,.5,.5,.7,1.8,3,6,24], 12:[33,11,4,2,1.1,.6,.3,.6,1.1,2,4,11,33], 13:[43,13,6,3,1.3,.7,.4,.4,.7,1.3,3,6,13,43],
+    14:[58,15,7,4,1.9,1,.5,.2,.5,1,1.9,4,7,15,58], 15:[88,18,11,5,3,1.3,.5,.3,.3,.5,1.3,3,5,11,18,88],
+    16:[110,41,10,5,3,1.5,1,.5,.3,.5,1,1.5,3,5,10,41,110] },
+  eleve: { 8:[29,4,1.5,.3,.2,.3,1.5,4,29], 9:[43,7,2,.6,.2,.2,.6,2,7,43], 10:[76,10,3,.9,.3,.2,.3,.9,3,10,76],
+    11:[120,14,5.2,1.4,.4,.2,.2,.4,1.4,5.2,14,120], 12:[170,24,8.1,2,.7,.2,.2,.2,.7,2,8.1,24,170], 13:[260,37,11,4,1,.2,.2,.2,.2,1,4,11,37,260],
+    14:[420,56,18,5,1.9,.3,.2,.2,.2,.3,1.9,5,18,56,420], 15:[620,83,27,8,3,.5,.2,.2,.2,.2,.5,3,8,27,83,620],
+    16:[1000,130,26,9,4,2,.2,.2,.2,.2,.2,2,4,9,26,130,1000] }
+};
 function pouletMult(nbOs, k) {
   let m = 0.99;
   for (let i = 0; i < k; i++) m *= (25 - i) / (25 - i - nbOs);
@@ -4188,6 +4203,38 @@ const serveur = http.createServer(async (req, res) => {
       if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
       return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, os: p.nbOs, ouverts: p.ouverts,
         mult: p.ouverts.length ? pouletMult(p.nbOs, p.ouverts.length) : 0, solde: compte.solde });
+    }
+
+    /* ===============================================================
+       LE PLINKO
+       ---------------------------------------------------------------
+       Chaque balle : une suite de gauche/droite tiree ICI (une par
+       rangee). La case d'arrivee = nombre de "droite". La mise est
+       partagee entre les balles. Tout est paye tout de suite ; la page
+       ne fait que rejouer les chemins. Gain plafonne a mise + 10 000 EUR.
+       =============================================================== */
+    if (route === '/api/plinko-lancer' && req.method === 'POST') {
+      const mise = sous(Number(body.mise) || 0);
+      const n = Number(body.rangees) | 0, nbBalles = Number(body.balles) | 0;
+      const table = PLINKO_TABLES[body.risque] && PLINKO_TABLES[body.risque][n];
+      if (!table) return repondre(res, 400, { erreur: 'Reglage inconnu.' });
+      if (!(nbBalles >= 1 && nbBalles <= 20)) return repondre(res, 400, { erreur: 'De 1 a 20 balles.' });
+      if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const parBalle = mise / nbBalles, chemins = [], gains = [], mults = [];
+      let total = 0;
+      for (let b = 0; b < nbBalles; b++) {
+        let ch = '', k = 0;
+        for (let r = 0; r < n; r++) { const d = crypto.randomInt(2); ch += d; k += d; }
+        const m = table[k], g = sous(parBalle * m);
+        chemins.push(ch); mults.push(m); gains.push(g); total += g;
+      }
+      total = Math.min(sous(total), sous(mise + 10000));
+      compte.solde = sous(compte.solde - mise + total);
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, chemins, gains, mults, total, solde: compte.solde });
     }
 
     /* ===============================================================
