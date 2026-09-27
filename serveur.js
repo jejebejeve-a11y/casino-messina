@@ -2517,7 +2517,7 @@ const RZ_FEU         = 30 * 60 * 1000;
 const RZ_REPARATION  = 5000;
 const RZ_BOUCLIER_ATTENTE = 12 * 3600 * 1000;   // 12 h avant de pouvoir remettre le bouclier
 const RZ_V_PIED      = 14;      // metres par seconde (le temps du jeu est accelere)
-const RZ_V_METRO     = 30;
+const RZ_V_METRO     = 60;      // deux fois plus rapide qu'avant
 const RZ_DUREE_MAX   = 540;     // 9 minutes au plus, d'un bout a l'autre de la carte
 const RZ_REVENU      = 0.01;    // EUR par koala et par minute a un poste tenu (100 koalas = 1 EUR/min)
 /* plus un joueur tient de postes differents en meme temps, plus chacun rapporte : */
@@ -2631,6 +2631,7 @@ const RZ_MUR_LONGUEUR_MIN = 66;     // m (x1,7 de plus)
 const RZ_MUR_LONGUEUR_MAX = 471;    // m (x1,7 de plus)
 const RZ_MUR_CHAINE_MAX  = 510;     // m : doit se relier a la base ou a un mur deja pose
 const RZ_MUR_VIE_BASE    = 30;      // force de base, meme sans renfort
+const RZ_PORTAIL_COUT    = 1500;    // EUR : un tronçon qu'on peut ouvrir/fermer
 function rzMurForce(m) { return RZ_MUR_VIE_BASE + rzPuissance(m.garnison); }
 /* intersection de segments (formule standard, orientation des triplets) */
 function rzOrientation(a, b, c) { return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]); }
@@ -2644,6 +2645,7 @@ function rzSegCroise(p1, p2, p3, p4) {
 function rzMurSurChemin(proprio, coords, ignoreId) {
   for (const m of Object.values(RZ_MURS)) {
     if (m.id === ignoreId || m.proprio === proprio || rzAllies(proprio, m.proprio)) continue;
+    if (m.portail && m.ouvert) continue;   // un portail ouvert laisse passer tout le monde
     for (let i = 1; i < coords.length; i++) if (rzSegCroise(coords[i - 1], coords[i], m.a, m.b)) return m;
   }
   return null;
@@ -3161,7 +3163,7 @@ function rzVue(compte, depuis) {
              revientDans: b.mortJusqua ? Math.max(0, b.mortJusqua - now) : 0 };
   });
   const murs = Object.values(RZ_MURS).map(m => ({ id: m.id, pseudo: RZJ[m.proprio] ? RZJ[m.proprio].pseudo : '?',
-    a: m.a, b: m.b, vie: Math.round(rzMurForce(m)), mien: m.proprio === pb }));
+    a: m.a, b: m.b, vie: Math.round(rzMurForce(m)), mien: m.proprio === pb, portail: !!m.portail, ouvert: !!m.ouvert }));
   const evts = moi.evenements.filter(e => e.t > (Number(depuis) || 0));
   return {
     now, solde: compte.solde, postes, bandits, murs, bases, groupes, alertes, evenements: evts,
@@ -3176,7 +3178,8 @@ function rzVue(compte, depuis) {
     regles: { prix: RZ_PRIX, force: RZ_FORCE, niveauArme: RZ_NIV_ARME, prixArmurerie: RZ_PRIX_ARMURERIE,
               armurerieMax: RZ_ARMURERIE_MAX, prixDefense: RZ_PRIX_DEFENSE, maxGroupes: RZ_MAX_GROUPES, reparation: RZ_REPARATION,
               stations: RZ_STATIONS, zone: RZ_ZONE, banditForce: RZ_BANDIT_FORCE, banditGain: RZ_BANDIT_GAIN,
-              murCout: RZ_MUR_COUT, murRembours: RZ_MUR_REMBOURS, murLongueurMin: RZ_MUR_LONGUEUR_MIN, murLongueurMax: RZ_MUR_LONGUEUR_MAX, murChaineMax: RZ_MUR_CHAINE_MAX }
+              murCout: RZ_MUR_COUT, murRembours: RZ_MUR_REMBOURS, murLongueurMin: RZ_MUR_LONGUEUR_MIN, murLongueurMax: RZ_MUR_LONGUEUR_MAX, murChaineMax: RZ_MUR_CHAINE_MAX,
+              portailCout: RZ_PORTAIL_COUT }
   };
 }
 
@@ -4709,12 +4712,24 @@ const serveur = http.createServer(async (req, res) => {
         const prochE = p => rzDist(p, [moi.base.lon, moi.base.lat]) <= RZ_MUR_CHAINE_MAX
           || mesMurs.some(m => rzDist(p, m.a) <= RZ_MUR_CHAINE_MAX || rzDist(p, m.b) <= RZ_MUR_CHAINE_MAX);
         if (!prochE(a) && !prochE(b)) return repondre(res, 409, { erreur: 'Cette muraille doit se relier à ta base ou à une muraille déjà posée.' });
-        if (compte.solde < RZ_MUR_COUT) return repondre(res, 409, { erreur: 'Il faut ' + RZ_MUR_COUT.toLocaleString('fr-FR') + ' € pour poser une muraille.' });
-        compte.solde = sous(compte.solde - RZ_MUR_COUT);
-        const m = { id: 'm' + (rzMurCompteur++), proprio: pb, a, b, garnison: rzVide() };
+        const portail = !!body.portail;
+        const cout = portail ? RZ_PORTAIL_COUT : RZ_MUR_COUT;
+        if (compte.solde < cout) return repondre(res, 409, { erreur: 'Il faut ' + cout.toLocaleString('fr-FR') + ' € pour poser ' + (portail ? 'un portail' : 'une muraille') + '.' });
+        compte.solde = sous(compte.solde - cout);
+        const m = { id: 'm' + (rzMurCompteur++), proprio: pb, a, b, garnison: rzVide(), portail, ouvert: false };
         RZ_MURS[m.id] = m;
         const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
+      if (route === '/api/razzia-portail-basculer' && req.method === 'POST') {
+        const m = RZ_MURS[String(body.id || '')];
+        if (!m) return repondre(res, 404, { erreur: 'Portail introuvable.' });
+        if (m.proprio !== pb) return repondre(res, 409, { erreur: 'Ce n\'est pas ton portail.' });
+        if (!m.portail) return repondre(res, 409, { erreur: 'Ce n\'est pas un portail.' });
+        m.ouvert = !m.ouvert;
+        rzSauver();
         return repondre(res, 200, rzVue(compte, now));
       }
 
@@ -4722,7 +4737,7 @@ const serveur = http.createServer(async (req, res) => {
         const m = RZ_MURS[String(body.id || '')];
         if (!m) return repondre(res, 404, { erreur: 'Muraille introuvable.' });
         if (m.proprio !== pb) return repondre(res, 409, { erreur: 'Ce n\'est pas ta muraille.' });
-        const remboursement = RZ_MUR_REMBOURS;
+        const remboursement = Math.round((m.portail ? RZ_PORTAIL_COUT : RZ_MUR_COUT) * (RZ_MUR_REMBOURS / RZ_MUR_COUT));
         RZ_TYPES.forEach(t => { moi.stock[t] += m.garnison[t] | 0; });   // la garnison rentre a la base, saine et sauve
         delete RZ_MURS[m.id];
         compte.solde = sous(compte.solde + remboursement);

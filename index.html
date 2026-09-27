@@ -15052,14 +15052,16 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
         var dx = qmb[0] - qma[0], dy = qmb[1] - qma[1], L = Math.hypot(dx, dy) || 1;
         var ux = dx / L, uy = dy / L, px = -uy, py = ux;               // perpendiculaire (cote crenelé)
         var ep = Math.max(3.5, k * 0.85);                              // demi-epaisseur du corps de pierre
+        var ouvert = m.portail && m.ouvert;
         var pierre = m.mien ? '#8a8f98' : '#5a5e66', ombre = m.mien ? '#3f434a' : '#232529';
-        // le corps du mur, en pierre grise
+        cx.globalAlpha = ouvert ? 0.4 : 1;
+        // le corps du mur (ou du portail), en pierre grise
         cx.fillStyle = pierre;
         cx.beginPath();
         cx.moveTo(qma[0] + px * ep, qma[1] + py * ep); cx.lineTo(qmb[0] + px * ep, qmb[1] + py * ep);
         cx.lineTo(qmb[0] - px * ep, qmb[1] - py * ep); cx.lineTo(qma[0] - px * ep, qma[1] - py * ep);
         cx.closePath(); cx.fill();
-        cx.strokeStyle = ombre; cx.lineWidth = 1.5; cx.stroke();
+        cx.strokeStyle = ombre; cx.lineWidth = 1.5; if (ouvert) cx.setLineDash([ep, ep]); cx.stroke(); cx.setLineDash([]);
         // les creneaux (merlons noirs) le long du sommet, façon muraille de prison
         var pas = Math.max(1, ep * 2.4), nb = Math.max(2, Math.round(L / pas));
         cx.fillStyle = ombre;
@@ -15071,7 +15073,10 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
           cx.lineTo(xb + px * ep * 2, yb + py * ep * 2); cx.lineTo(xa + px * ep * 2, ya + py * ep * 2);
           cx.closePath(); cx.fill();
         }
-        if (z >= 15.0) pastille(mx, my - ep * 3.2, (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo) + ' · ' + m.vie, m.mien ? '#c7cbd1' : '#9a9ea4', 'rgba(20,20,22,.94)');
+        cx.globalAlpha = 1;
+        var libelle = m.portail ? 'PORTAIL · ' + (m.ouvert ? 'OUVERT' : 'FERMÉ') + (m.mien ? '' : ' · ' + m.pseudo) : (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo);
+        var teinte = m.portail ? (m.ouvert ? '#8ee08a' : '#e0b23a') : (m.mien ? '#c7cbd1' : '#9a9ea4');
+        if (z >= 15.0) pastille(mx, my - ep * 3.2, libelle + ' · ' + m.vie, teinte, 'rgba(20,20,22,.94)');
       } });
     });
 
@@ -15229,9 +15234,11 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     defense: function () { ouvrirDefense(); },
     armurerie: function () { ouvrirArmurerie(); },
     groupes: function () { ouvrirGroupes(); },
-    murPoser: function () { S.mode = 'mur-a'; S.murA = null; fermerFeuille(); consigne('Touche le premier point de la nouvelle muraille sur la carte.'); },
+    murPoser: function () { S.murPortail = false; S.mode = 'mur-a'; S.murA = null; fermerFeuille(); consigne('Touche le premier point de la nouvelle muraille sur la carte.'); },
+    portailPoser: function () { S.murPortail = true; S.mode = 'mur-a'; S.murA = null; fermerFeuille(); consigne('Touche le premier point du nouveau portail sur la carte.'); },
     murRenfort: function (el) { S.envoi = { cible: { type: 'mur', id: el.dataset.m } }; ouvrirMurRenfort(el.dataset.m); },
-    murDemolir: function (el) { action('razzia-mur-demolir', { id: el.dataset.m }, function (r) { toast('Muraille démolie : +' + eur(r.remboursement) + ', tes koalas sont rentrés.', 'bon'); ouvrirMurailles(); caisse(); }); },
+    murDemolir: function (el) { action('razzia-mur-demolir', { id: el.dataset.m }, function (r) { toast('Démoli : +' + eur(r.remboursement) + ', tes koalas sont rentrés.', 'bon'); ouvrirMurailles(); caisse(); }); },
+    portailBasculer: function (el) { action('razzia-portail-basculer', { id: el.dataset.m }, function () { ouvrirMurRenfort(el.dataset.m); }); },
     cote: function (el) {
       Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('.rz-cote'), function (x) { x.classList.toggle('choisi', x === el); });
       if (S.envoi && S.envoi.cible) S.envoi.cible.cote = el.dataset.c;
@@ -15472,10 +15479,12 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   function ouvrirMurailles() {
     var v = S.vue, R = v.regles, mes = (v.murs || []).filter(function (m) { return m.mien; });
     var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Des tronçons de mur, à chaîner autour de ta base pour délimiter et protéger une zone. Un ennemi doit d\'abord détruire une muraille pour pouvoir la traverser. Plus tu y stationnes de koalas (en renfort, définitif), plus elle résiste.</p>' +
-      '<div class="rz-chiffres"><div><small>Prix</small><b>' + eur(R.murCout) + '</b></div><div><small>Longueur</small><b>' + R.murLongueurMin + '–' + R.murLongueurMax + ' m</b></div></div>' +
-      '<button class="rz-btn rouge plein" data-a="murPoser"' + (!v.moi.base ? ' disabled' : '') + '>Poser une nouvelle muraille</button></div>';
+      '<div class="rz-chiffres"><div><small>Muraille</small><b>' + eur(R.murCout) + '</b></div><div><small>Longueur</small><b>' + R.murLongueurMin + '–' + R.murLongueurMax + ' m</b></div></div>' +
+      '<button class="rz-btn rouge plein" data-a="murPoser"' + (!v.moi.base ? ' disabled' : '') + '>Poser une nouvelle muraille</button>' +
+      '<p class="rz-note" style="font-size:13.5px">Un <b>portail</b> a la même taille, mais toi seul peux l\'ouvrir ou le fermer : ouvert, tout le monde passe ; fermé, il bloque comme une muraille.</p>' +
+      '<button class="rz-btn plein" data-a="portailPoser"' + (!v.moi.base ? ' disabled' : '') + '>Poser un portail · ' + eur(R.portailCout) + '</button></div>';
     h += '<div class="rz-sec"><div class="rz-titre">Tes murailles · ' + mes.length + '</div>' +
-      (mes.length ? mes.map(function (m) { return '<div class="rz-ligne"><div class="rz-txt"><b>Muraille</b><span>Résistance ' + m.vie + '</span></div><button class="rz-btn mini" data-a="murRenfort" data-m="' + m.id + '">Renforcer</button></div>'; }).join('') : '<p class="rz-note">Tu n\'en as encore posé aucune.</p>');
+      (mes.length ? mes.map(function (m) { return '<div class="rz-ligne"><div class="rz-txt"><b>' + (m.portail ? 'Portail · ' + (m.ouvert ? 'ouvert' : 'fermé') : 'Muraille') + '</b><span>Résistance ' + m.vie + '</span></div><button class="rz-btn mini" data-a="murRenfort" data-m="' + m.id + '">' + (m.portail ? 'Gérer' : 'Renforcer') + '</button></div>'; }).join('') : '<p class="rz-note">Tu n\'en as encore posé aucune.</p>');
     h += '</div>';
     ouvrirFeuille('Murailles', h, { rouvrir: ouvrirMurailles });
   }
@@ -15486,20 +15495,22 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (!m) return;
     if (m.mien) return ouvrirMurRenfort(murId, groupe);
     S.envoi = { cible: { type: 'mur', id: m.id }, groupe: groupe || null };
-    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Une muraille de <b>' + echap(m.pseudo) + '</b>. Il faut la détruire pour pouvoir traverser cette zone.</p>' +
+    var nom = m.portail ? 'Portail' : 'Muraille';
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">' + (m.portail ? (m.ouvert ? 'Un portail de <b>' + echap(m.pseudo) + '</b>, actuellement ouvert : tu peux passer librement.' : 'Un portail de <b>' + echap(m.pseudo) + '</b>, fermé : il bloque comme une muraille tant qu\'il n\'est pas détruit.') : 'Une muraille de <b>' + echap(m.pseudo) + '</b>. Il faut la détruire pour pouvoir traverser cette zone.') + '</p>' +
       '<div class="rz-chiffres"><div><small>Résistance</small><b>' + m.vie + '</b></div></div></div>';
-    if (v.moi.base) {
+    if (v.moi.base && !(m.portail && m.ouvert)) {
       h += '<div class="rz-sec"><div class="rz-titre">Attaquer</div>' + (groupe ? '' : blocUnites(v.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
         '<button class="rz-btn rouge plein" data-a="trajet"' + (v.moi.feu > maintenant() ? ' disabled' : '') + '>Choisir le trajet</button><div class="rz-erreur"></div></div>';
     }
-    ouvrirFeuille('Muraille <em>· ' + echap(m.pseudo) + '</em>', h, { rouvrir: function () { ouvrirMur(murId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
+    ouvrirFeuille(nom + ' <em>· ' + echap(m.pseudo) + '</em>', h, { rouvrir: function () { ouvrirMur(murId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
   }
   function ouvrirMurRenfort(murId, groupe) {
     var v = S.vue, m = (v.murs || []).find(function (x) { return x.id === murId; });
     if (!m) return;
     S.envoi = { cible: { type: 'mur', id: m.id }, groupe: groupe || null };
-    var remb = v.regles.murRembours;
-    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Ta muraille, résistance actuelle <b>' + m.vie + '</b>. Envoie des koalas pour la renforcer : ils y restent définitivement en garnison.</p>' +
+    var remb = Math.round((m.portail ? v.regles.portailCout : v.regles.murCout) * (v.regles.murRembours / v.regles.murCout));
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">' + (m.portail ? 'Ton portail, actuellement <b>' + (m.ouvert ? 'ouvert' : 'fermé') + '</b>. Résistance <b>' + m.vie + '</b>. Envoie des koalas pour le renforcer : ils y restent définitivement en garnison.' : 'Ta muraille, résistance actuelle <b>' + m.vie + '</b>. Envoie des koalas pour la renforcer : ils y restent définitivement en garnison.') + '</p>' +
+      (m.portail ? '<button class="rz-btn mini' + (m.ouvert ? ' rouge' : '') + '" data-a="portailBasculer" data-m="' + m.id + '">' + (m.ouvert ? 'Fermer le portail' : 'Ouvrir le portail') + '</button>' : '') +
       '<button class="rz-btn mini" data-a="murDemolir" data-m="' + m.id + '">Démolir · +' + eur(remb) + ' · la garnison rentre</button></div>' +
       '<div class="rz-sec"><div class="rz-titre">Renforcer</div>' + (groupe ? '' : blocUnites(v.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
       '<button class="rz-btn rouge plein" data-a="trajet">Choisir le trajet</button><div class="rz-erreur"></div></div>';
@@ -15547,11 +15558,40 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     S.vue.regles.stations.forEach(function (s) { var x = dist(p, [s[1], s[2]]); if (x < d) { d = x; best = s; } });
     return best;
   }
+  /* les murailles ennemies bloquent le passage : si le chemin en traverse une,
+     on detourne par-dela son extremite la plus proche et on refait chercher
+     les rues a partir de la - ça prend plus de temps, comme un vrai contournement. */
+  function segCroise(p1, p2, p3, p4) {
+    function o(a, b, c) { return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]); }
+    var d1 = o(p3, p4, p1), d2 = o(p3, p4, p2), d3 = o(p1, p2, p3), d4 = o(p1, p2, p4);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  }
+  function murQuiBloque(coords) {
+    var murs = S.vue.murs || [];
+    for (var i = 1; i < coords.length; i++) for (var j = 0; j < murs.length; j++) {
+      var mm = murs[j];
+      if (mm.mien || (mm.portail && mm.ouvert)) continue;   // les notres, et les portails ouverts, ne bloquent personne
+      if (segCroise(coords[i - 1], coords[i], mm.a, mm.b)) return mm;
+    }
+    return null;
+  }
+  async function cheminEnEvitant(a, z) {
+    var coords = await aPied(a, z);
+    for (var tour = 0; tour < 3; tour++) {
+      var m = murQuiBloque(coords); if (!m) break;
+      var pres = dist(a, m.a) < dist(a, m.b) ? m.a : m.b, loin = pres === m.a ? m.b : m.a;
+      var vx = pres[0] - loin[0], vy = pres[1] - loin[1], vl = Math.hypot(vx, vy) || 1, marge = 0.00045;
+      var detour = [pres[0] + vx / vl * marge, pres[1] + vy / vl * marge];
+      var p1 = await aPied(a, detour), p2 = await aPied(detour, z);
+      coords = p1.concat(p2.slice(1));
+    }
+    return coords;
+  }
   function estimer(etapes) {
     var t = 0;
     etapes.forEach(function (e) {
       if (e.type === 'pied') t += Math.max(longueur(e.coords), dist(e.coords[0], e.coords[e.coords.length - 1])) / 14;
-      else { var a = station(e.de), z = station(e.a); t += dist([a[1], a[2]], [z[1], z[2]]) * 1.25 / 30 + 15; }
+      else { var a = station(e.de), z = station(e.a); t += dist([a[1], a[2]], [z[1], z[2]]) * 1.25 / 60 + 15; }
     });
     return Math.min(540, t) * 1000;
   }
@@ -15580,11 +15620,13 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (!a || !z) return erreurFeuille('Trajet impossible.');
     ouvrirFeuille('Le <em>trajet</em>', '<p class="rz-note" style="font-size:14px">Tes koalas cherchent les rues…</p>');
     var opts = [];
-    var pied = await aPied(a, z);
-    opts.push({ nom: 'À pied', sous: 'Par les rues · ' + (longueur(pied) / 1000).toFixed(1).replace('.', ',') + ' km', etapes: [{ type: 'pied', coords: pied }] });
+    var pied = await cheminEnEvitant(a, z);
+    var sousPied = 'Par les rues · ' + (longueur(pied) / 1000).toFixed(1).replace('.', ',') + ' km';
+    if (murQuiBloque(pied)) sousPied += ' · encore une muraille sur la route';
+    opts.push({ nom: 'À pied', sous: sousPied, etapes: [{ type: 'pied', coords: pied }] });
     var sA = stationProche(a), sZ = stationProche(z);
     if (sA && sZ && sA !== sZ && dist(a, z) > 1100 && dist(a, [sA[1], sA[2]]) + dist([sZ[1], sZ[2]], z) < dist(a, z) * 0.75) {
-      var p1 = await aPied(a, [sA[1], sA[2]]), p2 = await aPied([sZ[1], sZ[2]], z);
+      var p1 = await cheminEnEvitant(a, [sA[1], sA[2]]), p2 = await cheminEnEvitant([sZ[1], sZ[2]], z);
       opts.push({ nom: 'Métro', sous: sA[0] + ' → ' + sZ[0] + ' · invisible sous terre', etapes: [{ type: 'pied', coords: p1 }, { type: 'metro', de: sA[0], a: sZ[0] }, { type: 'pied', coords: p2 }] });
     }
     opts.forEach(function (o) { o.duree = estimer(o.etapes); });
@@ -15601,7 +15643,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     var ou = c.type === 'base' ? 'la base de ' + echap((S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo) + ' · côté ' + NOM_COTE[c.cote].toLowerCase()
       : c.type === 'poste' ? 'le ' + echap((S.vue.postes.find(function (p) { return p.id === c.id; }) || { nom: 'poste' }).nom)
       : c.type === 'bandit' ? 'le camp de bandits'
-      : c.type === 'mur' ? (murCible && murCible.mien ? 'ta muraille (renfort)' : 'une muraille ennemie')
+      : c.type === 'mur' ? (murCible && murCible.mien ? 'ta ' + (murCible.portail ? 'portail' : 'muraille') + ' (renfort)' : 'un ' + (murCible && murCible.portail ? 'portail' : 'une muraille') + ' ennemi' + (murCible && murCible.portail ? '' : 'e'))
       : c.type === 'groupe' ? 'le groupe de ' + echap((S.vue.groupes.find(function (g) { return g.id === c.id; }) || { pseudo: '?' }).pseudo)
       : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
     var estAttaque = c.type === 'base' || c.type === 'bandit' || c.type === 'groupe' || (c.type === 'mur' && !(murCible && murCible.mien));
@@ -15674,7 +15716,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       if (!dansZone(pm, S.vue.regles.zone)) return toast('Hors de la zone.', 'mauvais');
       if (S.mode === 'mur-a') { S.murA = pm; S.mode = 'mur-b'; consigne('Touche le second point (max ' + S.vue.regles.murLongueurMax + ' m).'); return; }
       S.mode = 'normal'; consigne('');
-      action('razzia-mur-construire', { a: S.murA, b: pm }, function () { toast('Muraille posée.', 'bon'); ouvrirMurailles(); });
+      action('razzia-mur-construire', { a: S.murA, b: pm, portail: !!S.murPortail }, function () { toast((S.murPortail ? 'Portail posé.' : 'Muraille posée.'), 'bon'); ouvrirMurailles(); });
       return;
     }
     if (S.mode === 'destination') {
