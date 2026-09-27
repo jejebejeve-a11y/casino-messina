@@ -2626,9 +2626,9 @@ function rzMultDefense(j) { return 1 + 0.25 * ((j.defense || 1) - 1); }
 const RZ_MURS = {};                 // id -> { id, proprio, a:[lon,lat], b:[lon,lat], garnison }
 let   rzMurCompteur = 1;
 const RZ_MUR_COUT        = 1500;    // EUR le tronçon
-const RZ_MUR_LONGUEUR_MIN = 11;     // m
-const RZ_MUR_LONGUEUR_MAX = 79;     // m (75 % plus grand qu'au depart)
-const RZ_MUR_CHAINE_MAX  = 100;     // m : doit se relier a la base ou a un mur deja pose
+const RZ_MUR_LONGUEUR_MIN = 39;     // m (x3,5)
+const RZ_MUR_LONGUEUR_MAX = 277;    // m (x3,5)
+const RZ_MUR_CHAINE_MAX  = 300;     // m : doit se relier a la base ou a un mur deja pose
 const RZ_MUR_VIE_BASE    = 30;      // force de base, meme sans renfort
 function rzMurForce(m) { return RZ_MUR_VIE_BASE + rzPuissance(m.garnison); }
 /* intersection de segments (formule standard, orientation des triplets) */
