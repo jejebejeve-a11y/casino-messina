@@ -15049,7 +15049,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       var mx = (qma[0] + qmb[0]) / 2, my = (qma[1] + qmb[1]) / 2;
       /* zone cliquable = pres du trait reel (segment), pas un cercle qui grandit avec la longueur a l'ecran :
          sinon, une muraille tres etiree par la perspective (vue presque de face) devient cliquable partout. */
-      cibles.push({ x: mx, y: my, r: Math.max(16, k * 0.9 + 12), type: 'mur', id: m.id, ax: qma[0], ay: qma[1], bx: qmb[0], by: qmb[1] });
+      cibles.push({ x: mx, y: my, r: 16, type: 'mur', id: m.id, ax: qma[0], ay: qma[1], bx: qmb[0], by: qmb[1] });
       acteurs.push({ y: 1e9 + my, f: function () {
         var dx = qmb[0] - qma[0], dy = qmb[1] - qma[1], L = Math.hypot(dx, dy) || 1;
         var ux = dx / L, uy = dy / L, px = -uy, py = ux;               // perpendiculaire (cote crenelé)

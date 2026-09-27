@@ -2908,6 +2908,8 @@ function rzPlanifier(depart, arrivee, etapesBrutes, t0) {
     e.vers = apres.coords[0];
     const sDe = rzStation(e.de), sA = rzStation(e.a);
     if (rzDist(e.depuis, [sDe[1], sDe[2]]) > 450 || rzDist(e.vers, [sA[1], sA[2]]) > 450) return null;
+    // verifier que le metro ne traverse pas un mur ennemi
+    if (rzMurSurChemin(depart, [e.depuis, e.vers])) return null;
   }
   // durees
   let total = 0;
