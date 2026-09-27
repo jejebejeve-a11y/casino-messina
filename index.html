@@ -14816,28 +14816,28 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
 
   /* ou est un groupe a l'instant t */
   function position(g, t) {
-    if (g.etat !== 'route' || !g.etapes) return { p: g.pos, metro: false };
+    if (g.etat !== 'route' || !g.etapes) return { p: g.pos, metro: false, limo: false };
     var es = g.etapes;
     for (var i = 0; i < es.length; i++) {
       var e = es[i];
-      if (t < e.t0) return { p: e.type === 'pied' ? e.coords[0] : e.depuis, metro: e.type === 'metro' };
+      if (t < e.t0) return { p: e.type === 'pied' ? e.coords[0] : e.depuis, metro: e.type === 'metro', limo: !!e.limo };
       if (t <= e.t1) {
         var f = (t - e.t0) / Math.max(1, e.t1 - e.t0);
-        if (e.type === 'metro') return { p: [e.depuis[0] + (e.vers[0] - e.depuis[0]) * f, e.depuis[1] + (e.vers[1] - e.depuis[1]) * f], metro: true };
+        if (e.type === 'metro') return { p: [e.depuis[0] + (e.vers[0] - e.depuis[0]) * f, e.depuis[1] + (e.vers[1] - e.depuis[1]) * f], metro: true, limo: false };
         var L = e._L || (e._L = longueur(e.coords)), vise = f * L, fait = 0;
         for (var j = 1; j < e.coords.length; j++) {
           var d = dist(e.coords[j - 1], e.coords[j]);
           if (fait + d >= vise) {
             var h = d ? (vise - fait) / d : 0, a = e.coords[j - 1], b = e.coords[j];
-            return { p: [a[0] + (b[0] - a[0]) * h, a[1] + (b[1] - a[1]) * h], metro: false };
+            return { p: [a[0] + (b[0] - a[0]) * h, a[1] + (b[1] - a[1]) * h], metro: false, limo: !!e.limo, sens: Math.atan2(b[1] - a[1], b[0] - a[0]) };
           }
           fait += d;
         }
-        return { p: e.coords[e.coords.length - 1], metro: false };
+        return { p: e.coords[e.coords.length - 1], metro: false, limo: !!e.limo };
       }
     }
     var der = es[es.length - 1];
-    return { p: der.type === 'pied' ? der.coords[der.coords.length - 1] : der.vers, metro: false };
+    return { p: der.type === 'pied' ? der.coords[der.coords.length - 1] : der.vers, metro: false, limo: false };
   }
 
   function relation(pb) {
@@ -15123,6 +15123,27 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
           cx.fillStyle = '#fff'; cx.font = '700 12px "Barlow Condensed",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText('M ' + g.n, q[0], q[1] + 0.5);
           return;
         }
+        if (ps.limo) {
+          var angLimo = Math.atan2(qs[1] - q[1], qs[0] - q[0]);
+          cx.save(); cx.translate(q[0], q[1]); cx.rotate(angLimo);
+          var lo = 34, la = 12;   // longueur / largeur de la caisse a l'ecran
+          cx.fillStyle = 'rgba(0,0,0,.28)'; cx.beginPath(); cx.ellipse(0, la * 0.55, lo * 0.56, la * 0.32, 0, 0, 7); cx.fill();
+          cx.fillStyle = '#0c0c0f'; cx.strokeStyle = '#2a2a30'; cx.lineWidth = 1.4;
+          cx.beginPath();
+          cx.moveTo(-lo / 2, -la * 0.15); cx.lineTo(-lo / 2 + 4, -la / 2); cx.lineTo(lo / 2 - 6, -la / 2);
+          cx.lineTo(lo / 2, -la * 0.15); cx.lineTo(lo / 2, la / 2 - 1); cx.lineTo(-lo / 2, la / 2 - 1);
+          cx.closePath(); cx.fill(); cx.stroke();
+          cx.fillStyle = '#3b4048';
+          cx.fillRect(-lo * 0.18, -la * 0.42, lo * 0.34, la * 0.34);
+          cx.fillRect(lo * 0.20, -la * 0.42, lo * 0.24, la * 0.34);
+          cx.fillStyle = '#c9a227';
+          cx.beginPath(); cx.arc(-lo / 2 + 2, 0, 1.6, 0, 7); cx.fill();
+          cx.beginPath(); cx.arc(lo / 2 - 2, 0, 1.6, 0, 7); cx.fill();
+          cx.fillStyle = '#111'; cx.fillRect(-lo * 0.3, la / 2 - 2, 6, 3); cx.fillRect(lo * 0.14, la / 2 - 2, 6, 3);
+          cx.restore();
+          if (z >= 15.0) pastille(q[0], q[1] - la * 2.2, (g.mien ? 'Limousine' : g.pseudo + ' · limousine'), col);
+          return;
+        }
         if (z < 15.3) {
           cx.fillStyle = '#111'; cx.strokeStyle = col; cx.lineWidth = 3; cx.beginPath(); cx.arc(q[0], q[1], 12, 0, 7); cx.fill(); cx.stroke();
           cx.fillStyle = '#fff'; cx.font = '700 13px "Barlow Condensed",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(String(g.n), q[0], q[1] + 0.5);
@@ -15286,7 +15307,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     },
     partir: function () {
       var o = S.options && S.options[S.optionChoisie]; if (!o || !S.envoi) return;
-      var d = { cible: S.envoi.cible, etapes: o.etapes.map(function (e) { return e.type === 'pied' ? { type: 'pied', coords: e.coords } : { type: 'metro', de: e.de, a: e.a }; }) };
+      var d = { cible: S.envoi.cible, etapes: o.etapes.map(function (e) { return e.type === 'pied' ? { type: 'pied', coords: e.coords, limo: !!e.limo } : { type: 'metro', de: e.de, a: e.a }; }) };
       if (S.envoi.groupe) d.groupe = S.envoi.groupe; else d.unites = S.envoi.unites;
       action('razzia-envoyer', d, function () {
         tut(520, 0.1, 0.1); setTimeout(function () { tut(780, 0.14, 0.1); }, 110);
@@ -15342,6 +15363,9 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       ligne('Koala', eurRond(R.prix.koala) + ' · force ' + R.force.nu, 'koala', [1, 10, 50]) +
       ligne('Pistolet noir', eurRond(R.prix.pistolet) + ' · force ' + R.force.pistolet + ' · équipe un koala sans arme', 'pistolet', [1, 10], m.armurerie < R.niveauArme.pistolet ? 'Armurerie niv. 1' : '') +
       ligne('Pistolet diamant rouge', eurRond(R.prix.diamant) + ' · force ' + R.force.diamant + ' · le meilleur', 'diamant', [1, 5], m.armurerie < R.niveauArme.diamant ? 'Armurerie niv. 2' : '') +
+      '</div><div class="rz-sec"><div class="rz-titre">Limousine</div>' +
+      (m.limousine ? '<p class="rz-note" style="margin-top:0">Tu as ta limousine : dans « Choisir le trajet », prends l\'option Limousine pour envoyer n\'importe quel nombre de koalas deux fois plus vite que le métro.</p>'
+        : '<p class="rz-note" style="margin-top:0">Une grande limousine noire, capacité illimitée, deux fois plus rapide que le métro — et on la voit rouler sur la vraie route. Achat unique.</p><button class="rz-btn or plein" data-a="acheter" data-q="limousine" data-n="1"' + (feu ? ' disabled' : '') + '>Acheter la limousine · ' + eurRond(R.prixLimousine) + '</button>') +
       '</div><div class="rz-sec"><div class="rz-titre">Armurerie · niveau ' + m.armurerie + ' / ' + R.armurerieMax + '</div>' +
       (m.armurerie < R.armurerieMax
         ? '<button class="rz-btn or plein" data-a="ameliorer" data-q="armurerie"' + (feu ? ' disabled' : '') + '>Passer au niveau ' + (m.armurerie + 1) + ' · ' + eurRond(R.prixArmurerie[m.armurerie]) + '</button>' +
@@ -15607,10 +15631,11 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     }
     return coords;
   }
+  var V_LIMOUSINE = 120; // m/s, deux fois plus vite que le metro (mirroir de RZ_V_METRO*2 cote serveur)
   function estimer(etapes) {
     var t = 0;
     etapes.forEach(function (e) {
-      if (e.type === 'pied') t += Math.max(longueur(e.coords), dist(e.coords[0], e.coords[e.coords.length - 1])) / 14;
+      if (e.type === 'pied') t += Math.max(longueur(e.coords), dist(e.coords[0], e.coords[e.coords.length - 1])) / (e.limo ? V_LIMOUSINE : 14);
       else { var a = station(e.de), z = station(e.a); t += dist([a[1], a[2]], [z[1], z[2]]) * 1.25 / 60 + 15; }
     });
     return Math.min(540, t) * 1000;
@@ -15649,8 +15674,12 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       var p1 = await cheminEnEvitant(a, [sA[1], sA[2]]), p2 = await cheminEnEvitant([sZ[1], sZ[2]], z);
       opts.push({ nom: 'Métro', sous: sA[0] + ' → ' + sZ[0] + ' · invisible sous terre', etapes: [{ type: 'pied', coords: p1 }, { type: 'metro', de: sA[0], a: sZ[0] }, { type: 'pied', coords: p2 }] });
     }
+    if (S.vue.moi.limousine) {
+      opts.push({ nom: 'Limousine', sous: 'Par les rues · deux fois plus vite que le métro', etapes: [{ type: 'pied', coords: pied, limo: true }] });
+    }
     opts.forEach(function (o) { o.duree = estimer(o.etapes); });
-    S.options = opts; S.optionChoisie = opts.length > 1 && opts[1].duree < opts[0].duree ? 1 : 0;
+    S.options = opts; S.optionChoisie = 0;
+    opts.forEach(function (o, i) { if (o.duree < opts[S.optionChoisie].duree) S.optionChoisie = i; });
     majTraces();
     // cadrer le trajet
     var tous = []; opts[S.optionChoisie].etapes.forEach(function (e) { if (e.type === 'pied') tous = tous.concat(e.coords); });

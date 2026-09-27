@@ -2518,10 +2518,12 @@ const RZ_REPARATION  = 5000;
 const RZ_BOUCLIER_ATTENTE = 12 * 3600 * 1000;   // 12 h avant de pouvoir remettre le bouclier
 const RZ_V_PIED      = 14;      // metres par seconde (le temps du jeu est accelere)
 const RZ_V_METRO     = 60;      // deux fois plus rapide qu'avant
+const RZ_V_LIMOUSINE = RZ_V_METRO * 2;   // la limousine va deux fois plus vite que le metro
+const RZ_PRIX_LIMOUSINE = 45000;         // EUR, achat unique et definitif
 const RZ_DUREE_MAX   = 540;     // 9 minutes au plus, d'un bout a l'autre de la carte
 const RZ_REVENU      = 0.01;    // EUR par koala et par minute a un poste tenu (100 koalas = 1 EUR/min)
 /* plus un joueur tient de postes differents en meme temps, plus chacun rapporte : */
-const RZ_CONTROLE_MULT = [1, 1, 2, 4, 7, 12];   // index = nb de postes distincts tenus (0 a 5)
+const RZ_CONTROLE_MULT = [1, 1, 2, 4, 7, 12, 18, 26, 36, 48];   // index = nb de postes distincts tenus (0 a 9)
 function rzMultControle(nb) { return RZ_CONTROLE_MULT[Math.max(0, Math.min(nb, RZ_CONTROLE_MULT.length - 1))]; }
 /* les postes a tenir pour gagner de l'argent, eparpilles dans toute la zone :
    meme mecanique partout, seul l'emplacement change. */
@@ -2531,6 +2533,10 @@ const RZ_POSTES = [
   { id: 'est',   nom: 'Poste Est',    lon: 2.29820, lat: 48.87810 },   // vers les Ternes
   { id: 'sud',   nom: 'Poste Sud',    lon: 2.27850, lat: 48.83650 },   // vers Auteuil
   { id: 'ouest', nom: 'Poste Ouest',  lon: 2.23800, lat: 48.83210 },   // vers Boulogne-Billancourt
+  { id: 'nordest', nom: 'Poste Nord-Est', lon: 2.28900, lat: 48.88900 },  // vers Porte Maillot
+  { id: 'sudest',  nom: 'Poste Sud-Est',  lon: 2.28500, lat: 48.82300 },  // vers Auteuil-sud
+  { id: 'sudouest',nom: 'Poste Sud-Ouest',lon: 2.23500, lat: 48.81900 },  // vers Boulogne-sud
+  { id: 'centre',  nom: 'Poste Centre',   lon: 2.26700, lat: 48.86300 },  // au milieu du bois
 ];
 function rzPoste(id) { return RZ_POSTES.find(p => p.id === id) || RZ_POSTES[0]; }
 
@@ -2718,7 +2724,7 @@ function rzPoint(p) {
 
 function rzNouveauJoueur(compte) {
   return { pseudo: compte.pseudo, base: null, bouclier: true, bouclierRetireLe: 0, feuJusqua: 0,
-           defense: 1, armurerie: 0, stock: rzVide(),
+           defense: 1, armurerie: 0, stock: rzVide(), limousine: false,
            repartition: { devant: 25, derriere: 25, gauche: 25, droite: 25 },
            allies: [], demandes: [], evenements: [] };
 }
@@ -2881,7 +2887,7 @@ function rzPlanifier(depart, arrivee, etapesBrutes, t0) {
     if (e && e.type === 'pied') {
       const c = (Array.isArray(e.coords) ? e.coords : []).slice(0, 600).map(rzPoint).filter(Boolean);
       if (c.length < 2) return null;
-      etapes.push({ type: 'pied', coords: c });
+      etapes.push({ type: 'pied', coords: c, limo: !!e.limo });
     } else if (e && e.type === 'metro') {
       const de = rzStation(e.de), a = rzStation(e.a);
       if (!de || !a || de === a) return null;
@@ -2906,7 +2912,7 @@ function rzPlanifier(depart, arrivee, etapesBrutes, t0) {
   // durees
   let total = 0;
   etapes.forEach(e => {
-    if (e.type === 'pied') e.duree = Math.max(rzLongueur(e.coords), rzDist(e.coords[0], e.coords[e.coords.length - 1])) / RZ_V_PIED;
+    if (e.type === 'pied') e.duree = Math.max(rzLongueur(e.coords), rzDist(e.coords[0], e.coords[e.coords.length - 1])) / (e.limo ? RZ_V_LIMOUSINE : RZ_V_PIED);
     else e.duree = rzDist(e.depuis, e.vers) * 1.25 / RZ_V_METRO + 15;
     total += e.duree;
   });
@@ -2919,7 +2925,7 @@ function rzPlanifier(depart, arrivee, etapesBrutes, t0) {
 function rzRetour(g, t0) {
   const etapes = g.etapes.slice().reverse().map(e => {
     const d = e.t1 - e.t0;
-    if (e.type === 'pied') return { type: 'pied', coords: e.coords.slice().reverse(), d };
+    if (e.type === 'pied') return { type: 'pied', coords: e.coords.slice().reverse(), d, limo: e.limo };
     return { type: 'metro', de: e.a, a: e.de, depuis: e.vers, vers: e.depuis, d };
   });
   let t = t0;
@@ -3170,7 +3176,7 @@ function rzVue(compte, depuis) {
     now, solde: compte.solde, postes, bandits, murs, bases, groupes, alertes, evenements: evts,
     moi: {
       base: moi.base, deplaceUtilise: !!moi.deplaceUtilise, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
-      feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock,
+      feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock, limousine: !!moi.limousine,
       repartition: moi.repartition, cotes: rzRepartir(moi.stock, moi.repartition),
       allies: moi.allies.map(k => ({ id: k, pseudo: RZJ[k] ? RZJ[k].pseudo : k })),
       demandes: moi.demandes.map(k => ({ id: k, pseudo: RZJ[k] ? RZJ[k].pseudo : k })),
@@ -3180,7 +3186,7 @@ function rzVue(compte, depuis) {
               armurerieMax: RZ_ARMURERIE_MAX, prixDefense: RZ_PRIX_DEFENSE, maxGroupes: RZ_MAX_GROUPES, reparation: RZ_REPARATION,
               stations: RZ_STATIONS, zone: RZ_ZONE, banditForce: RZ_BANDIT_FORCE, banditGain: RZ_BANDIT_GAIN,
               murCout: RZ_MUR_COUT, murRembours: RZ_MUR_REMBOURS, murLongueurMin: RZ_MUR_LONGUEUR_MIN, murLongueurMax: RZ_MUR_LONGUEUR_MAX, murChaineMax: RZ_MUR_CHAINE_MAX,
-              portailCout: RZ_PORTAIL_COUT }
+              portailCout: RZ_PORTAIL_COUT, prixLimousine: RZ_PRIX_LIMOUSINE }
   };
 }
 
@@ -4649,6 +4655,10 @@ const serveur = http.createServer(async (req, res) => {
           const prix = RZ_PRIX[quoi] * n;
           if (compte.solde < prix) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
           compte.solde = sous(compte.solde - prix); moi.stock.nu -= n; moi.stock[quoi] += n;
+        } else if (quoi === 'limousine') {
+          if (moi.limousine) return repondre(res, 409, { erreur: 'Tu as déjà ta limousine.' });
+          if (compte.solde < RZ_PRIX_LIMOUSINE) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
+          compte.solde = sous(compte.solde - RZ_PRIX_LIMOUSINE); moi.limousine = true;
         } else return repondre(res, 400, { erreur: 'Achat inconnu.' });
         const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
@@ -4801,6 +4811,7 @@ const serveur = http.createServer(async (req, res) => {
           if (!p || !rzDansZone(p)) return repondre(res, 400, { erreur: 'Destination hors de la zone ouverte.' });
           arrivee = p; c = { type: 'point' };
         }
+        if (!moi.limousine && Array.isArray(body.etapes) && body.etapes.some(e => e && e.limo)) return repondre(res, 409, { erreur: 'Tu n\'as pas de limousine.' });
         const plan = rzPlanifier(depart, arrivee, body.etapes, now);
         if (!plan) return repondre(res, 400, { erreur: 'Trajet refusé. Réessaie.' });
         // une muraille ennemie encore debout bloque le passage : il faut d'abord la detruire
