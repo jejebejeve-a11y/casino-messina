@@ -2635,17 +2635,40 @@ async function rzAjouter(pb, delta) {
   return f.solde;
 }
 
-/* ---- sauvegarde du monde ---- */
+/* ---- sauvegarde du monde ----
+   Avant, un echec reseau vers la base (Upstash) etait juste ignore : si le
+   serveur redemarrait ensuite sans qu'aucune autre sauvegarde n'ait reussi
+   entre-temps, on rechargeait un monde perime (une base supprimee par un
+   admin pouvait ainsi "revenir" au redemarrage). Maintenant, tant que la
+   derniere sauvegarde n'a pas vraiment reussi, on retente tout seul. */
 let rzSauvePrevue = null;
+let rzADIRTY = false;      // il y a des changements pas encore confirmes sauvegardes
+let rzEnCours = false;     // une tentative de sauvegarde est en cours
+async function rzSauverMaintenant() {
+  if (rzEnCours || !Carnet.pret) return false;
+  rzEnCours = true;
+  try {
+    await Carnet.commande(['SET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur })]);
+    rzADIRTY = false;
+    return true;
+  } catch (e) {
+    console.log('Razzia : sauvegarde impossible, nouvel essai bientot (' + e.message + ')');
+    return false;
+  } finally {
+    rzEnCours = false;
+  }
+}
 function rzSauver() {
+  rzADIRTY = true;
   if (!rzCharge || rzSauvePrevue) return;
-  rzSauvePrevue = setTimeout(() => {
+  rzSauvePrevue = setTimeout(async () => {
     rzSauvePrevue = null;
-    if (!Carnet.pret) return;
-    Carnet.commande(['SET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur })])
-      .catch(e => console.log('Razzia : sauvegarde impossible (' + e.message + ')'));
+    await rzSauverMaintenant();
   }, 1500);
 }
+// filet de securite : si une sauvegarde a echoue et qu'aucune autre action
+// n'en a redeclenche une, on reessaie tout seul toutes les 20 secondes.
+setInterval(() => { if (rzADIRTY && rzCharge) rzSauverMaintenant(); }, 20000);
 (async function rzCharger() {
   for (let i = 0; i < 30 && !Carnet.pret; i++) await new Promise(r => setTimeout(r, 1000));
   if (Carnet.pret) {
@@ -4277,7 +4300,13 @@ const serveur = http.createServer(async (req, res) => {
       j.bouclier = true;
       j.bouclierRetireLe = 0;
       j.feuJusqua = 0;
-      rzSauver();
+      // action sensible : on s'assure que la suppression est vraiment ecrite
+      // dans la base avant de dire "ok" (sinon un redemarrage du serveur
+      // pourrait faire revenir l'ancienne base, comme avant ce correctif)
+      rzADIRTY = true;
+      let ecrite = await rzSauverMaintenant();
+      for (let essai = 0; !ecrite && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); ecrite = await rzSauverMaintenant(); }
+      if (!ecrite) return repondre(res, 503, { erreur: 'La base a bien ete enlevee ici, mais je n\'arrive pas a l\'enregistrer durablement (souci reseau). Reessaie dans une minute.' });
       return repondre(res, 200, { ok: true, pseudo: j.pseudo });
     }
 
@@ -4304,7 +4333,12 @@ const serveur = http.createServer(async (req, res) => {
         moi.base = { lon: p[0], lat: p[1], forme: forme.length >= 3 ? forme : null,
                      haut: Math.max(6, Math.min(120, Number(body.haut) || 18)) };
         moi.bouclier = true;
-        rzSauver();
+        // action sensible (une fois posee, on veut etre sur qu'elle survit a
+        // un redemarrage du serveur) : on attend une vraie confirmation
+        rzADIRTY = true;
+        let poseeOk = await rzSauverMaintenant();
+        for (let essai = 0; !poseeOk && essai < 3; essai++) { await new Promise(r => setTimeout(r, 400)); poseeOk = await rzSauverMaintenant(); }
+        if (!poseeOk) { moi.base = null; return repondre(res, 503, { erreur: 'Souci reseau, ta base n\'a pas pu etre enregistree. Reessaie.' }); }
         return repondre(res, 200, rzVue(compte, now));
       }
 
