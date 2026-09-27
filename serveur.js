@@ -95,41 +95,38 @@ function towerRand(a, b) { return a + Math.random() * (b - a); }
 function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
 /* ---------- Tower Rush : les cotes (refonte) ----------
-   Avant : un lacher bien vise ne tombait jamais, et chaque etage
-   multipliait en moyenne par plus de 1, sans plafond. Un bon joueur
-   pouvait donc monter indefiniment (0,10 € -> 16 000 €, soit x160 000).
-
-   Maintenant la tour a DOUZE niveaux et un plafond dur de x100.
-   - Chaque niveau a une chance de tenir, meme avec un lacher parfait
-     (TOWER_SURVIE). Un lacher imprecis ajoute son propre risque par-dessus.
-   - Si l\'etage tient, le multiplicateur cumule suit en moyenne
-     TOWER_ECHELLE (x1,13 au 1er niveau ... x100 au 12e), avec un peu de
-     hasard a chaque etage (la cote peut rester inferieure a x1).
-   - Le hasard de chaque etage est INDEPENDANT des precedents : aucune
-     strategie d\'encaissement ne peut faire mieux que l\'esperance du
-     premier niveau (0,85 x 1,13 = 0,96). Plus on monte, plus l\'esperance
-     baisse (0,78 au 7e niveau, 0,11 au sommet).
-   - Probabilite d\'atteindre le sommet depuis le depart, lacher parfait
-     a chaque fois : 0,85 x 0,82 x ... x 0,25 = 0,109 %.
-   - Etage gele : aucun risque, mais la cote reste proche de x1 (moyenne
-     0,99) et il ne compte pas comme un niveau.
-   Simulation (voir le rapport) : retour moyen ~0,90 a 0,96 par euro mise
-   selon la facon de jouer, jamais plus de x100.                        */
-const TOWER_NIVEAUX  = 12;
-const TOWER_MULT_MAX = 100;
-const TOWER_SURVIE   = [0.85, 0.82, 0.78, 0.74, 0.70, 0.66, 0.60, 0.54, 0.48, 0.42, 0.36, 0.25];
-const TOWER_ECHELLE  = [1.13, 1.36, 1.71, 2.26, 3.13, 4.5, 7.0, 10.5, 15.5, 22, 30, 100];
+   La seule facon de perdre la tour, c\'est un lacher mal vise : rien
+   d\'autre. Si l\'etage est pose dans la zone sans risque du balancement,
+   il tient a coup sur, quel que soit le niveau deja atteint - un joueur
+   qui a le coup en main peut monter tres haut sans jamais risquer
+   l\'effondrement.
+   Le seul hasard qui reste porte sur le multiplicateur de l\'etage POSE :
+   il suit en moyenne TOWER_ECHELLE (progression ~x1,35 par etage), mais
+   peut retomber sous x1 (par exemple x0,50) - c\'est de la malchance sur
+   le gain, jamais sur la tour elle-meme.
+   Plus on monte, plus le balancement est rapide (towerPeriodFor) et
+   l\'amplitude reduite (towerAmpFor) : viser juste devient plus dur en
+   hauteur, ce qui suffit a garder un risque qui grimpe avec l\'audace du
+   joueur, sans avoir besoin d\'un effondrement tire au sort.
+   Plafond de securite : niveau 30 ou x5000, encaisse d\'office (au-dela
+   c\'est purement theorique).                                          */
+const TOWER_NIVEAUX  = 30;
+const TOWER_MULT_MAX = 5000;
+const TOWER_ECHELLE  = [1.13, 1.36, 1.71, 2.26, 3.13, 4.5, 7.0, 10.5, 15.5, 22, 30,
+                         40.5, 54.68, 73.81, 99.65, 134.52, 181.6, 245.16, 330.97,
+                         446.81, 603.2, 814.32, 1099.33, 1484.09, 2003.52, 2704.75,
+                         3651.42, 4929.41, 5000, 5000];
 
 function towerRollFactor(niveau) {
-  const k = Math.min(niveau, TOWER_NIVEAUX - 1);
+  const k = Math.min(niveau, TOWER_ECHELLE.length - 1);
   const ratio = k === 0 ? TOWER_ECHELLE[0] : TOWER_ECHELLE[k] / TOWER_ECHELLE[k - 1];
   const a = k === 0 ? 0.40 : 0.15;                    // hasard de moyenne 1
   return ratio * towerRand(1 - a, 1 + a);
 }
 
 /* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l\'issue :
-   'rate' (l\'etage tombe a cote), 'glisse' (la tour s\'effondre) ou 'pose'.
-   Exporte en bas de fichier pour la simulation des cotes. */
+   'rate' (l\'etage part a cote, seulement si le lacher est mal vise) ou
+   'pose'. Exporte en bas de fichier pour la simulation des cotes. */
 function towerTirer(tour, angle) {
   const n = tour.floors.length;
   const niveau = tour.niveau | 0;
@@ -138,18 +135,13 @@ function towerTirer(tour, angle) {
   if (etaitGele) angle *= 0.2;
 
   const errRatio = Math.abs(angle) / amp;
-  /* zone de lacher sans risque plus large qu'avant : il faut vraiment mal
-     viser (pres du bout du balancement) pour que l'etage parte a cote */
+  /* zone de lacher sans risque : il faut vraiment mal viser (pres du
+     bout du balancement) pour que l'etage parte a cote. En dessous de
+     safeT, aucun risque, quel que soit le niveau deja atteint. */
   const safeT = 0.60, missT = Math.max(0.85, 1.08 - n * 0.012);
   const edgeT = towerClamp((errRatio - safeT) / Math.max(0.001, missT - safeT), 0, 1);
   const missChance = etaitGele ? 0 : edgeT * edgeT;
   if (Math.random() < missChance) return { issue: 'rate', angle: angle };
-
-  // le risque propre au niveau, meme avec un lacher parfait
-  /* la tour elle-meme ne glisse et ne penche jamais : quand le risque du
-     niveau tombe, c'est l'etage qu'on vient de lacher qui part a cote */
-  const tombe = !etaitGele && Math.random() >= TOWER_SURVIE[Math.min(niveau, TOWER_NIVEAUX - 1)];
-  if (tombe) return { issue: 'rate', angle: angle, casse: errRatio < 0.6 };   // bien vise : l'etage se brise en se posant
 
   const facteur = etaitGele ? towerRand(0.92, 1.06) : towerRollFactor(niveau);
   if (etaitGele) tour.frozenLeft--;
@@ -2526,8 +2518,17 @@ const RZ_BOUCLIER_ATTENTE = 12 * 3600 * 1000;   // 12 h avant de pouvoir remettr
 const RZ_V_PIED      = 14;      // metres par seconde (le temps du jeu est accelere)
 const RZ_V_METRO     = 30;
 const RZ_DUREE_MAX   = 540;     // 9 minutes au plus, d'un bout a l'autre de la carte
-const RZ_REVENU      = 0.005;   // EUR par koala et par minute au Bat B (100 koalas = 0,50 EUR/min)
-const RZ_BATB        = { lon: 2.27890, lat: 48.85270 };   // Maison de la Radio, au milieu du secteur
+const RZ_REVENU      = 0.005;   // EUR par koala et par minute a un poste tenu (100 koalas = 0,50 EUR/min)
+/* les postes a tenir pour gagner de l'argent, eparpilles dans toute la zone :
+   meme mecanique partout, seul l'emplacement change. */
+const RZ_POSTES = [
+  { id: 'batb',  nom: 'Bat B',        lon: 2.27890, lat: 48.85270 },   // Maison de la Radio, au milieu du secteur
+  { id: 'nord',  nom: 'Poste Nord',   lon: 2.25980, lat: 48.88460 },   // vers le Pont de Neuilly
+  { id: 'est',   nom: 'Poste Est',    lon: 2.29820, lat: 48.87810 },   // vers les Ternes
+  { id: 'sud',   nom: 'Poste Sud',    lon: 2.27850, lat: 48.83650 },   // vers Auteuil
+  { id: 'ouest', nom: 'Poste Ouest',  lon: 2.23800, lat: 48.83210 },   // vers Boulogne-Billancourt
+];
+function rzPoste(id) { return RZ_POSTES.find(p => p.id === id) || RZ_POSTES[0]; }
 const RZ_COTES       = ['devant', 'derriere', 'gauche', 'droite'];
 const RZ_ZONE = [
   [2.2330,48.8680],[2.2500,48.8830],[2.2740,48.8900],[2.2960,48.8925],[2.3060,48.8790],
@@ -2715,7 +2716,11 @@ function rzAppliquerMonde(d) {
   const conv = u => { if (!u) return rzVide(); const r = rzVide();
     r.nu = (u.nu | 0) + (u.couteau | 0); r.pistolet = u.pistolet | 0; r.diamant = (u.diamant | 0) + (u.kalach | 0) + (u.roquette | 0); return r; };
   Object.values(RZJ).forEach(j => { j.stock = conv(j.stock); j.armurerie = Math.min(RZ_ARMURERIE_MAX, j.armurerie | 0); });
-  Object.values(RZG).forEach(g => { g.unites = conv(g.unites); });
+  Object.values(RZG).forEach(g => {
+    g.unites = conv(g.unites);
+    // ancien Bat B unique -> nouveau systeme de postes (celui-ci garde l'id 'batb')
+    if (g.cible && g.cible.type === 'batb') g.cible = { type: 'poste', id: 'batb' };
+  });
   rzCompteur = Math.max(rzCompteur, d.n || 1);
   rzVersion = Number(d.v) || 0;
 }
@@ -2826,18 +2831,19 @@ async function rzArrivee(g) {
   }
   if (c.type === 'point') { g.etat = 'poste'; g.pos = rzPositionFin(g); return; }
 
-  if (c.type === 'batb') {
-    const occupants = Object.values(RZG).filter(x => x.etat === 'poste' && x.cible && x.cible.type === 'batb'
+  if (c.type === 'poste') {
+    const poste = rzPoste(c.id);
+    const occupants = Object.values(RZG).filter(x => x.etat === 'poste' && x.cible && x.cible.type === 'poste' && x.cible.id === poste.id
       && x.proprio !== g.proprio && !rzAllies(g.proprio, x.proprio));
-    g.etat = 'poste'; g.pos = [RZ_BATB.lon, RZ_BATB.lat]; g.cagnotte = 0; g.depuis = now;
-    if (!occupants.length) { rzEvenement(g.proprio, 'Tes koalas ont pris le Bat B. Ils rapportent de l\'argent chaque minute.', 'bon'); return; }
+    g.etat = 'poste'; g.pos = [poste.lon, poste.lat]; g.cagnotte = 0; g.depuis = now;
+    if (!occupants.length) { rzEvenement(g.proprio, 'Tes koalas ont pris le ' + poste.nom + '. Ils rapportent de l\'argent chaque minute.', 'bon'); return; }
     const def = rzVide(); occupants.forEach(o => RZ_TYPES.forEach(t => { def[t] += o.unites[t] | 0; }));
     const r = rzCombat(g.unites, 1, def, 1);
     const noms = [...new Set(occupants.map(o => RZJ[o.proprio] ? RZJ[o.proprio].pseudo : '?'))].join(', ');
     if (r.gagnant === 'A') {
       g.unites = r.A;
-      occupants.forEach(o => { rzEvenement(o.proprio, moi.pseudo + ' a attaqué le Bat B : tes koalas y sont tous tombés.', 'mauvais'); delete RZG[o.id]; });
-      rzEvenement(g.proprio, 'Bat B repris à ' + noms + '. Il te reste ' + rzTotal(r.A) + ' koalas sur place.', 'bon');
+      occupants.forEach(o => { rzEvenement(o.proprio, moi.pseudo + ' a attaqué le ' + poste.nom + ' : tes koalas y sont tous tombés.', 'mauvais'); delete RZG[o.id]; });
+      rzEvenement(g.proprio, poste.nom + ' repris à ' + noms + '. Il te reste ' + rzTotal(r.A) + ' koalas sur place.', 'bon');
     } else {
       // les survivants de la defense se repartissent entre leurs groupes
       const restes = r.B;
@@ -2846,9 +2852,9 @@ async function rzArrivee(g) {
         RZ_TYPES.forEach(t => { const pris = Math.min(o.unites[t] | 0, restes[t]); u[t] = pris; restes[t] -= pris; });
         o.unites = u;
         if (!rzTotal(u)) delete RZG[o.id];
-        rzEvenement(o.proprio, moi.pseudo + ' a attaqué le Bat B et a perdu. Tes koalas tiennent toujours.', 'bon');
+        rzEvenement(o.proprio, moi.pseudo + ' a attaqué le ' + poste.nom + ' et a perdu. Tes koalas tiennent toujours.', 'bon');
       });
-      rzEvenement(g.proprio, 'Attaque du Bat B ratée : tes ' + rzTotal(g.unites) + ' koalas sont tombés face à ' + noms + '.', 'mauvais');
+      rzEvenement(g.proprio, 'Attaque du ' + poste.nom + ' ratée : tes ' + rzTotal(g.unites) + ' koalas sont tombés face à ' + noms + '.', 'mauvais');
       delete RZG[g.id];
     }
     return;
@@ -2903,7 +2909,7 @@ async function rzArrivee(g) {
   rzRetour(g, now);
 }
 
-/* ---- le battement : arrivees et revenus du Bat B ---- */
+/* ---- le battement : arrivees et revenus des postes tenus ---- */
 let rzOccupe = false, rzDernierRevenu = Date.now();
 setInterval(async () => {
   if (!rzCharge || rzOccupe) return;
@@ -2917,7 +2923,7 @@ setInterval(async () => {
       rzDernierRevenu = now;
       const gains = {};
       Object.values(RZG).forEach(g => {
-        if (g.etat !== 'poste' || !g.cible || g.cible.type !== 'batb') return;
+        if (g.etat !== 'poste' || !g.cible || g.cible.type !== 'poste') return;
         g.cagnotte = (g.cagnotte || 0) + rzTotal(g.unites) * RZ_REVENU;
         const verse = Math.floor(g.cagnotte * 100) / 100;
         if (verse >= 0.01) { g.cagnotte -= verse; g.gagne = sous((g.gagne || 0) + verse); gains[g.proprio] = (gains[g.proprio] || 0) + verse; }
@@ -2949,13 +2955,15 @@ function rzVue(compte, depuis) {
   });
   const alertes = Object.values(RZG).filter(g => g.etat === 'route' && g.cible.type === 'base' && g.cible.pseudo === pb)
     .map(g => ({ pseudo: RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?', n: rzTotal(g.unites), fin: g.fin, cote: g.cible.cote }));
-  const occ = Object.values(RZG).filter(g => g.etat === 'poste' && g.cible.type === 'batb');
-  const batb = { lon: RZ_BATB.lon, lat: RZ_BATB.lat,
-                 occupants: [...new Set(occ.map(g => RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?'))],
-                 n: occ.reduce((s, g) => s + rzTotal(g.unites), 0) };
+  const postes = RZ_POSTES.map(p => {
+    const occ = Object.values(RZG).filter(g => g.etat === 'poste' && g.cible && g.cible.type === 'poste' && g.cible.id === p.id);
+    return { id: p.id, nom: p.nom, lon: p.lon, lat: p.lat,
+             occupants: [...new Set(occ.map(g => RZJ[g.proprio] ? RZJ[g.proprio].pseudo : '?'))],
+             n: occ.reduce((s, g) => s + rzTotal(g.unites), 0) };
+  });
   const evts = moi.evenements.filter(e => e.t > (Number(depuis) || 0));
   return {
-    now, solde: compte.solde, batb, bases, groupes, alertes, evenements: evts,
+    now, solde: compte.solde, postes, bases, groupes, alertes, evenements: evts,
     moi: {
       base: moi.base, deplaceUtilise: !!moi.deplaceUtilise, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
       feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock,
@@ -4103,21 +4111,11 @@ const serveur = http.createServer(async (req, res) => {
         compte.tower = null;
         Carnet.enregistrer(compte);
         return repondre(res, 200, {
-          ok: true, rate: true, casse: !!r.casse, angle: r.angle, perdu: perdu, solde: compte.solde
+          ok: true, rate: true, angle: r.angle, perdu: perdu, solde: compte.solde
         });
       }
 
-      if (r.issue === 'glisse') {
-        const perdu = tour.mise;
-        compte.tower = null;
-        Carnet.enregistrer(compte);
-        return repondre(res, 200, {
-          ok: true, rate: false, glisse: true, facteur: r.facteur, lean: tour.visOffset,
-          totalMult: tour.totalMult, perdu: perdu, solde: compte.solde
-        });
-      }
-
-      // le sommet (12e niveau, ou le plafond x100) : on encaisse d\'office
+      // le sommet (niveau TOWER_NIVEAUX, ou le plafond TOWER_MULT_MAX) : on encaisse d\'office
       if (r.sommet) {
         const gain = sous(tour.mise * tour.totalMult);
         compte.solde = sous(compte.solde + gain);
@@ -4522,8 +4520,10 @@ const serveur = http.createServer(async (req, res) => {
           if (v.bouclier) return repondre(res, 409, { erreur: 'Cette base est sous bouclier.' });
           arrivee = [v.base.lon, v.base.lat];
           c = { type: 'base', pseudo: String(cible.pseudo), cote: RZ_COTES.indexOf(cible.cote) >= 0 ? cible.cote : 'devant' };
-        } else if (cible.type === 'batb') {
-          arrivee = [RZ_BATB.lon, RZ_BATB.lat]; c = { type: 'batb' };
+        } else if (cible.type === 'poste' || cible.type === 'batb') {
+          const poste = RZ_POSTES.find(p => p.id === (cible.type === 'batb' ? 'batb' : String(cible.id || '')));
+          if (!poste) return repondre(res, 404, { erreur: 'Poste introuvable.' });
+          arrivee = [poste.lon, poste.lat]; c = { type: 'poste', id: poste.id };
         } else if (cible.type === 'maison') {
           arrivee = [moi.base.lon, moi.base.lat]; c = { type: 'maison' };
         } else {
@@ -4705,7 +4705,7 @@ function quitterTable(compte) {
 
 /* pour la simulation des cotes de Tower Rush (node -e "require('./serveur.js')") :
    rien n\'est exporte d\'autre, et le site demarre exactement comme avant */
-module.exports = { towerTirer, towerAmpFor, towerPeriodFor, TOWER_NIVEAUX, TOWER_MULT_MAX, TOWER_SURVIE, TOWER_ECHELLE };
+module.exports = { towerTirer, towerAmpFor, towerPeriodFor, TOWER_NIVEAUX, TOWER_MULT_MAX, TOWER_ECHELLE };
 
 Carnet.demarrer().then(() => {
   if (require.main !== module) return;

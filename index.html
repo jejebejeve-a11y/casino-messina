@@ -2499,7 +2499,7 @@ body.pont-actif{overflow:hidden}
           </button>
           <button class="carte-jeu" data-jeu="razzia">
             <div class="cj-titre serif">Razzia</div>
-            <div class="cj-texte">La vraie carte de Paris. Pose ta base sur un vrai bâtiment, arme tes koalas, tiens le Bat B, et va piller les autres joueurs par les rues ou par le métro.</div>
+            <div class="cj-texte">La vraie carte de Paris. Pose ta base sur un vrai bâtiment, arme tes koalas, tiens un poste (Bat B ou l'un des quatre autres, éparpillés sur la carte), et va piller les autres joueurs par les rues ou par le métro.</div>
             <div class="cj-pied">Jouer</div>
           </button>
         </div>
@@ -8434,13 +8434,13 @@ window.addEventListener('error', function (ev) {
       <h2>Règles — Tower Rush</h2>
       <ul>
         <li>L'étage se balance sous la grue. Appuyez sur <b>BUILD</b> quand il passe au-dessus de son ombre, au sommet de la tour.</li>
-        <li>Une cote est tirée à chaque étage posé et se <b>multiplie</b> avec les précédentes. Elle peut aussi être <b>inférieure à x1</b> : vous pouvez perdre une partie de vos gains même en jouant bien.</li>
-        <li>Un lâcher trop imprécis fait tomber l'étage à côté : la tour entière s'effondre (x0).</li>
+        <li>La tour ne tombe que si vous posez <b>mal</b> : un lâcher trop imprécis fait tomber l'étage à côté et la tour est perdue (x0). Bien visé, l'étage tient toujours — vous pouvez monter très haut sans risque si vous avez le coup en main.</li>
+        <li>Plus vous montez, plus la grue balance vite et sur une amplitude réduite : viser juste devient plus difficile en hauteur.</li>
+        <li>Une cote est tirée à chaque étage bien posé et se <b>multiplie</b> avec les précédentes. Elle peut aussi être <b>inférieure à x1</b> (par exemple x0,50) : la malchance peut réduire vos gains, mais elle ne fait jamais tomber la tour.</li>
         <li>La tour reste toujours <b>bien droite</b> : elle ne penche pas et ne glisse jamais, quelle que soit sa hauteur.</li>
-        <li>Chaque niveau a aussi son propre risque : même bien visé, l'étage peut <b>tomber à côté</b>, et ce risque grandit en montant.</li>
         <li><b>CASHOUT</b> encaisse à tout moment mise × multiplicateur cumulé.</li>
-        <li>Le sommet est au <b>12ᵉ niveau</b> : gain maximum <b>x100</b>, encaissé d'office. L'atteindre est très rare (environ 1 tour sur 1 000).</li>
-        <li><b>❄ Étage Gelé</b> : de temps en temps, deux ou trois étages sans risque d'effondrement, mais la cote y reste proche de x1.</li>
+        <li>Le sommet est au <b>30ᵉ niveau</b> ou au plafond <b>x5000</b> : gain encaissé d'office. L'atteindre demande d'enchaîner de nombreux lâchers bien visés.</li>
+        <li><b>❄ Étage Gelé</b> : de temps en temps, deux ou trois étages sans risque, mais la cote y reste proche de x1.</li>
       </ul>
       <p>Mise min 0,10 € — max 500 €. C'est le serveur qui calcule chaque lâcher, jamais la page.</p>
       <button class="btn btn-blue" id="trCloseRules" style="width:100%;height:42px;">Compris</button>
@@ -12894,25 +12894,6 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
       var payRect=payload.getBoundingClientRect();
       var targetDY=(retRect.top-payRect.top)+(payRect.height*0.1);
 
-      if (r.rate && r.casse){
-        /* bien visé mais le niveau n'a pas tenu : l'étage se pose droit sur la tour
-           et se brise sur place. La tour, elle, ne bouge pas. */
-        var casseDur=clamp(0.34+Math.abs(targetDY)/1050, 0.34, 0.6);
-        payload.style.transition='transform '+casseDur.toFixed(2)+'s cubic-bezier(.45,0,.8,1)';
-        payload.style.transform='translate(calc(-50% + '+(angle*0.3).toFixed(1)+'px), '+targetDY.toFixed(0)+'px)';
-        setTimeout(function(){
-          Sound.crash(); shakeStage(); flashRed();
-          var stR2=$('trStage').getBoundingClientRect();
-          burst(stR2.width/2, retRect.top-stageRect.top+14, 22, ['#c9c2b4','#8d877c','#ffffff'], 52, 7);
-          payload.style.transition='transform .5s cubic-bezier(.4,0,1,1), opacity .5s';
-          payload.style.transform='translate(-50%, '+(targetDY+90).toFixed(0)+'px) scale(.92,.6)';
-          payload.style.opacity='0';
-          toast('L’étage s’est brisé en se posant — tour perdue.','lose');
-          pushResult(0,true);
-          setTimeout(function(){ S.animBusy=false; endRound(); }, 560);
-        }, casseDur*1000+30);
-        return;
-      }
       if (r.rate){
         var missDur=0.52;
         payload.style.transition='transform '+missDur+'s cubic-bezier(.4,0,1,1)';
@@ -12954,7 +12935,7 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
 
         /* (la tour ne glisse plus jamais : plus de cas "glisse" ici) */
 
-        /* le sommet (12e niveau ou plafond x100) : le serveur a deja encaisse */
+        /* le sommet (niveau max ou plafond du multiplicateur) : le serveur a deja encaisse */
         if (r.sommet){
           pushResult(factor,false);
           setTimeout(function(){
@@ -14538,6 +14519,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       c.addSource('rz-batb', { type: 'geojson', data: vide() });
       c.addLayer({ id: 'rz-batb-sol', type: 'fill', source: 'rz-batb', paint: { 'fill-color': '#e6c56c', 'fill-opacity': 0.14 } }, 'rz-bat');
       c.addLayer({ id: 'rz-batb-trait', type: 'line', source: 'rz-batb', paint: { 'line-color': '#e6c56c', 'line-width': 3, 'line-dasharray': [1.5, 1] } }, 'rz-bat');
+      /* (la source "rz-batb" porte maintenant un cercle par poste : nom garde pour ne rien casser) */
       c.addSource('rz-trajet', { type: 'geojson', data: vide() });
       c.addLayer({ id: 'rz-trajet-fond', type: 'line', source: 'rz-trajet', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#000', 'line-opacity': 0.55, 'line-width': ['case', ['==', ['get', 'type'], 'apercu'], 9, 6] } }, 'rz-bat');
@@ -14572,8 +14554,10 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     var zone = S.vue.regles.zone.slice(); zone.push(zone[0]);
     var monde = [[2.0, 48.6], [2.6, 48.6], [2.6, 49.1], [2.0, 49.1], [2.0, 48.6]];
     S.carte.getSource('rz-masque').setData({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [monde, zone.slice().reverse()] } });
-    var b = [S.vue.batb.lon, S.vue.batb.lat];
-    S.carte.getSource('rz-batb').setData({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [cercle(b, 105, 56)] } });
+    var feats = S.vue.postes.map(function (p) {
+      return { type: 'Feature', properties: { id: p.id }, geometry: { type: 'Polygon', coordinates: [cercle([p.lon, p.lat], 105, 56)] } };
+    });
+    S.carte.getSource('rz-batb').setData({ type: 'FeatureCollection', features: feats });
   }
 
   /* ---------------- les monuments, refaits a la main ----------------
@@ -14723,8 +14707,11 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (m.base) {
       if (m.feu > now) p += puce('En feu · ' + duree(m.feu - now), 'rouge');
       p += m.bouclier ? puce('Bouclier', 'bleu') : puce(m.bouclierDispo > 0 ? 'Bouclier dans ' + duree(m.bouclierDispo) : 'Sans bouclier', 'rouge');
-      var bb = v.groupes.filter(function (g) { return g.mien && g.etat === 'poste' && g.cible.type === 'batb'; });
-      if (bb.length) (p += puce('Bat B · ' + bb.reduce(function (s, g) { return s + g.n; }, 0), 'or'));
+      var tenus = {};
+      v.groupes.filter(function (g) { return g.mien && g.etat === 'poste' && g.cible.type === 'poste'; }).forEach(function (g) {
+        tenus[g.cible.id] = (tenus[g.cible.id] || 0) + g.n;
+      });
+      v.postes.forEach(function (pt) { if (tenus[pt.id]) p += puce(pt.nom + ' · ' + tenus[pt.id], 'or'); });
     }
     $('rzPuces').innerHTML = p;
     var ng = v.groupes.filter(function (g) { return g.mien; }).length;
@@ -14906,7 +14893,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   /* ---------------- chaque image ---------------- */
   function preparerCombats(now) {
     S.vue.groupes.forEach(function (g) {
-      if (S.combats[g.id] || g.etat !== 'route' || !g.cible || (g.cible.type !== 'base' && g.cible.type !== 'batb') || !g.fin) return;
+      if (S.combats[g.id] || g.etat !== 'route' || !g.cible || (g.cible.type !== 'base' && g.cible.type !== 'poste') || !g.fin) return;
       var reste = g.fin - now;
       if (reste > 2600 || reste < -400) return;
       var centre, rayon, cote = g.cibleCote || 'devant', defN, defEquipe, defArmes;
@@ -14929,11 +14916,13 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
         centre = decale(centre, d[0] * rayon, d[1] * rayon);
         var dir = d;
       } else {
-        var bb = [S.vue.batb.lon, S.vue.batb.lat];
+        var pt = S.vue.postes.find(function (x) { return x.id === g.cible.id; });
+        if (!pt) return;
+        var bb = [pt.lon, pt.lat];
         var dd = avant ? [(avant[0] - bb[0]) * Math.cos(bb[1] * Math.PI / 180), avant[1] - bb[1]] : [0, -1];
         var ll = Math.hypot(dd[0], dd[1]) || 1; dir = [dd[0] / ll, dd[1] / ll];
         centre = decale(bb, dir[0] * 100, dir[1] * 100);
-        defN = S.vue.batb.n; defArmes = ['pistolet', 'nu']; defEquipe = '#7a7f86';
+        defN = pt.n; defArmes = ['pistolet', 'nu']; defEquipe = '#7a7f86';
         if (!defN) return;             // personne a combattre : il s'installe
       }
       if (!defN) return;               // cote vide : pas de bagarre, il passe
@@ -15003,22 +14992,26 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       } });
     });
 
-    // le Bat B
-    var qb = ecran([v.batb.lon, v.batb.lat]), hb = hauteurPx(v.batb.lat, 28);
-    cibles.push({ x: qb[0], y: qb[1] - hb / 2, r: Math.max(34, 90 / metresParPixel(v.batb.lat)), type: 'batb' });
-    acteurs.push({ y: 1e9 + qb[1], f: function () {
-      pastille(qb[0], qb[1] - hb - 18, 'BAT B' + (v.batb.n ? ' · ' + v.batb.occupants.join(', ') + ' · ' + v.batb.n : ' · libre'), COUL.moi, 'rgba(40,30,8,.94)');
-    } });
+    // les postes (Bat B et les autres, meme mecanique partout)
+    v.postes.forEach(function (pt) {
+      var qb = ecran([pt.lon, pt.lat]), hb = hauteurPx(pt.lat, 28);
+      if (qb[0] < -200 || qb[1] < -200 || qb[0] > W + 200 || qb[1] > H + 300) return;
+      cibles.push({ x: qb[0], y: qb[1] - hb / 2, r: Math.max(34, 90 / metresParPixel(pt.lat)), type: 'poste', id: pt.id });
+      acteurs.push({ y: 1e9 + qb[1], f: function () {
+        pastille(qb[0], qb[1] - hb - 18, pt.nom.toUpperCase() + (pt.n ? ' · ' + pt.occupants.join(', ') + ' · ' + pt.n : ' · libre'), COUL.moi, 'rgba(40,30,8,.94)');
+      } });
+    });
 
     // les groupes
-    var occ = 0;
+    var occPoste = {};
     v.groupes.forEach(function (g) {
       var cb = S.combats[g.id];
       if (cb && now >= cb.debut) return;             // il est dans la bagarre
       var ps = position(g, now); if (!ps.p) return;
       var p = ps.p;
-      if (g.etat === 'poste' && g.cible.type === 'batb') {
-        var ang = hasard(parseInt(String(g.id).replace(/\D/g, ''), 10) || occ) * Math.PI * 2 + occ * 1.3; occ++;
+      if (g.etat === 'poste' && g.cible.type === 'poste') {
+        var occ = occPoste[g.cible.id] = (occPoste[g.cible.id] || 0);
+        var ang = hasard(parseInt(String(g.id).replace(/\D/g, ''), 10) || occ) * Math.PI * 2 + occ * 1.3; occPoste[g.cible.id]++;
         p = decale(p, Math.cos(ang) * 98, Math.sin(ang) * 98);
       }
       if (ps.metro && !g.mien) return;               // dans le metro, personne ne te voit
@@ -15224,7 +15217,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       '<div class="rz-sec rz-grille"><button class="rz-btn" data-a="armurerie">Armurerie</button><button class="rz-btn" data-a="defense">Défense</button></div>' +
       '<div class="rz-sec"><div class="rz-titre">Envoyer des koalas quelque part</div>' + blocUnites(m.stock) +
       (total(m.stock) ? '<button class="rz-btn rouge plein" data-a="pointCarte">Choisir l\'endroit sur la carte</button>' : '') + '<div class="rz-erreur"></div>' +
-      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur sur la carte. Pour gagner de l\'argent sans attaquer, touche le Bat B.</p></div>' +
+      '<p class="rz-note">Pour attaquer, touche la base d\'un autre joueur sur la carte. Pour gagner de l\'argent sans attaquer, touche un poste (Bat B ou l\'un des quatre autres).</p></div>' +
       '<div class="rz-sec"><div class="rz-titre">Emplacement</div>' +
       (m.deplaceUtilise
         ? '<p class="rz-note">Tu as déjà changé ta base d\'emplacement une fois.</p>'
@@ -15285,14 +15278,15 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   /* --- mes groupes --- */
   function texteGroupe(g) {
     var now = maintenant(), c = g.cible || {};
-    if (g.etat === 'poste') return c.type === 'batb' ? 'Au Bat B · a rapporté ' + eur(g.gagne) : 'Posté, attend tes ordres';
-    var ou = c.type === 'maison' ? 'Rentre à la base' : c.type === 'batb' ? 'Vers le Bat B' : c.type === 'base' ? 'Attaque ' + (S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo + (g.cibleCote ? ' · ' + NOM_COTE[g.cibleCote].toLowerCase() : '') : 'Vers un point';
+    var nomPoste = c.type === 'poste' ? (S.vue.postes.find(function (p) { return p.id === c.id; }) || { nom: 'un poste' }).nom : null;
+    if (g.etat === 'poste') return c.type === 'poste' ? 'Au ' + nomPoste + ' · a rapporté ' + eur(g.gagne) : 'Posté, attend tes ordres';
+    var ou = c.type === 'maison' ? 'Rentre à la base' : c.type === 'poste' ? 'Vers le ' + nomPoste : c.type === 'base' ? 'Attaque ' + (S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo + (g.cibleCote ? ' · ' + NOM_COTE[g.cibleCote].toLowerCase() : '') : 'Vers un point';
     return ou + (g.fin ? ' · <span data-fin="' + g.fin + '">' + duree(g.fin - now) + '</span>' : '');
   }
   function ouvrirGroupes() {
     var mes = S.vue.groupes.filter(function (g) { return g.mien; });
     var h = '<div class="rz-sec"><div class="rz-titre">Dehors · ' + mes.length + ' / ' + S.vue.regles.maxGroupes + ' groupes</div>';
-    if (!mes.length) h += '<p class="rz-note">Aucun groupe dehors. Touche une base ennemie, le Bat B, ou « Ma base » pour envoyer des koalas.</p>';
+    if (!mes.length) h += '<p class="rz-note">Aucun groupe dehors. Touche une base ennemie, un poste, ou « Ma base » pour envoyer des koalas.</p>';
     mes.forEach(function (g) {
       h += '<div class="rz-ligne"><div class="rz-txt"><b>' + g.n + ' koala' + (g.n > 1 ? 's' : '') + (g.armes && g.armes.length ? ' · ' + g.armes.map(function (a) { return a === 'diamant' ? 'diamant' : 'pistolet'; }).join(' + ') : '') + '</b><span>' + texteGroupe(g) + '</span></div>' +
         '<button class="rz-btn mini" data-a="voir" data-g="' + g.id + '">Voir</button>' +
@@ -15362,18 +15356,20 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     });
   }
 
-  /* --- le Bat B --- */
-  function ouvrirBatB(groupe) {
+  /* --- un poste (Bat B et les autres : meme mecanique) --- */
+  function ouvrirPoste(posteId, groupe) {
     var v = S.vue, m = v.moi, R = v.regles;
-    S.envoi = { cible: { type: 'batb' }, groupe: groupe || null };
-    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">La Maison de la Radio. Les koalas qui la tiennent rapportent <b>' + (0.005).toLocaleString('fr-FR') + ' € par koala et par minute</b> à leur chef. ' +
+    var pt = v.postes.find(function (x) { return x.id === posteId; });
+    if (!pt) return;
+    S.envoi = { cible: { type: 'poste', id: pt.id }, groupe: groupe || null };
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Les koalas qui le tiennent rapportent <b>' + (0.005).toLocaleString('fr-FR') + ' € par koala et par minute</b> à leur chef. ' +
       'Si des koalas arrivent en plus grand nombre, ils prennent la place.</p>' +
-      '<div class="rz-chiffres"><div><small>Tenu par</small><b>' + (v.batb.occupants.length ? echap(v.batb.occupants.join(', ')) : 'Personne') + '</b></div><div><small>Koalas</small><b>' + v.batb.n + '</b></div></div></div>';
+      '<div class="rz-chiffres"><div><small>Tenu par</small><b>' + (pt.occupants.length ? echap(pt.occupants.join(', ')) : 'Personne') + '</b></div><div><small>Koalas</small><b>' + pt.n + '</b></div></div></div>';
     if (m.base) {
       h += '<div class="rz-sec"><div class="rz-titre">Envoyer des koalas</div>' + (groupe ? '' : blocUnites(m.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
         '<button class="rz-btn rouge plein" data-a="trajet"' + (m.feu > maintenant() ? ' disabled' : '') + '>Choisir le trajet</button><div class="rz-erreur"></div></div>';
     }
-    ouvrirFeuille('Le <em>Bat B</em>', h, { rouvrir: function () { ouvrirBatB(groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
+    ouvrirFeuille('Le <em>' + echap(pt.nom) + '</em>', h, { rouvrir: function () { ouvrirPoste(posteId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
   }
 
   /* --- un groupe touche sur la carte --- */
@@ -15381,7 +15377,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (!g.mien) {
       ouvrirFeuille('Groupe de <em>' + echap(g.pseudo) + '</em>', '<div class="rz-sec"><div class="rz-chiffres"><div><small>Koalas</small><b>' + g.n + '</b></div><div><small>Armes</small><b>' +
         (g.armes && g.armes.length ? g.armes.map(function (a) { return a === 'diamant' ? 'Diamant' : 'Pistolet'; }).join(', ') : 'Aucune') + '</b></div></div>' +
-        '<p class="rz-note">' + (g.etat === 'poste' ? (g.cible.type === 'batb' ? 'Il tient le Bat B.' : 'Il attend dans la rue.') : 'Il est en route.') + '</p></div>');
+        '<p class="rz-note">' + (g.etat === 'poste' ? (g.cible.type === 'poste' ? 'Il tient ' + echap((S.vue.postes.find(function (p) { return p.id === g.cible.id; }) || { nom: 'un poste' }).nom) + '.' : 'Il attend dans la rue.') : 'Il est en route.') + '</p></div>');
       return;
     }
     ouvrirGroupes();
@@ -15426,7 +15422,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   function arriveeEnvoi() {
     var c = S.envoi.cible;
     if (c.type === 'base') { var b = S.vue.bases.find(function (x) { return x.id === c.pseudo; }); return b ? [b.lon, b.lat] : null; }
-    if (c.type === 'batb') return [S.vue.batb.lon, S.vue.batb.lat];
+    if (c.type === 'poste') { var pt = S.vue.postes.find(function (x) { return x.id === c.id; }); return pt ? [pt.lon, pt.lat] : null; }
     if (c.type === 'maison') return [S.vue.moi.base.lon, S.vue.moi.base.lat];
     return [c.lon, c.lat];
   }
@@ -15452,7 +15448,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       S.carte.fitBounds(bb, { padding: { top: 90, bottom: Math.min(420, window.innerHeight * 0.5), left: 40, right: 40 }, maxZoom: 16.5, duration: 900 });
     }
     var c = S.envoi.cible, ou = c.type === 'base' ? 'la base de ' + echap((S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo) + ' · côté ' + NOM_COTE[c.cote].toLowerCase()
-      : c.type === 'batb' ? 'le Bat B' : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
+      : c.type === 'poste' ? 'le ' + echap((S.vue.postes.find(function (p) { return p.id === c.id; }) || { nom: 'poste' }).nom) : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
     var n = S.envoi.groupe ? (S.vue.groupes.find(function (g) { return g.id === S.envoi.groupe; }) || {}).n : total(S.envoi.unites);
     var h = '<p class="rz-note" style="margin:0 0 10px;font-size:14px">' + n + ' koala' + (n > 1 ? 's' : '') + ' vers ' + ou + '.</p>' +
       opts.map(function (o, i) { return '<button class="rz-option' + (i === S.optionChoisie ? ' choisi' : '') + '" data-a="option" data-i="' + i + '"><div><b>' + o.nom + '</b><span>' + echap(o.sous) + '</span></div><i>' + duree(o.duree) + '</i></button>'; }).join('') +
@@ -15470,7 +15466,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   function entrerDestination() {
     S.mode = 'destination';
     $('rzFeuille').hidden = true;
-    consigne('Touche l\'endroit, une base ou le Bat B <button class="rz-btn mini" id="rzAnnuler">Annuler</button>');
+    consigne('Touche l\'endroit, une base ou un poste <button class="rz-btn mini" id="rzAnnuler">Annuler</button>');
     $('rzAnnuler').onclick = function (e) { e.stopPropagation(); S.mode = 'normal'; S.envoi = null; consigne(''); };
   }
   function anneau(f) {
@@ -15522,7 +15518,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       S.mode = 'normal'; consigne('');
       if (base && !base.moi) { ouvrirCibleBase(base, groupe); if (S.envoi) S.envoi.unites = unites; return; }
       if (base && base.moi) { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'maison' } }; if (!groupe) return toast('Ils sont déjà à la base.', 'info'); return calculer(); }
-      if (t && t.type === 'batb') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'batb' } }; return calculer(); }
+      if (t && t.type === 'poste') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'poste', id: t.id } }; return calculer(); }
       var p = [e.lngLat.lng, e.lngLat.lat];
       if (!dansZone(p, S.vue.regles.zone)) { toast('Hors de la zone.', 'mauvais'); S.mode = 'destination'; return entrerDestination(); }
       S.envoi = { groupe: groupe, unites: unites, cible: { type: 'point', lon: Math.round(p[0] * 1e6) / 1e6, lat: Math.round(p[1] * 1e6) / 1e6 } };
@@ -15530,7 +15526,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     }
     if (t && t.type === 'groupe' && (!base || t.g.mien)) return ouvrirGroupe(t.g);
     if (base) return ouvrirCibleBase(base);
-    if (t && t.type === 'batb') return ouvrirBatB();
+    if (t && t.type === 'poste') return ouvrirPoste(t.id);
     if (!$('rzFeuille').hidden) fermerFeuille();
   }
 
