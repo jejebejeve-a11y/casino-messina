@@ -29,6 +29,7 @@ const DELAI_BOT       = 1300;   // temps de reflexion d\'un bot
 const CHAT_MAX        = 60;     // messages de chat conserves par table
 const ABSENCE_MAX     = 15000;  // sans nouvelles, un joueur perd sa place
 const SOLDE_DEPART    = 22;
+const PECHE_MAX_JOUR  = 20000;   // maximum de poissons peches par jour et par joueur
 
 /* ---------- le penalty ----------
    L\'echelle des gains : un but = on monte d\'un cran.
@@ -3626,12 +3627,18 @@ const serveur = http.createServer(async (req, res) => {
 
     // --- une prise a la peche : c\'est le serveur qui credite ---
     if (route === '/api/peche' && req.method === 'POST') {
+      const jour = new Date().toISOString().slice(0, 10);
+      if (compte.pecheJour !== jour) { compte.pecheJour = jour; compte.pecheAuj = 0; }
+      if (compte.pecheAuj >= PECHE_MAX_JOUR) {
+        return repondre(res, 200, { solde: compte.solde, poissons: compte.poissons, plafond: true });
+      }
+      compte.pecheAuj = compte.pecheAuj + 1;
       compte.solde    = sous(compte.solde + 1);
       compte.poissons = compte.poissons + 1;
       const info = siegeDe(compte);
       if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
-      return repondre(res, 200, { solde: compte.solde, poissons: compte.poissons });
+      return repondre(res, 200, { solde: compte.solde, poissons: compte.poissons, restant: PECHE_MAX_JOUR - compte.pecheAuj });
     }
 
     // --- l\'apparence du personnage ---

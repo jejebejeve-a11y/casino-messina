@@ -5939,6 +5939,10 @@ function ferrer(reussi) {
           $('affPrises').textContent = E.prises;
         }
         majSolde();
+        if (r.plafond && !P.plafondDitAuj) {
+          P.plafondDitAuj = true;
+          majConsigne('Limite du jour atteinte', 'Jeffrey a assez pêché pour aujourd\'hui : 20 000 poissons max par jour. Reviens demain !');
+        }
       });
     }
     $('affPrises').textContent = E.prises;
