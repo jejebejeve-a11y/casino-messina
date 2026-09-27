@@ -13971,6 +13971,7 @@ body.rz-actif{overflow:hidden}
     <button data-rz="base"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>Base</button>
     <button data-rz="armurerie"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 8h15l1-2h2v5h-6l-1 2h-3l-1 5H6l1-5H3z"/></svg>Armurerie</button>
     <button data-rz="defense"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Défense</button>
+    <button data-rz="murailles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V9l4-2 4 2 4-2 4 2 2-1v13H3z"/><path d="M7 21v-6M11 21v-4M15 21v-6M19 21v-4"/></svg>Murailles</button>
     <button data-rz="groupes"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20c0-4 2.5-6 5-6s5 2 5 6zM12 20c0-4 2.5-6 5-6s5 2 5 6z"/></svg>Groupes<span class="rz-pastille" id="rzNbGroupes" hidden></span></button>
     <button data-rz="allies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12l3 3 5-6"/><path d="M4 12a8 8 0 1016 0 8 8 0 00-16 0"/></svg>Alliés<span class="rz-pastille" id="rzNbDemandes" hidden></span></button>
     <button data-rz="journal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>Journal</button>
@@ -14852,8 +14853,17 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   }
 
   /* une petite troupe en formation autour d'un point de l'ecran */
+  /* plus une armee est nombreuse, plus elle doit occuper de terrain a l'ecran :
+     echelle logarithmique, 1x jusqu'a ~10 koalas, 5x (une vraie rue) a partir
+     de 50 000 koalas, jamais plus loin au-dela. */
+  function troupeEchelle(n) {
+    var r = Math.log(Math.max(1, n) / 10) / Math.log(50000 / 10);
+    return 1 + 4 * Math.max(0, Math.min(1, r));
+  }
   function troupe(x, y, n, k, equipe, armes, sens, marche, graine, tirs, alpha) {
-    var m = Math.min(n, k > 9 ? 10 : 7), cols = Math.ceil(Math.sqrt(m * 1.6)), esp = k * 2.3, t = performance.now();
+    var echelle = troupeEchelle(n);
+    var capBase = k > 9 ? 10 : 7, m = Math.min(n, Math.round(capBase * Math.min(echelle, 3)));
+    var cols = Math.ceil(Math.sqrt(m * 1.6)), esp = k * 2.3 * echelle, t = performance.now();
     var pos = [];
     for (var i = 0; i < m; i++) {
       var c = i % cols, r = Math.floor(i / cols);
@@ -14893,9 +14903,10 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
   /* ---------------- chaque image ---------------- */
   function preparerCombats(now) {
     S.vue.groupes.forEach(function (g) {
-      if (S.combats[g.id] || g.etat !== 'route' || !g.cible || (g.cible.type !== 'base' && g.cible.type !== 'poste') || !g.fin) return;
+      var typesCombat = { base: 1, poste: 1, bandit: 1, mur: 1 };
+      if (S.combats[g.id] || g.etat !== 'route' || !g.cible || !typesCombat[g.cible.type] || !g.fin) return;
       var reste = g.fin - now;
-      if (reste > 2600 || reste < -400) return;
+      if (reste > 13500 || reste < -400) return;
       var centre, rayon, cote = g.cibleCote || 'devant', defN, defEquipe, defArmes;
       var der = g.etapes[g.etapes.length - 1], avant = der.type === 'pied' && der.coords.length > 2 ? der.coords[der.coords.length - 3] : null;
       if (g.cible.type === 'base') {
@@ -14915,7 +14926,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
         if (!d) d = [0, -1];
         centre = decale(centre, d[0] * rayon, d[1] * rayon);
         var dir = d;
-      } else {
+      } else if (g.cible.type === 'poste') {
         var pt = S.vue.postes.find(function (x) { return x.id === g.cible.id; });
         if (!pt) return;
         var bb = [pt.lon, pt.lat];
@@ -14924,10 +14935,27 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
         centre = decale(bb, dir[0] * 100, dir[1] * 100);
         defN = pt.n; defArmes = ['pistolet', 'nu']; defEquipe = '#7a7f86';
         if (!defN) return;             // personne a combattre : il s'installe
+      } else if (g.cible.type === 'bandit') {
+        var bd = (S.vue.bandits || []).find(function (x) { return x.id === g.cible.id; });
+        if (!bd || !bd.vivant) return;
+        var bb2 = [bd.lon, bd.lat];
+        var dd2 = avant ? [(avant[0] - bb2[0]) * Math.cos(bb2[1] * Math.PI / 180), avant[1] - bb2[1]] : [0, -1];
+        var ll2 = Math.hypot(dd2[0], dd2[1]) || 1; dir = [dd2[0] / ll2, dd2[1] / ll2];
+        centre = decale(bb2, dir[0] * 100, dir[1] * 100);
+        var force = ((S.vue.regles.banditForce || [])[bd.niveau - 1]) || 10;
+        defN = Math.max(1, Math.round(force / 8)); defArmes = ['pistolet', 'nu']; defEquipe = '#7a7f86';
+      } else {
+        var mu = (S.vue.murs || []).find(function (x) { return x.id === g.cible.id; });
+        if (!mu) return;
+        var bb3 = [(mu.a[0] + mu.b[0]) / 2, (mu.a[1] + mu.b[1]) / 2];
+        var dd3 = avant ? [(avant[0] - bb3[0]) * Math.cos(bb3[1] * Math.PI / 180), avant[1] - bb3[1]] : [0, -1];
+        var ll3 = Math.hypot(dd3[0], dd3[1]) || 1; dir = [dd3[0] / ll3, dd3[1] / ll3];
+        centre = decale(bb3, dir[0] * 40, dir[1] * 40);
+        defN = Math.max(1, Math.round(mu.vie / 8)); defArmes = ['nu']; defEquipe = '#7a7f86';
       }
       if (!defN) return;               // cote vide : pas de bagarre, il passe
       S.combats[g.id] = {
-        p: centre, dir: dir, debut: g.fin - 2600, fin: g.fin + 1900, graine: hasard(g.fin + g.n),
+        p: centre, dir: dir, debut: g.fin - 13000, fin: g.fin + 1900, graine: hasard(g.fin + g.n),
         n: g.n, armes: g.armes && g.armes.length ? g.armes.concat(['nu']) : ['nu'], equipe: COUL[g.mien ? 'moi' : relation(g.proprio)],
         defN: defN, defArmes: defArmes.length ? defArmes : ['nu'], defEquipe: defEquipe, pseudo: g.pseudo
       };
@@ -15002,14 +15030,28 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       } });
     });
 
-    // les bandits (camps fixes, façon "barbares")
+    // les bandits (camps fixes, façon "barbares") : caches tant qu'on n'a pas zoome, il faut les chercher
     v.bandits.forEach(function (b) {
+      if (z < 15.4) return;
       var qb = ecran([b.lon, b.lat]), hb = hauteurPx(b.lat, 18);
       if (qb[0] < -200 || qb[1] < -200 || qb[0] > W + 200 || qb[1] > H + 300) return;
       if (b.vivant) cibles.push({ x: qb[0], y: qb[1] - hb / 2, r: Math.max(30, 80 / metresParPixel(b.lat)), type: 'bandit', id: b.id });
       acteurs.push({ y: 1e9 + qb[1], f: function () {
         var txt = b.vivant ? 'BANDITS · NIV. ' + b.niveau : 'VAINCUS · revient dans ' + duree(b.revientDans);
         pastille(qb[0], qb[1] - hb - 16, txt, b.vivant ? '#e0212e' : '#6b6f76', 'rgba(30,10,10,.9)');
+      } });
+    });
+
+    // les murailles : tronçons de mur qui bloquent le passage tant qu'ils tiennent
+    (v.murs || []).forEach(function (m) {
+      var qma = ecran(m.a), qmb = ecran(m.b);
+      if (Math.max(qma[0], qmb[0]) < -200 || Math.min(qma[0], qmb[0]) > W + 200 || Math.max(qma[1], qmb[1]) < -300 || Math.min(qma[1], qmb[1]) > H + 200) return;
+      var mx = (qma[0] + qmb[0]) / 2, my = (qma[1] + qmb[1]) / 2, lpx = Math.hypot(qmb[0] - qma[0], qmb[1] - qma[1]);
+      cibles.push({ x: mx, y: my, r: Math.max(16, lpx / 2), type: 'mur', id: m.id });
+      acteurs.push({ y: 1e9 + my, f: function () {
+        cx.strokeStyle = m.mien ? '#4d7cff' : '#8a5a1f'; cx.lineWidth = 6; cx.lineCap = 'round';
+        cx.beginPath(); cx.moveTo(qma[0], qma[1]); cx.lineTo(qmb[0], qmb[1]); cx.stroke();
+        if (z >= 15.0) pastille(mx, my - 14, (m.mien ? 'TA MURAILLE' : 'MURAILLE · ' + m.pseudo) + ' · ' + m.vie, m.mien ? '#4d7cff' : '#8a5a1f', 'rgba(20,20,26,.9)');
       } });
     });
 
@@ -15167,6 +15209,8 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     defense: function () { ouvrirDefense(); },
     armurerie: function () { ouvrirArmurerie(); },
     groupes: function () { ouvrirGroupes(); },
+    murPoser: function () { S.mode = 'mur-a'; S.murA = null; fermerFeuille(); consigne('Touche le premier point de la nouvelle muraille sur la carte.'); },
+    murRenfort: function (el) { S.envoi = { cible: { type: 'mur', id: el.dataset.m } }; ouvrirMurRenfort(el.dataset.m); },
     cote: function (el) {
       Array.prototype.forEach.call($('rzFeuilleCorps').querySelectorAll('.rz-cote'), function (x) { x.classList.toggle('choisi', x === el); });
       if (S.envoi && S.envoi.cible) S.envoi.cible.cote = el.dataset.c;
@@ -15301,7 +15345,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     mes.forEach(function (g) {
       h += '<div class="rz-ligne"><div class="rz-txt"><b>' + g.n + ' koala' + (g.n > 1 ? 's' : '') + (g.armes && g.armes.length ? ' · ' + g.armes.map(function (a) { return a === 'diamant' ? 'diamant' : 'pistolet'; }).join(' + ') : '') + '</b><span>' + texteGroupe(g) + '</span></div>' +
         '<button class="rz-btn mini" data-a="voir" data-g="' + g.id + '">Voir</button>' +
-        (g.etat === 'poste' ? '<button class="rz-btn mini" data-a="ailleurs" data-g="' + g.id + '">Ailleurs</button><button class="rz-btn mini rouge" data-a="rentrer" data-g="' + g.id + '">Rentrer</button>' : '') + '</div>';
+        ((g.etat === 'poste' || g.etat === 'route') ? '<button class="rz-btn mini" data-a="ailleurs" data-g="' + g.id + '">Ailleurs</button>' + (g.etat === 'poste' ? '<button class="rz-btn mini rouge" data-a="rentrer" data-g="' + g.id + '">Rentrer</button>' : '') : '') + '</div>';
     });
     h += '<div class="rz-erreur"></div></div>';
     ouvrirFeuille('Mes <em>groupes</em>', h, {
@@ -15403,6 +15447,42 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     ouvrirFeuille('Bandits <em>· niveau ' + b.niveau + '</em>', h, { rouvrir: function () { ouvrirBandit(banditId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
   }
 
+  /* --- le panneau des murailles : construire, ou voir les siennes --- */
+  function ouvrirMurailles() {
+    var v = S.vue, R = v.regles, mes = (v.murs || []).filter(function (m) { return m.mien; });
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Des tronçons de mur, à chaîner autour de ta base pour délimiter et protéger une zone. Un ennemi doit d\'abord détruire une muraille pour pouvoir la traverser. Plus tu y stationnes de koalas (en renfort, définitif), plus elle résiste.</p>' +
+      '<div class="rz-chiffres"><div><small>Prix</small><b>' + eur(R.murCout) + '</b></div><div><small>Longueur</small><b>' + R.murLongueurMin + '–' + R.murLongueurMax + ' m</b></div></div>' +
+      '<button class="rz-btn rouge plein" data-a="murPoser"' + (!v.moi.base ? ' disabled' : '') + '>Poser une nouvelle muraille</button></div>';
+    h += '<div class="rz-sec"><div class="rz-titre">Tes murailles · ' + mes.length + '</div>' +
+      (mes.length ? mes.map(function (m) { return '<div class="rz-ligne"><div class="rz-txt"><b>Muraille</b><span>Résistance ' + m.vie + '</span></div><button class="rz-btn mini" data-a="murRenfort" data-m="' + m.id + '">Renforcer</button></div>'; }).join('') : '<p class="rz-note">Tu n\'en as encore posé aucune.</p>');
+    h += '</div>';
+    ouvrirFeuille('Murailles', h, { rouvrir: ouvrirMurailles });
+  }
+
+  /* --- une muraille touchee sur la carte (attaque si ennemie, renfort si la sienne) --- */
+  function ouvrirMur(murId, groupe) {
+    var v = S.vue, m = (v.murs || []).find(function (x) { return x.id === murId; });
+    if (!m) return;
+    if (m.mien) return ouvrirMurRenfort(murId, groupe);
+    S.envoi = { cible: { type: 'mur', id: m.id }, groupe: groupe || null };
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Une muraille de <b>' + echap(m.pseudo) + '</b>. Il faut la détruire pour pouvoir traverser cette zone.</p>' +
+      '<div class="rz-chiffres"><div><small>Résistance</small><b>' + m.vie + '</b></div></div></div>';
+    if (v.moi.base) {
+      h += '<div class="rz-sec"><div class="rz-titre">Attaquer</div>' + (groupe ? '' : blocUnites(v.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
+        '<button class="rz-btn rouge plein" data-a="trajet"' + (v.moi.feu > maintenant() ? ' disabled' : '') + '>Choisir le trajet</button><div class="rz-erreur"></div></div>';
+    }
+    ouvrirFeuille('Muraille <em>· ' + echap(m.pseudo) + '</em>', h, { rouvrir: function () { ouvrirMur(murId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
+  }
+  function ouvrirMurRenfort(murId, groupe) {
+    var v = S.vue, m = (v.murs || []).find(function (x) { return x.id === murId; });
+    if (!m) return;
+    S.envoi = { cible: { type: 'mur', id: m.id }, groupe: groupe || null };
+    var h = '<div class="rz-sec"><p class="rz-note" style="margin-top:0;font-size:13.5px">Ta muraille, résistance actuelle <b>' + m.vie + '</b>. Envoie des koalas pour la renforcer : ils y restent définitivement en garnison.</p></div>' +
+      '<div class="rz-sec"><div class="rz-titre">Renforcer</div>' + (groupe ? '' : blocUnites(v.moi.stock) + '<p class="rz-note" id="rzForce">Force envoyée : 0</p>') +
+      '<button class="rz-btn rouge plein" data-a="trajet">Choisir le trajet</button><div class="rz-erreur"></div></div>';
+    ouvrirFeuille('Ta muraille', h, { rouvrir: function () { ouvrirMurRenfort(murId, groupe); }, change: function () { var f = $('rzForce'); if (f) f.textContent = 'Force envoyée : ' + forceDe(lireUnites()); } });
+  }
+
   /* --- un groupe touche sur la carte --- */
   function ouvrirGroupe(g, groupe) {
     if (!g.mien) {
@@ -15453,7 +15533,13 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     return Math.min(540, t) * 1000;
   }
   function departEnvoi() {
-    if (S.envoi.groupe) { var g = S.vue.groupes.find(function (x) { return x.id === S.envoi.groupe; }); return g && g.pos ? g.pos : null; }
+    if (S.envoi.groupe) {
+      var g = S.vue.groupes.find(function (x) { return x.id === S.envoi.groupe; });
+      if (!g) return null;
+      if (g.pos) return g.pos;
+      if (g.etat === 'route') { var ps = position(g, maintenant()); return ps.p || null; }   // redirection en cours de route
+      return null;
+    }
     return [S.vue.moi.base.lon, S.vue.moi.base.lat];
   }
   function arriveeEnvoi() {
@@ -15461,6 +15547,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (c.type === 'base') { var b = S.vue.bases.find(function (x) { return x.id === c.pseudo; }); return b ? [b.lon, b.lat] : null; }
     if (c.type === 'poste') { var pt = S.vue.postes.find(function (x) { return x.id === c.id; }); return pt ? [pt.lon, pt.lat] : null; }
     if (c.type === 'bandit') { var bd = S.vue.bandits.find(function (x) { return x.id === c.id; }); return bd ? [bd.lon, bd.lat] : null; }
+    if (c.type === 'mur') { var mu = (S.vue.murs || []).find(function (x) { return x.id === c.id; }); return mu ? [(mu.a[0] + mu.b[0]) / 2, (mu.a[1] + mu.b[1]) / 2] : null; }
     if (c.type === 'groupe') { var cg = S.vue.groupes.find(function (x) { return x.id === c.id; }); if (!cg) return null; var ps = position(cg, maintenant()); return ps.p || null; }
     if (c.type === 'maison') return [S.vue.moi.base.lon, S.vue.moi.base.lat];
     return [c.lon, c.lat];
@@ -15486,12 +15573,15 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       var bb = tous.reduce(function (r, p) { return [[Math.min(r[0][0], p[0]), Math.min(r[0][1], p[1])], [Math.max(r[1][0], p[0]), Math.max(r[1][1], p[1])]]; }, [[tous[0][0], tous[0][1]], [tous[0][0], tous[0][1]]]);
       S.carte.fitBounds(bb, { padding: { top: 90, bottom: Math.min(420, window.innerHeight * 0.5), left: 40, right: 40 }, maxZoom: 16.5, duration: 900 });
     }
-    var c = S.envoi.cible, ou = c.type === 'base' ? 'la base de ' + echap((S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo) + ' · côté ' + NOM_COTE[c.cote].toLowerCase()
+    var c = S.envoi.cible;
+    var murCible = c.type === 'mur' ? (S.vue.murs || []).find(function (m) { return m.id === c.id; }) : null;
+    var ou = c.type === 'base' ? 'la base de ' + echap((S.vue.bases.find(function (b) { return b.id === c.pseudo; }) || {}).pseudo) + ' · côté ' + NOM_COTE[c.cote].toLowerCase()
       : c.type === 'poste' ? 'le ' + echap((S.vue.postes.find(function (p) { return p.id === c.id; }) || { nom: 'poste' }).nom)
       : c.type === 'bandit' ? 'le camp de bandits'
+      : c.type === 'mur' ? (murCible && murCible.mien ? 'ta muraille (renfort)' : 'une muraille ennemie')
       : c.type === 'groupe' ? 'le groupe de ' + echap((S.vue.groupes.find(function (g) { return g.id === c.id; }) || { pseudo: '?' }).pseudo)
       : c.type === 'maison' ? 'ta base' : 'l\'endroit choisi';
-    var estAttaque = c.type === 'base' || c.type === 'bandit' || c.type === 'groupe';
+    var estAttaque = c.type === 'base' || c.type === 'bandit' || c.type === 'groupe' || (c.type === 'mur' && !(murCible && murCible.mien));
     var n = S.envoi.groupe ? (S.vue.groupes.find(function (g) { return g.id === S.envoi.groupe; }) || {}).n : total(S.envoi.unites);
     var h = '<p class="rz-note" style="margin:0 0 10px;font-size:14px">' + n + ' koala' + (n > 1 ? 's' : '') + ' vers ' + ou + '.</p>' +
       opts.map(function (o, i) { return '<button class="rz-option' + (i === S.optionChoisie ? ' choisi' : '') + '" data-a="option" data-i="' + i + '"><div><b>' + o.nom + '</b><span>' + echap(o.sous) + '</span></div><i>' + duree(o.duree) + '</i></button>'; }).join('') +
@@ -15556,6 +15646,14 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     var base = fb.length ? S.vue.bases.find(function (b) { return b.id === fb[0].properties.id; }) : null;
     var t = toucher(x, y);
     if (!base && t && t.type === 'base') base = t.b;
+    if (S.mode === 'mur-a' || S.mode === 'mur-b') {
+      var pm = [Math.round(e.lngLat.lng * 1e6) / 1e6, Math.round(e.lngLat.lat * 1e6) / 1e6];
+      if (!dansZone(pm, S.vue.regles.zone)) return toast('Hors de la zone.', 'mauvais');
+      if (S.mode === 'mur-a') { S.murA = pm; S.mode = 'mur-b'; consigne('Touche le second point (max ' + S.vue.regles.murLongueurMax + ' m).'); return; }
+      S.mode = 'normal'; consigne('');
+      action('razzia-mur-construire', { a: S.murA, b: pm }, function () { toast('Muraille posée.', 'bon'); ouvrirMurailles(); });
+      return;
+    }
     if (S.mode === 'destination') {
       var groupe = S.envoi && S.envoi.groupe, unites = S.envoi && S.envoi.unites;
       S.mode = 'normal'; consigne('');
@@ -15563,6 +15661,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       if (base && base.moi) { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'maison' } }; if (!groupe) return toast('Ils sont déjà à la base.', 'info'); return calculer(); }
       if (t && t.type === 'poste') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'poste', id: t.id } }; return calculer(); }
       if (t && t.type === 'bandit') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'bandit', id: t.id } }; return calculer(); }
+      if (t && t.type === 'mur') { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'mur', id: t.id } }; return calculer(); }
       if (t && t.type === 'groupe' && !t.g.mien) { S.envoi = { groupe: groupe, unites: unites, cible: { type: 'groupe', id: t.g.id } }; return calculer(); }
       var p = [e.lngLat.lng, e.lngLat.lat];
       if (!dansZone(p, S.vue.regles.zone)) { toast('Hors de la zone.', 'mauvais'); S.mode = 'destination'; return entrerDestination(); }
@@ -15573,6 +15672,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
     if (base) return ouvrirCibleBase(base);
     if (t && t.type === 'poste') return ouvrirPoste(t.id);
     if (t && t.type === 'bandit') return ouvrirBandit(t.id);
+    if (t && t.type === 'mur') return ouvrirMur(t.id);
     if (!$('rzFeuille').hidden) fermerFeuille();
   }
 
@@ -15583,7 +15683,7 @@ window.RAZZIA = { ouvert: false, ouvrir: null, fermer: null };
       if (S.mode === 'destination') { S.mode = 'normal'; consigne(''); }
       var q = b.dataset.rz;
       if (!S.vue.moi.base && q !== 'allies' && q !== 'journal') { entrerPose(); return toast('Pose d\'abord ta base sur un bâtiment.', 'info'); }
-      ({ base: ouvrirBase, armurerie: ouvrirArmurerie, defense: ouvrirDefense, groupes: ouvrirGroupes, allies: ouvrirAllies, journal: ouvrirJournal })[q]();
+      ({ base: ouvrirBase, armurerie: ouvrirArmurerie, defense: ouvrirDefense, groupes: ouvrirGroupes, murailles: ouvrirMurailles, allies: ouvrirAllies, journal: ouvrirJournal })[q]();
     };
   });
   $('rzSon').onclick = function () {

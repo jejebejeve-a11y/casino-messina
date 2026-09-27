@@ -2511,7 +2511,7 @@ const RZ_NIV_ARME = { pistolet: 1, diamant: 2 };                            // n
 const RZ_PRIX_ARMURERIE = [2000, 12000];                                    // pour passer au niveau 1, puis 2
 const RZ_ARMURERIE_MAX  = RZ_PRIX_ARMURERIE.length;
 const RZ_PRIX_DEFENSE   = [0, 2000, 6000, 15000, 40000];                   // index = niveau actuel (1 a 4)
-const RZ_MAX_GROUPES = 4;
+const RZ_MAX_GROUPES = 10;
 const RZ_PILLAGE     = 0.25;
 const RZ_FEU         = 30 * 60 * 1000;
 const RZ_REPARATION  = 5000;
@@ -2519,7 +2519,10 @@ const RZ_BOUCLIER_ATTENTE = 12 * 3600 * 1000;   // 12 h avant de pouvoir remettr
 const RZ_V_PIED      = 14;      // metres par seconde (le temps du jeu est accelere)
 const RZ_V_METRO     = 30;
 const RZ_DUREE_MAX   = 540;     // 9 minutes au plus, d'un bout a l'autre de la carte
-const RZ_REVENU      = 0.005;   // EUR par koala et par minute a un poste tenu (100 koalas = 0,50 EUR/min)
+const RZ_REVENU      = 0.01;    // EUR par koala et par minute a un poste tenu (100 koalas = 1 EUR/min)
+/* plus un joueur tient de postes differents en meme temps, plus chacun rapporte : */
+const RZ_CONTROLE_MULT = [1, 1, 2, 4, 7, 12];   // index = nb de postes distincts tenus (0 a 5)
+function rzMultControle(nb) { return RZ_CONTROLE_MULT[Math.max(0, Math.min(nb, RZ_CONTROLE_MULT.length - 1))]; }
 /* les postes a tenir pour gagner de l'argent, eparpilles dans toute la zone :
    meme mecanique partout, seul l'emplacement change. */
 const RZ_POSTES = [
@@ -2608,7 +2611,42 @@ function rzCombat(A, multA, B, multB) {
   if (pb > pa) return { gagnant: 'B', A: rzVide(), B: rzPertes(B, pa / multB) };
   return { gagnant: 'nul', A: rzVide(), B: rzVide() };
 }
+/* un groupe qui perd une attaque ne se fait jamais rayer d'un coup : il perd
+   au plus 30 % de sa force envoyee (les plus faibles d'abord) et le reste
+   rentre tout seul a la base. */
+const RZ_PERTE_MAX_DEFAITE = 0.30;
+function rzApresDefaite(u) { return rzPertes(u, rzPuissance(u) * RZ_PERTE_MAX_DEFAITE); }
 function rzMultDefense(j) { return 1 + 0.25 * ((j.defense || 1) - 1); }
+
+/* ---- murailles : petits tronçons de mur qu'on chaine autour de sa base ----
+   chaque tronçon coute cher, a la taille d'un batiment ou deux, et bloque le
+   passage de tout groupe ennemi tant qu'il tient : pour traverser, il faut
+   d'abord l'attaquer et le detruire. Plus on y stationne de koalas (renfort,
+   definitif), plus il resiste. */
+const RZ_MURS = {};                 // id -> { id, proprio, a:[lon,lat], b:[lon,lat], garnison }
+let   rzMurCompteur = 1;
+const RZ_MUR_COUT        = 1500;    // EUR le tronçon
+const RZ_MUR_LONGUEUR_MIN = 6;      // m
+const RZ_MUR_LONGUEUR_MAX = 45;     // m (taille d'un batiment ou deux)
+const RZ_MUR_CHAINE_MAX  = 60;      // m : doit se relier a la base ou a un mur deja pose
+const RZ_MUR_VIE_BASE    = 30;      // force de base, meme sans renfort
+function rzMurForce(m) { return RZ_MUR_VIE_BASE + rzPuissance(m.garnison); }
+/* intersection de segments (formule standard, orientation des triplets) */
+function rzOrientation(a, b, c) { return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]); }
+function rzSegCroise(p1, p2, p3, p4) {
+  const d1 = rzOrientation(p3, p4, p1), d2 = rzOrientation(p3, p4, p2);
+  const d3 = rzOrientation(p1, p2, p3), d4 = rzOrientation(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+/* le premier mur ennemi (intact, pas alliee) que ce chemin traverse, ou null.
+   ignoreId : on ignore la muraille qu'on est justement en train d'attaquer. */
+function rzMurSurChemin(proprio, coords, ignoreId) {
+  for (const m of Object.values(RZ_MURS)) {
+    if (m.id === ignoreId || m.proprio === proprio || rzAllies(proprio, m.proprio)) continue;
+    for (let i = 1; i < coords.length; i++) if (rzSegCroise(coords[i - 1], coords[i], m.a, m.b)) return m;
+  }
+  return null;
+}
 /* repartit les koalas de la base sur les 4 cotes, selon les pourcentages choisis */
 function rzRepartir(stock, rep) {
   const res = {}; RZ_COTES.forEach(c => { res[c] = rzVide(); });
@@ -2749,7 +2787,7 @@ async function rzSauverMaintenant(sansVerif) {
     }
     const v = Math.max(Date.now(), rzVersion + 1);
     const bandits = RZ_BANDITS.map(b => ({ id: b.id, niveau: b.niveau, mortJusqua: b.mortJusqua }));
-    await Carnet.commande(['MSET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur, v, bandits }), 'razzia:version', String(v)]);
+    await Carnet.commande(['MSET', 'razzia:monde', JSON.stringify({ joueurs: RZJ, groupes: RZG, n: rzCompteur, v, bandits, murs: RZ_MURS, mc: rzMurCompteur }), 'razzia:version', String(v)]);
     rzVersion = v;
     rzADIRTY = false;
     return true;
@@ -2792,6 +2830,9 @@ function rzAppliquerMonde(d) {
     const b = RZ_BANDITS.find(x => x.id === sb.id);
     if (b) { b.niveau = sb.niveau || b.niveau; b.mortJusqua = sb.mortJusqua || 0; }
   });
+  Object.keys(RZ_MURS).forEach(k => delete RZ_MURS[k]);
+  Object.assign(RZ_MURS, d.murs || {});
+  rzMurCompteur = Math.max(rzMurCompteur, d.mc || 1);
 }
 /* se remettre a jour si un autre serveur a sauvegarde plus recent que nous.
    force = on va poser/supprimer une base : on verifie a coup sur. Sinon, au
@@ -2923,9 +2964,38 @@ async function rzArrivee(g) {
         if (!rzTotal(u)) delete RZG[o.id];
         rzEvenement(o.proprio, moi.pseudo + ' a attaqué le ' + poste.nom + ' et a perdu. Tes koalas tiennent toujours.', 'bon');
       });
-      rzEvenement(g.proprio, 'Attaque du ' + poste.nom + ' ratée : tes ' + rzTotal(g.unites) + ' koalas sont tombés face à ' + noms + '.', 'mauvais');
-      delete RZG[g.id];
+      g.unites = rzApresDefaite(g.unites);
+      rzEvenement(g.proprio, 'Attaque du ' + poste.nom + ' ratée face à ' + noms + ' : tu perds 30% de tes koalas, il t\'en reste ' + rzTotal(g.unites) + ' qui rentrent à la base.', 'mauvais');
+      rzRetour(g, now);
     }
+    return;
+  }
+
+  if (c.type === 'mur-renfort') {
+    const m = RZ_MURS[c.id];
+    if (!m) { rzEvenement(g.proprio, 'Cette muraille a disparu entre-temps.', 'info'); rzRetour(g, now); return; }
+    RZ_TYPES.forEach(t => { m.garnison[t] = (m.garnison[t] | 0) + (g.unites[t] | 0); });
+    rzEvenement(g.proprio, rzTotal(g.unites) + ' koalas renforcent ta muraille (force désormais ' + Math.round(rzMurForce(m)) + ').', 'bon');
+    delete RZG[g.id];
+    return;
+  }
+
+  if (c.type === 'mur') {
+    const m = RZ_MURS[c.id];
+    if (!m) { rzEvenement(g.proprio, 'Cette muraille a déjà été détruite.', 'info'); rzRetour(g, now); return; }
+    const D = rzMurForce(m);
+    const r = rzCombat(g.unites, 1, { nu: D, pistolet: 0, diamant: 0 }, 1);
+    if (r.gagnant === 'A') {
+      g.unites = r.A;
+      delete RZ_MURS[m.id];
+      rzEvenement(m.proprio, moi.pseudo + ' a détruit une de tes murailles.', 'mauvais');
+      rzEvenement(g.proprio, 'Muraille détruite. Il te reste ' + rzTotal(r.A) + ' koalas.', 'bon');
+    } else {
+      g.unites = rzApresDefaite(g.unites);
+      rzEvenement(g.proprio, 'Attaque de la muraille ratée : tu perds 30% de tes koalas, il t\'en reste ' + rzTotal(g.unites) + ' qui rentrent à la base.', 'mauvais');
+      rzEvenement(m.proprio, moi.pseudo + ' a attaqué une de tes murailles et a perdu.', 'bon');
+    }
+    rzRetour(g, now);
     return;
   }
 
@@ -2947,9 +3017,8 @@ async function rzArrivee(g) {
       await rzAjouter(g.proprio, gain);
       rzEvenement(g.proprio, 'Bandits niveau ' + b.niveau + ' vaincus : +' + gain.toLocaleString('fr-FR') + ' €. Il te reste ' + rzTotal(r.A) + ' koalas.', 'bon');
     } else {
-      rzEvenement(g.proprio, 'Attaque des bandits (niveau ' + b.niveau + ') ratée : tes ' + rzTotal(g.unites) + ' koalas sont tombés.', 'mauvais');
-      delete RZG[g.id];
-      return;
+      g.unites = rzApresDefaite(g.unites);
+      rzEvenement(g.proprio, 'Attaque des bandits (niveau ' + b.niveau + ') ratée : tu perds 30% de tes koalas, il t\'en reste ' + rzTotal(g.unites) + ' qui rentrent à la base.', 'mauvais');
     }
     rzRetour(g, now);
     return;
@@ -2969,10 +3038,9 @@ async function rzArrivee(g) {
       rzEvenement(cg.proprio, moi.pseudo + ' a attaqué ton groupe en déplacement : tes koalas sont tous tombés.', 'mauvais');
       rzEvenement(g.proprio, 'Groupe de ' + nomCible + ' détruit. Il te reste ' + rzTotal(r.A) + ' koalas.', 'bon');
     } else {
-      rzEvenement(g.proprio, 'Attaque ratée contre le groupe de ' + nomCible + ' : tes ' + rzTotal(g.unites) + ' koalas sont tombés.', 'mauvais');
+      g.unites = rzApresDefaite(g.unites);
+      rzEvenement(g.proprio, 'Attaque ratée contre le groupe de ' + nomCible + ' : tu perds 30% de tes koalas, il t\'en reste ' + rzTotal(g.unites) + ' qui rentrent à la base.', 'mauvais');
       rzEvenement(cg.proprio, moi.pseudo + ' a attaqué ton groupe en déplacement et a perdu. Tes koalas tiennent toujours.', 'bon');
-      delete RZG[g.id];
-      return;
     }
     rzRetour(g, now);
     return;
@@ -2993,9 +3061,10 @@ async function rzArrivee(g) {
     RZ_TYPES.forEach(t => { cible.stock[t] = Math.max(0, cible.stock[t] - ((def[t] | 0) - (r.B[t] | 0))); });
     const nomCote = { devant: 'devant', derriere: 'derrière', gauche: 'à gauche', droite: 'à droite' }[cote];
     if (r.gagnant !== 'A') {
-      rzEvenement(g.proprio, 'Attaque ratée ' + nomCote + ' chez ' + cible.pseudo + ' : tes ' + rzTotal(g.unites) + ' koalas sont tombés.', 'mauvais');
+      g.unites = rzApresDefaite(g.unites);
+      rzEvenement(g.proprio, 'Attaque ratée ' + nomCote + ' chez ' + cible.pseudo + ' : tu perds 30% de tes koalas, il t\'en reste ' + rzTotal(g.unites) + ' qui rentrent à la base.', 'mauvais');
       rzEvenement(c.pseudo, moi.pseudo + ' t\'a attaqué ' + nomCote + ' et a perdu. Il te reste ' + rzTotal(r.B) + ' défenseurs de ce côté.', 'bon');
-      delete RZG[g.id];
+      rzRetour(g, now);
       return;
     }
     g.unites = r.A;
@@ -3040,9 +3109,15 @@ setInterval(async () => {
     if (now - rzDernierRevenu >= 60000) {
       rzDernierRevenu = now;
       const gains = {};
+      const postesTenus = {};   // proprio -> Set des ids de postes ou il a au moins un groupe
       Object.values(RZG).forEach(g => {
         if (g.etat !== 'poste' || !g.cible || g.cible.type !== 'poste') return;
-        g.cagnotte = (g.cagnotte || 0) + rzTotal(g.unites) * RZ_REVENU;
+        (postesTenus[g.proprio] || (postesTenus[g.proprio] = new Set())).add(g.cible.id);
+      });
+      Object.values(RZG).forEach(g => {
+        if (g.etat !== 'poste' || !g.cible || g.cible.type !== 'poste') return;
+        const mult = rzMultControle(postesTenus[g.proprio] ? postesTenus[g.proprio].size : 1);
+        g.cagnotte = (g.cagnotte || 0) + rzTotal(g.unites) * RZ_REVENU * mult;
         const verse = Math.floor(g.cagnotte * 100) / 100;
         if (verse >= 0.01) { g.cagnotte -= verse; g.gagne = sous((g.gagne || 0) + verse); gains[g.proprio] = (gains[g.proprio] || 0) + verse; }
       });
@@ -3084,9 +3159,11 @@ function rzVue(compte, depuis) {
     return { id: b.id, lon: b.lon, lat: b.lat, niveau: b.niveau, vivant: rzBanditVivant(b, now),
              revientDans: b.mortJusqua ? Math.max(0, b.mortJusqua - now) : 0 };
   });
+  const murs = Object.values(RZ_MURS).map(m => ({ id: m.id, pseudo: RZJ[m.proprio] ? RZJ[m.proprio].pseudo : '?',
+    a: m.a, b: m.b, vie: Math.round(rzMurForce(m)), mien: m.proprio === pb }));
   const evts = moi.evenements.filter(e => e.t > (Number(depuis) || 0));
   return {
-    now, solde: compte.solde, postes, bandits, bases, groupes, alertes, evenements: evts,
+    now, solde: compte.solde, postes, bandits, murs, bases, groupes, alertes, evenements: evts,
     moi: {
       base: moi.base, deplaceUtilise: !!moi.deplaceUtilise, bouclier: moi.bouclier, bouclierDispo: moi.bouclier ? 0 : Math.max(0, moi.bouclierRetireLe + RZ_BOUCLIER_ATTENTE - now),
       feu: rzEnFeu(moi) ? moi.feuJusqua : 0, defense: moi.defense, armurerie: moi.armurerie, stock: moi.stock,
@@ -3097,7 +3174,8 @@ function rzVue(compte, depuis) {
     },
     regles: { prix: RZ_PRIX, force: RZ_FORCE, niveauArme: RZ_NIV_ARME, prixArmurerie: RZ_PRIX_ARMURERIE,
               armurerieMax: RZ_ARMURERIE_MAX, prixDefense: RZ_PRIX_DEFENSE, maxGroupes: RZ_MAX_GROUPES, reparation: RZ_REPARATION,
-              stations: RZ_STATIONS, zone: RZ_ZONE, banditForce: RZ_BANDIT_FORCE, banditGain: RZ_BANDIT_GAIN }
+              stations: RZ_STATIONS, zone: RZ_ZONE, banditForce: RZ_BANDIT_FORCE, banditGain: RZ_BANDIT_GAIN,
+              murCout: RZ_MUR_COUT, murLongueurMin: RZ_MUR_LONGUEUR_MIN, murLongueurMax: RZ_MUR_LONGUEUR_MAX, murChaineMax: RZ_MUR_CHAINE_MAX }
   };
 }
 
@@ -4619,6 +4697,26 @@ const serveur = http.createServer(async (req, res) => {
         return repondre(res, 200, rzVue(compte, now));
       }
 
+      if (route === '/api/razzia-mur-construire' && req.method === 'POST') {
+        if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
+        if (!moi.base) return repondre(res, 409, { erreur: 'Pose d\'abord ta base.' });
+        const a = rzPoint(body.a), b = rzPoint(body.b);
+        if (!a || !b || !rzDansZone(a) || !rzDansZone(b)) return repondre(res, 400, { erreur: 'Muraille hors de la zone ouverte.' });
+        const longueur = rzDist(a, b);
+        if (longueur < RZ_MUR_LONGUEUR_MIN || longueur > RZ_MUR_LONGUEUR_MAX) return repondre(res, 400, { erreur: 'Une muraille doit faire entre ' + RZ_MUR_LONGUEUR_MIN + ' et ' + RZ_MUR_LONGUEUR_MAX + ' m.' });
+        const mesMurs = Object.values(RZ_MURS).filter(m => m.proprio === pb);
+        const prochE = p => rzDist(p, [moi.base.lon, moi.base.lat]) <= RZ_MUR_CHAINE_MAX
+          || mesMurs.some(m => rzDist(p, m.a) <= RZ_MUR_CHAINE_MAX || rzDist(p, m.b) <= RZ_MUR_CHAINE_MAX);
+        if (!prochE(a) && !prochE(b)) return repondre(res, 409, { erreur: 'Cette muraille doit se relier à ta base ou à une muraille déjà posée.' });
+        if (compte.solde < RZ_MUR_COUT) return repondre(res, 409, { erreur: 'Il faut ' + RZ_MUR_COUT.toLocaleString('fr-FR') + ' € pour poser une muraille.' });
+        compte.solde = sous(compte.solde - RZ_MUR_COUT);
+        const m = { id: 'm' + (rzMurCompteur++), proprio: pb, a, b, garnison: rzVide() };
+        RZ_MURS[m.id] = m;
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        Carnet.enregistrer(compte); rzSauver();
+        return repondre(res, 200, rzVue(compte, now));
+      }
+
       if (route === '/api/razzia-envoyer' && req.method === 'POST') {
         if (rzEnFeu(moi)) return repondre(res, 409, { erreur: FEU });
         const cible = body.cible || {};
@@ -4626,13 +4724,14 @@ const serveur = http.createServer(async (req, res) => {
         if (body.groupe) {
           g = RZG[String(body.groupe)];
           if (!g || g.proprio !== pb) return repondre(res, 404, { erreur: 'Groupe introuvable.' });
-          if (g.etat !== 'poste') return repondre(res, 409, { erreur: 'Ce groupe est déjà en route.' });
-          depart = g.pos;
+          if (g.etat === 'poste') depart = g.pos;
+          else if (g.etat === 'route') depart = rzPositionActuelle(g, now);
+          if (!depart) return repondre(res, 409, { erreur: 'Ce groupe ne peut pas être redirigé maintenant.' });
         } else {
           unites = rzPropre(body.unites);
           if (!rzTotal(unites)) return repondre(res, 400, { erreur: 'Choisis au moins un koala.' });
           if (RZ_TYPES.some(t => unites[t] > moi.stock[t])) return repondre(res, 409, { erreur: 'Tu n\'as pas tous ces koalas à la base.' });
-          if (rzGroupesDe(pb).length >= RZ_MAX_GROUPES) return repondre(res, 409, { erreur: '4 groupes dehors au maximum.' });
+          if (rzGroupesDe(pb).length >= RZ_MAX_GROUPES) return repondre(res, 409, { erreur: RZ_MAX_GROUPES + ' groupes dehors au maximum.' });
           depart = [moi.base.lon, moi.base.lat];
         }
         let arrivee, c;
@@ -4660,6 +4759,11 @@ const serveur = http.createServer(async (req, res) => {
           const p = rzPositionActuelle(cg, now);
           if (!p) return repondre(res, 404, { erreur: 'Groupe introuvable.' });
           arrivee = p; c = { type: 'groupe', id: cg.id };
+        } else if (cible.type === 'mur') {
+          const m = RZ_MURS[String(cible.id || '')];
+          if (!m) return repondre(res, 404, { erreur: 'Muraille introuvable.' });
+          arrivee = [(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2];
+          c = m.proprio === pb ? { type: 'mur-renfort', id: m.id } : { type: 'mur', id: m.id };
         } else if (cible.type === 'maison') {
           arrivee = [moi.base.lon, moi.base.lat]; c = { type: 'maison' };
         } else {
@@ -4669,6 +4773,12 @@ const serveur = http.createServer(async (req, res) => {
         }
         const plan = rzPlanifier(depart, arrivee, body.etapes, now);
         if (!plan) return repondre(res, 400, { erreur: 'Trajet refusé. Réessaie.' });
+        // une muraille ennemie encore debout bloque le passage : il faut d'abord la detruire
+        for (const e of plan.etapes) {
+          if (e.type !== 'pied') continue;
+          const mBloque = rzMurSurChemin(pb, e.coords, c.type === 'mur' || c.type === 'mur-renfort' ? c.id : null);
+          if (mBloque) return repondre(res, 409, { erreur: 'Une muraille de ' + (RZJ[mBloque.proprio] ? RZJ[mBloque.proprio].pseudo : '?') + ' bloque ce chemin : il faut d\'abord la détruire.' });
+        }
         if (c.type === 'base' && moi.bouclier) { moi.bouclier = false; moi.bouclierRetireLe = now; }   // attaquer fait tomber son propre bouclier
         if (!g) {
           RZ_TYPES.forEach(t => { moi.stock[t] -= unites[t]; });
