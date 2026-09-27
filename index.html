@@ -8319,6 +8319,19 @@ window.ClavierMise = (function () {
   };
 })();
 
+/* Pas de zoom quand on tape vite deux fois dans un jeu (Plinko, Poulet, clavier de mise) :
+   le 2e appui est quand meme transmis au bouton. */
+(function () {
+  let dernier = 0;
+  document.addEventListener('touchend', e => {
+    const t = e.target;
+    if (!t.closest || !t.closest('.poulet-plein, .cm-voile')) return;
+    const n = Date.now();
+    if (n - dernier < 350) { e.preventDefault(); const b = t.closest('button'); if (b && !b.disabled) b.click(); }
+    dernier = n;
+  }, { passive: false });
+})();
+
 /* Etincelles dorees, dessinees sur un petit canevas pose par-dessus le jeu. */
 window.Etincelles = function (cv) {
   const c = cv.getContext('2d'); let parts = [], raf = 0, dpr = 1, w = 0, h = 0;
@@ -8359,6 +8372,7 @@ window.Etincelles = function (cv) {
   --ru:#e3174f;--ru2:#ff3d6e;--ru3:#9c0c33;--ice:#74e4ff;--or:#ffcf5a;--vert:#1fe07a;--txt:#e8f1fa;--dim:#7f96ad;
   background:radial-gradient(900px 520px at 50% -8%,rgba(116,228,255,.10),transparent 62%),radial-gradient(700px 600px at 50% 115%,rgba(227,23,79,.16),transparent 60%),var(--pf);
   color:var(--txt);font-family:'Inter',system-ui,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-variant-numeric:tabular-nums}
+.poulet-plein,.poulet-plein *{touch-action:manipulation}
 .poulet-plein *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 .poulet-plein input{-webkit-user-select:text;user-select:text}
 body.poulet-actif{overflow:hidden}
@@ -8486,6 +8500,8 @@ body.poulet-actif{overflow:hidden}
     <div class="pl-rail" id="plRail"></div>
 
     <div class="pl-panneau">
+      <button class="pl-go" id="plGo"><span id="plGoTxt">Miser</span><small id="plGoSous" hidden></small></button>
+      <button class="pl-hasard" id="plHasard" disabled>Case au hasard</button>
       <div class="pl-gain-ligne"><span>Gain total <span id="plGainX"></span></span><b id="plGain">0,00 €</b></div>
       <div>
         <div class="pl-lab">Mise <em>0,20 € – 1 000 €</em></div>
@@ -8504,8 +8520,6 @@ body.poulet-actif{overflow:hidden}
           <button data-os="1">1</button><button data-os="3">3</button><button data-os="5">5</button><button data-os="10">10</button><button data-os="24">24</button>
         </div>
       </div>
-      <button class="pl-go" id="plGo"><span id="plGoTxt">Miser</span><small id="plGoSous" hidden></small></button>
-      <button class="pl-hasard" id="plHasard" disabled>Case au hasard</button>
     </div>
   </div>
 
@@ -8774,7 +8788,7 @@ construire(); majPanneau();
 <style>
 .pk-plateau{position:relative;border-radius:20px;padding:10px 8px 12px;background:radial-gradient(120% 80% at 50% 0%,#15283b,#0a1520 70%);border:1px solid rgba(116,228,255,.14);box-shadow:0 24px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05)}
 .pk-plateau canvas{display:block;width:100%}
-#pkCanvas{aspect-ratio:1/1.02;max-width:100%}
+#pkCanvas{aspect-ratio:1/.93;max-width:100%}
 #pkEtinc{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .pk-histo{display:flex;gap:5px;min-height:26px;overflow:hidden;justify-content:flex-end}
 .pk-histo div{flex-shrink:0;padding:4px 8px;border-radius:8px;font:900 11.5px 'Inter',sans-serif;color:#2a0710;animation:pk-entre .3s cubic-bezier(.2,1.5,.4,1)}
@@ -8803,6 +8817,7 @@ construire(); majPanneau();
     </div>
 
     <div class="pl-panneau">
+      <button class="pl-go" id="pkGo"><span>Lancer</span><small id="pkGoSous"></small></button>
       <div class="pk-dernier">Gain du dernier lancer <b id="pkGain">0,00 €</b></div>
       <div>
         <div class="pl-lab">Mise totale <em id="pkParBalle">0,20 € – 1 000 €</em></div>
@@ -8826,7 +8841,6 @@ construire(); majPanneau();
         <div class="pl-lab">Risque</div>
         <div class="pl-os pk-risque"><button data-r="faible">Faible</button><button data-r="moyen">Moyen</button><button data-r="eleve">Élevé</button></div>
       </div>
-      <button class="pl-go" id="pkGo"><span>Lancer</span><small id="pkGoSous"></small></button>
     </div>
   </div>
 
