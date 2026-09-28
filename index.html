@@ -9643,6 +9643,381 @@ ui();
 })();
 </script>
 
+<!-- ===== LA ROULETTE (nouvelle table) ===== -->
+<style>
+#roulPlein{position:fixed;inset:0;z-index:900;overflow-y:auto;overflow-x:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;
+  --r-noir:#0b0a08;--r-noir2:#15130f;--r-or:#d4af37;--r-or2:#f3dc8e;--r-or3:#8a6d1f;--r-tapis:#0d3b2b;--r-tapis2:#082a1e;--r-rouge:#b3152f;--r-vert:#0f7a45;--r-txt:#f2ead8;--r-dim:#a89d82;
+  background:radial-gradient(120% 60% at 50% 0%,#1d1a13,var(--r-noir) 60%);color:var(--r-txt);font-family:'Jost',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+#roulPlein[hidden]{display:none!important}
+#roulPlein *{box-sizing:border-box}
+#roulPlein button{font-family:inherit;color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.ro-cadre{max-width:560px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px}
+.ro-haut{display:flex;align-items:center;gap:10px}
+.ro-rond{width:38px;height:38px;border-radius:50%;border:1px solid rgba(212,175,55,.45);background:rgba(212,175,55,.06);display:grid;place-items:center;font-size:18px;color:var(--r-or2);flex-shrink:0}
+.ro-titre{flex:1;min-width:0;line-height:1}
+.ro-titre small{display:block;font:600 9px 'Jost',sans-serif;letter-spacing:.4em;color:var(--r-dim)}
+.ro-titre b{font:700 24px 'Cinzel',Georgia,serif;letter-spacing:.12em;background:linear-gradient(180deg,#fff4c9,var(--r-or) 55%,var(--r-or3));-webkit-background-clip:text;background-clip:text;color:transparent}
+.ro-solde{border:1px solid rgba(212,175,55,.4);border-radius:12px;padding:5px 11px;text-align:right;line-height:1.1;background:rgba(0,0,0,.35)}
+.ro-solde small{display:block;font-size:8.5px;letter-spacing:.2em;color:var(--r-dim)}
+.ro-solde span{font:700 17px 'Cormorant Garamond',serif;color:var(--r-or2)}
+.ro-scene{position:relative;border-radius:22px;padding:10px;background:radial-gradient(90% 80% at 50% 45%,#16140f,#070605);border:1px solid rgba(212,175,55,.3);box-shadow:inset 0 0 40px rgba(0,0,0,.8),0 20px 40px rgba(0,0,0,.5)}
+#roCanvas{display:block;width:100%;max-width:330px;aspect-ratio:1;margin:0 auto}
+#roEtinc{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ro-statut{position:absolute;left:12px;right:12px;top:10px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+.ro-statut span{font:600 11px 'Jost',sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--r-or2);background:rgba(0,0,0,.55);border:1px solid rgba(212,175,55,.3);padding:5px 9px;border-radius:20px}
+.ro-statut b{font:700 20px 'Cormorant Garamond',serif;color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(212,175,55,.3);min-width:44px;text-align:center;padding:2px 8px;border-radius:20px}
+.ro-barre{height:3px;border-radius:2px;background:rgba(212,175,55,.15);overflow:hidden;margin:8px 6px 0}
+.ro-barre i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--r-or3),var(--r-or2));transform-origin:left}
+.ro-resultat{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none;text-align:center;transition:opacity .25s,transform .4s cubic-bezier(.2,1.5,.4,1)}
+.ro-resultat.voir{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.ro-resultat .num{width:86px;height:86px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font:700 44px 'Cormorant Garamond',serif;color:#fff;border:3px solid var(--r-or2);box-shadow:0 0 30px rgba(212,175,55,.6)}
+.ro-resultat .gain{margin-top:8px;font:700 22px 'Cormorant Garamond',serif;color:#7dffc0;text-shadow:0 2px 10px #000}
+.ro-histo{display:flex;gap:5px;overflow:hidden;justify-content:flex-start}
+.ro-histo i{flex-shrink:0;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 12px 'Jost',sans-serif;font-style:normal;color:#fff;border:1px solid rgba(255,255,255,.15)}
+.ro-histo i:first-child{width:30px;height:30px;font-size:14px;border:2px solid var(--r-or2)}
+.ro-joueurs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.ro-joueurs::-webkit-scrollbar{display:none}
+.ro-j{flex-shrink:0;display:flex;align-items:center;gap:6px;border:1px solid rgba(212,175,55,.25);background:rgba(0,0,0,.35);border-radius:20px;padding:4px 10px 4px 4px;font-size:12px}
+.ro-j i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 10px 'Jost',sans-serif;font-style:normal;color:#111}
+.ro-j b{font-weight:600}
+.ro-j em{font-style:normal;color:var(--r-or2)}
+.ro-j.moi{border-color:var(--r-or)}
+.ro-tapis{border-radius:18px;padding:8px;background:radial-gradient(120% 90% at 50% 20%,var(--r-tapis),var(--r-tapis2));border:2px solid var(--r-or3);box-shadow:inset 0 0 0 1px rgba(243,220,142,.2),0 14px 30px rgba(0,0,0,.45)}
+.ro-grille{display:grid;grid-template-columns:.85fr .95fr 1fr 1fr 1fr;grid-auto-rows:34px;gap:3px}
+.ro-case{position:relative;border:1px solid rgba(243,220,142,.35);border-radius:6px;background:transparent;display:flex;align-items:center;justify-content:center;font:700 15px 'Cormorant Garamond',serif;color:#fff;padding:0;transition:filter .12s,box-shadow .2s}
+.ro-case:active{filter:brightness(1.35)}
+.ro-case.rouge{background:linear-gradient(180deg,#c81d3a,#8e0f24)}
+.ro-case.noir{background:linear-gradient(180deg,#26241f,#0c0b09)}
+.ro-case.vert{background:linear-gradient(180deg,#149a57,#0a5a33)}
+.ro-case.ext{font:600 11px 'Jost',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--r-or2);background:rgba(0,0,0,.18)}
+.ro-case.ext.vertical{writing-mode:vertical-rl;transform:rotate(180deg)}
+.ro-case .losange{width:16px;height:16px;transform:rotate(45deg);border-radius:3px}
+.ro-case.gagne{box-shadow:0 0 0 2px #fff,0 0 18px 4px rgba(243,220,142,.9);z-index:2;animation:ro-pulse .8s ease-in-out infinite alternate}
+@keyframes ro-pulse{to{filter:brightness(1.4)}}
+.ro-case.eteinte{filter:brightness(.55)}
+.ro-jeton{position:absolute;z-index:3;right:-4px;top:-6px;min-width:26px;height:26px;padding:0 4px;border-radius:13px;display:grid;place-items:center;font:700 10.5px 'Jost',sans-serif;color:#111;border:2px dashed rgba(255,255,255,.85);box-shadow:0 3px 6px rgba(0,0,0,.6);animation:ro-pose .25s cubic-bezier(.2,1.6,.4,1)}
+@keyframes ro-pose{from{transform:translateY(-10px) scale(.4);opacity:0}}
+.ro-autres{position:absolute;left:3px;bottom:2px;display:flex;gap:2px;z-index:2}
+.ro-autres i{width:8px;height:8px;border-radius:50%;border:1px solid rgba(0,0,0,.5)}
+.ro-jetons{display:flex;gap:6px;justify-content:space-between}
+.ro-jt{flex:1;aspect-ratio:1;max-width:54px;border-radius:50%;border:3px dashed rgba(255,255,255,.75);font:700 12px 'Jost',sans-serif;color:#fff;display:grid;place-items:center;box-shadow:0 4px 0 rgba(0,0,0,.45);transition:transform .12s}
+.ro-jt.choisi{transform:translateY(-5px);box-shadow:0 0 0 2px var(--r-or2),0 8px 16px rgba(0,0,0,.5)}
+.ro-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ro-btn{border:1px solid rgba(212,175,55,.45);background:rgba(212,175,55,.07);border-radius:12px;padding:11px 4px;font:600 12px 'Jost',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--r-or2)}
+.ro-btn:disabled{opacity:.35}
+.ro-info{display:flex;justify-content:space-between;font-size:12px;color:var(--r-dim)}
+.ro-info b{color:var(--r-or2);font-weight:600}
+.ro-toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;z-index:950;background:#15130f;border:1px solid var(--r-or);color:var(--r-or2);padding:10px 16px;border-radius:12px;font-size:13px;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
+.ro-toast.voir{opacity:1;transform:translate(-50%,0)}
+</style>
+
+<div id="roulPlein" hidden>
+  <div class="ro-cadre">
+    <div class="ro-haut">
+      <button class="ro-rond" id="roQuitter" aria-label="Quitter la table">‹</button>
+      <div class="ro-titre"><small>CASINO MESSINA</small><b>ROULETTE</b></div>
+      <button class="ro-rond" id="roSon" aria-label="Son"></button>
+      <div class="ro-solde"><small>SOLDE</small><span id="roSolde">0,00 €</span></div>
+    </div>
+
+    <div class="ro-scene">
+      <canvas id="roCanvas"></canvas>
+      <canvas id="roEtinc"></canvas>
+      <div class="ro-statut"><span id="roPhase">Faites vos jeux</span><b id="roSec">15</b></div>
+      <div class="ro-resultat" id="roRes"><div class="num" id="roResNum">0</div><div class="gain" id="roResGain"></div></div>
+      <div class="ro-barre"><i id="roBarre"></i></div>
+    </div>
+
+    <div class="ro-histo" id="roHisto"></div>
+    <div class="ro-joueurs" id="roJoueurs"></div>
+
+    <div class="ro-tapis"><div class="ro-grille" id="roGrille"></div></div>
+
+    <div class="ro-jetons" id="roJetons"></div>
+    <div class="ro-actions">
+      <button class="ro-btn" id="roEffacer">Effacer</button>
+      <button class="ro-btn" id="roRepeter">Répéter</button>
+      <button class="ro-btn" id="roDoubler">Doubler</button>
+    </div>
+    <div class="ro-info"><span>Ma mise : <b id="roMaMise">0,00 €</b></span><span>Max 10 000 € par tour · plein x36</span></div>
+  </div>
+  <div class="ro-toast" id="roToast"></div>
+</div>
+
+<script>
+/* ===== LA ROULETTE =====
+   Table partagee tenue par le serveur (/api/roulette-*) : il tire le
+   numero, paie, et envoie les mises de chacun. La page anime la roue
+   pour que la bille tombe exactement sur le numero tire. */
+window.ROUL = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const R = id => document.getElementById(id);
+const racine = R('roulPlein'), cv = R('roCanvas'), c = cv.getContext('2d');
+const eclats = window.Etincelles(R('roEtinc'));
+const ORDRE = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const ROUGES = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+const coul = n => n === 0 ? 'vert' : ROUGES.includes(n) ? 'rouge' : 'noir';
+const HEX = { vert:'#0f8a4c', rouge:'#b3152f', noir:'#14120f' };
+const COUL_J = ['#f3dc8e','#7ec8ff','#ff8fb1','#8dffc0','#c9a2ff','#ffb36b','#e8e8e8'];
+const JETONS = [[.1,'#6f7a86'],[.5,'#8e6c3a'],[1,'#e8e2d0'],[5,'#b3152f'],[25,'#1e7d4f'],[100,'#1c1c1c']];
+const eu = v => (Math.round(v*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+const court = v => v >= 1000 ? Math.round(v/100)/10 + 'k' : v >= 100 ? Math.round(v) + '' : v >= 10 ? (Math.round(v*10)/10 + '').replace('.',',') : (Math.round(v*100)/100 + '').replace('.',',');
+const S = { etat:null, jeton:1, occupe:false, sondage:0, vuLancement:null, spin:null, resteRes:0 };
+let son = true; try { son = localStorage.getItem('pouletSon') !== '0'; } catch (e) {}
+
+/* ---------- sons ---------- */
+let ac = null;
+function ctx(){ if (!ac) { try { ac = new (window.AudioContext||window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; }
+function note(f, d, type, vol, retard){ const a = son && ctx(); if (!a) return; const t = a.currentTime + (retard||0), o = a.createOscillator(), g = a.createGain();
+  o.type = type||'sine'; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+.005); g.gain.exponentialRampToValueAtTime(.0001, t+d);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+d+.03); }
+const Son = {
+  jeton(){ note(2400, .035, 'triangle', .07); note(3600, .025, 'sine', .04, .012); },
+  tic(){ note(2800 + Math.random()*500, .02, 'sine', .035); },
+  plus(){ note(520, .5, 'sine', .08); note(780, .5, 'sine', .05, .05); },
+  gain(){ [0,4,7,12,16].forEach((s,i) => note(660*Math.pow(2,s/12), .25, 'triangle', .1, i*.07)); }
+};
+
+/* ---------- la roue ---------- */
+let W = 0, dpr = 1, roue = null, angleRoue = 0, bille = { a: 0, r: .74, visible: false }, dernierT = 0, raf = 0, dernierTicSeg = -1;
+const SEG = Math.PI * 2 / 37;
+function dessinerRoue(){
+  const s = W * dpr, o = document.createElement('canvas'); o.width = o.height = s; const x = o.getContext('2d'), m = s / 2;
+  x.translate(m, m);
+  const R0 = m * .98, R1 = m * .86, R2 = m * .62, R3 = m * .42;
+  let g = x.createRadialGradient(0,0,R1,0,0,R0); g.addColorStop(0,'#3a2a12'); g.addColorStop(.5,'#6b4a1d'); g.addColorStop(1,'#2a1c0a');
+  x.fillStyle = g; x.beginPath(); x.arc(0,0,R0,0,6.2832); x.fill();
+  x.strokeStyle = '#d4af37'; x.lineWidth = s*.006; x.beginPath(); x.arc(0,0,R1,0,6.2832); x.stroke();
+  for (let i = 0; i < 37; i++) {
+    const a0 = i*SEG - Math.PI/2 - SEG/2, a1 = a0 + SEG, n = ORDRE[i];
+    x.fillStyle = HEX[coul(n)]; x.beginPath(); x.moveTo(0,0); x.arc(0,0,R1*.985,a0,a1); x.closePath(); x.fill();
+    x.strokeStyle = 'rgba(243,220,142,.55)'; x.lineWidth = s*.0025; x.beginPath(); x.moveTo(Math.cos(a0)*R2, Math.sin(a0)*R2); x.lineTo(Math.cos(a0)*R1, Math.sin(a0)*R1); x.stroke();
+    x.save(); x.rotate(i*SEG); x.fillStyle = '#fff'; x.font = '700 ' + (s*.045) + 'px "Cormorant Garamond",Georgia,serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(String(n), 0, -R1*.88); x.restore();
+  }
+  g = x.createRadialGradient(0,-R2*.3,R3*.2,0,0,R2); g.addColorStop(0,'#4a3316'); g.addColorStop(1,'#1c1206');
+  x.fillStyle = g; x.beginPath(); x.arc(0,0,R2,0,6.2832); x.fill();
+  x.strokeStyle = '#d4af37'; x.lineWidth = s*.008; x.beginPath(); x.arc(0,0,R2,0,6.2832); x.stroke();
+  g = x.createRadialGradient(-R3*.3,-R3*.3,2,0,0,R3); g.addColorStop(0,'#fff2b8'); g.addColorStop(.6,'#d4af37'); g.addColorStop(1,'#7a5a14');
+  x.fillStyle = g; x.beginPath(); x.arc(0,0,R3*.55,0,6.2832); x.fill();
+  x.strokeStyle = '#b8931f'; x.lineWidth = s*.02; x.lineCap = 'round';
+  for (let k = 0; k < 4; k++) { const a = k*Math.PI/2; x.beginPath(); x.moveTo(Math.cos(a)*R3*.5, Math.sin(a)*R3*.5); x.lineTo(Math.cos(a)*R3*1.15, Math.sin(a)*R3*1.15); x.stroke(); }
+  x.fillStyle = '#fff2b8'; x.beginPath(); x.arc(0,0,R3*.16,0,6.2832); x.fill();
+  roue = o;
+}
+function taille(){
+  const r = cv.getBoundingClientRect(); if (!r.width) return;
+  dpr = Math.min(2.5, window.devicePixelRatio || 1); W = r.width;
+  cv.width = cv.height = Math.round(W * dpr); dessinerRoue();
+}
+function dessiner(){
+  if (!roue) return;
+  const s = W * dpr, m = s / 2;
+  c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,s,s);
+  c.save(); c.translate(m,m); c.rotate(angleRoue); c.drawImage(roue, -m, -m); c.restore();
+  // reflet fixe
+  const g = c.createLinearGradient(0,0,s,s); g.addColorStop(0,'rgba(255,255,255,.08)'); g.addColorStop(.5,'rgba(255,255,255,0)'); c.fillStyle = g; c.beginPath(); c.arc(m,m,m*.98,0,6.2832); c.fill();
+  if (bille.visible) {
+    const br = m * bille.r, bx = m + Math.cos(bille.a - Math.PI/2) * br, by = m + Math.sin(bille.a - Math.PI/2) * br, rr = s * .022;
+    c.fillStyle = 'rgba(0,0,0,.45)'; c.beginPath(); c.arc(bx + rr*.3, by + rr*.4, rr, 0, 6.2832); c.fill();
+    const gb = c.createRadialGradient(bx - rr*.35, by - rr*.35, rr*.1, bx, by, rr); gb.addColorStop(0,'#fff'); gb.addColorStop(1,'#b9bcc4');
+    c.fillStyle = gb; c.beginPath(); c.arc(bx, by, rr, 0, 6.2832); c.fill();
+  }
+}
+const DUREE_SPIN = 5600;
+function lancerSpin(numero, debut){
+  const i = ORDRE.indexOf(numero), a0 = angleRoue;
+  const tours = 3 * Math.PI * 2, af = a0 + tours + ((Math.random()*.6) - .3);
+  const poche = i * SEG, bf = af + poche - 5 * Math.PI * 2;          // la bille finit dans la poche du numero
+  S.spin = { t0: debut, a0, af, b0: bille.visible ? bille.a : a0 + Math.PI, bf, numero, fini: false };
+  bille.visible = true;
+}
+function suivreSpin(t){
+  const sp = S.spin; if (!sp) return;
+  const u = Math.min(1, (t - sp.t0) / DUREE_SPIN), eW = 1 - Math.pow(1-u, 3), eB = 1 - Math.pow(1-u, 2.2);
+  angleRoue = sp.a0 + (sp.af - sp.a0) * eW;
+  bille.a = sp.b0 + (sp.bf - sp.b0) * eB;
+  // la bille descend du rebord vers les poches, avec quelques rebonds a la fin
+  bille.r = u < .62 ? .93 : u < .9 ? .93 - (u - .62) / .28 * .24 + Math.abs(Math.sin(u*60)) * .025 * (1-u) : .69;
+  const seg = Math.floor(((bille.a - angleRoue) % (Math.PI*2) + Math.PI*2) / SEG);
+  if (u > .55 && u < .97 && seg !== dernierTicSeg) { dernierTicSeg = seg; Son.tic(); }
+  if (u >= 1) { bille.a = angleRoue + ORDRE.indexOf(sp.numero) * SEG; bille.r = .69; if (!sp.fini) { sp.fini = true; montrerResultat(); } }
+}
+function boucle(t){
+  const dt = dernierT ? Math.min(50, t - dernierT) : 16; dernierT = t;
+  if (S.spin && !S.spin.fini) suivreSpin(t);
+  else {
+    angleRoue += dt * .00018;                                   // la roue tourne doucement au repos
+    if (S.spin && S.spin.fini) bille.a = angleRoue + ORDRE.indexOf(S.spin.numero) * SEG;
+  }
+  dessiner();
+  const e = S.etat;
+  if (e) {
+    const reste = Math.max(0, e.echeance - Date.now() - decalage);
+    if (e.phase === 'mise') { R('roSec').textContent = Math.ceil(reste/1000); R('roBarre').style.transform = 'scaleX(' + Math.min(1, reste/15000) + ')'; }
+    else R('roBarre').style.transform = 'scaleX(0)';
+  }
+  raf = ROUL.ouvert ? requestAnimationFrame(boucle) : 0;
+}
+
+/* ---------- le tapis ---------- */
+const CASES = [];
+function construireTapis(){
+  const g = R('roGrille'); let h = '';
+  const cel = (id, cls, txt, style) => `<button class="ro-case ${cls}" data-z="${id}" style="${style}">${txt}</button>`;
+  h += cel('n0', 'vert', '0', 'grid-column:3/6;grid-row:1');
+  const ext = [['manque','1-18'],['pair','Pair'],['rouge','<span class="losange" style="background:#c81d3a"></span>'],['noir','<span class="losange" style="background:#111;border:1px solid #d4af37"></span>'],['impair','Impair'],['passe','19-36']];
+  ext.forEach(([id,t],k) => h += cel(id, 'ext' + (t.startsWith('<') ? '' : ' vertical'), t, `grid-column:1;grid-row:${2+k*2}/${4+k*2}`));
+  ['1er 12','2e 12','3e 12'].forEach((t,k) => h += cel('douz'+k, 'ext vertical', t, `grid-column:2;grid-row:${2+k*4}/${6+k*4}`));
+  for (let n = 1; n <= 36; n++) { const row = Math.ceil(n/3) + 1, col = ((n-1) % 3) + 3; h += cel('n'+n, coul(n), String(n), `grid-column:${col};grid-row:${row}`); }
+  ['col2','col1','col0'].forEach((id,k) => h += cel(id, 'ext', '2:1', `grid-column:${3+k};grid-row:14`));
+  g.innerHTML = h;
+  g.querySelectorAll('.ro-case').forEach(b => CASES.push(b));
+}
+function majTapis(){
+  const e = S.etat; if (!e) return;
+  const miennes = e.mesMises || {}, autres = {};
+  (e.places || []).forEach(p => { if (p && !p.moi) Object.keys(p.mises || {}).forEach(z => { (autres[z] = autres[z] || []).push(COUL_J[p.couleur % 7]); }); });
+  const gagnant = (e.phase === 'resultat' || (S.spin && S.spin.fini)) ? e.numeroGagnant : null;
+  CASES.forEach(b => {
+    const z = b.dataset.z, m = miennes[z] || 0;
+    let j = b.querySelector('.ro-jeton');
+    if (m > 0) { if (!j) { j = document.createElement('span'); j.className = 'ro-jeton'; b.appendChild(j); } j.textContent = court(m); j.style.background = couleurJeton(m); }
+    else if (j) j.remove();
+    let a = b.querySelector('.ro-autres');
+    const ls = autres[z] || [];
+    if (ls.length) { if (!a) { a = document.createElement('span'); a.className = 'ro-autres'; b.appendChild(a); } a.innerHTML = ls.slice(0,4).map(cc => `<i style="background:${cc}"></i>`).join(''); }
+    else if (a) a.remove();
+    const gagne = gagnant !== null && gagnant !== undefined && zoneGagne(z, gagnant);
+    b.classList.toggle('gagne', gagne);
+    b.classList.toggle('eteinte', gagnant !== null && gagnant !== undefined && !gagne);
+  });
+}
+function couleurJeton(m){ let c0 = JETONS[0][1]; for (const [v, cc] of JETONS) if (m >= v) c0 = cc; return c0 === '#1c1c1c' || c0 === '#b3152f' || c0 === '#1e7d4f' || c0 === '#8e6c3a' || c0 === '#6f7a86' ? c0 : c0; }
+function zoneGagne(z, n){
+  if (z === 'n' + n) return true; if (n === 0) return false;
+  if (z === 'rouge') return ROUGES.includes(n); if (z === 'noir') return !ROUGES.includes(n);
+  if (z === 'pair') return n % 2 === 0; if (z === 'impair') return n % 2 === 1;
+  if (z === 'manque') return n <= 18; if (z === 'passe') return n >= 19;
+  if (z.startsWith('douz')) return Math.floor((n-1)/12) === +z.slice(4);
+  if (z.startsWith('col')) return (3 - ((n-1) % 3) - 1) === +z.slice(3) ? true : false;
+  return false;
+}
+function construireJetons(){
+  R('roJetons').innerHTML = JETONS.map(([v,cc]) => `<button class="ro-jt${v === S.jeton ? ' choisi' : ''}" data-v="${v}" style="background:${cc};color:${v===1?'#111':'#fff'}">${court(v)}</button>`).join('')
+    + `<button class="ro-jt" data-v="autre" style="background:linear-gradient(135deg,#f3dc8e,#8a6d1f);color:#111;font-size:10px">AUTRE</button>`;
+}
+
+/* ---------- affichage ---------- */
+let decalage = 0, chronoToast;
+function toast(t){ const el = R('roToast'); el.textContent = t; el.classList.add('voir'); clearTimeout(chronoToast); chronoToast = setTimeout(() => el.classList.remove('voir'), 2400); }
+function joueur(){ try { return (typeof E !== 'undefined' && E && E.joueur) ? E.joueur : null; } catch (e) { return null; } }
+function afficherSolde(){
+  const e = S.etat; if (!e) return;
+  // pendant que la roue tourne, le gain n'apparait pas encore dans le solde
+  const cache = (e.phase === 'lancement' && !(S.spin && S.spin.fini)) ? (e.dernierGain || 0) : 0;
+  R('roSolde').textContent = eu(Math.max(0, e.solde - cache));
+  const j = joueur(); if (j && !cache) { j.solde = e.solde; if (typeof window.majSolde === 'function') window.majSolde(); }
+}
+function majTout(){
+  const e = S.etat; if (!e) return;
+  R('roPhase').textContent = e.phase === 'mise' ? 'Faites vos jeux' : (S.spin && S.spin.fini) || e.phase === 'resultat' ? 'Résultat' : 'Rien ne va plus';
+  R('roSec').style.visibility = e.phase === 'mise' ? 'visible' : 'hidden';
+  const cacherDernier = e.phase === 'lancement' && !(S.spin && S.spin.fini);   // pas de spoiler pendant que la bille tourne
+  const h = (e.historique || []).slice(cacherDernier ? 1 : 0, (cacherDernier ? 1 : 0) + 12);
+  R('roHisto').innerHTML = h.map(x => `<i style="background:${HEX[x.c] || HEX[coul(x.n)]}">${x.n}</i>`).join('');
+  const places = (e.places || []).filter(Boolean);
+  R('roJoueurs').innerHTML = places.map(p => `<span class="ro-j${p.moi?' moi':''}"><i style="background:${COUL_J[p.couleur % 7]}">${(p.nom[0]||'?').toUpperCase()}</i><b>${p.moi ? 'Toi' : p.nom.replace(/[<>&"]/g,'')}</b><em>${p.total ? eu(p.total) : ''}</em></span>`).join('');
+  const ma = Object.values(e.mesMises || {}).reduce((a,b) => a+b, 0);
+  R('roMaMise').textContent = eu(ma);
+  const mise = e.phase === 'mise';
+  R('roEffacer').disabled = !mise || !ma;
+  R('roRepeter').disabled = !mise || ma > 0 || !Object.keys(e.dernieresMises || {}).length;
+  R('roDoubler').disabled = !mise || !ma;
+  majTapis(); afficherSolde();
+}
+function montrerResultat(){
+  const e = S.etat; if (!e || e.numeroGagnant === null || e.numeroGagnant === undefined) return;
+  const n = e.numeroGagnant, box = R('roRes');
+  R('roResNum').textContent = n; R('roResNum').style.background = HEX[coul(n)];
+  const g = e.dernierGain || 0;
+  R('roResGain').textContent = g > 0 ? '+' + eu(g) : (e.derniereMiseTotale ? 'Perdu' : '');
+  R('roResGain').style.color = g > 0 ? '#7dffc0' : '#ffb3c0';
+  box.classList.add('voir'); setTimeout(() => box.classList.remove('voir'), 3800);
+  if (g > 0) { Son.gain(); const sc = R('roEtinc'); eclats.eclat(sc.clientWidth/2, sc.clientHeight/2, g >= 36 ? 90 : 40, ['#f3dc8e','#ffffff','#d4af37','#7dffc0'], 6); }
+  else Son.plus();
+  majTout();
+}
+
+/* ---------- serveur ---------- */
+function recevoir(r){
+  if (!r || r.erreur || typeof r.phase !== 'string') return false;
+  if (typeof r.echeance === 'number') decalage = 0;
+  const avant = S.etat;
+  S.etat = r;
+  // une nouvelle roue commence : on lance l'animation a partir du temps restant
+  if (r.phase === 'lancement' && r.numeroGagnant !== null && S.vuLancement !== r.echeance) {
+    S.vuLancement = r.echeance;
+    const ecoule = Math.max(0, r.dureeLancement - (r.echeance - Date.now()));
+    lancerSpin(r.numeroGagnant, performance.now() - ecoule);
+  }
+  if (r.phase === 'mise' && avant && avant.phase !== 'mise') { S.spin = null; dernierTicSeg = -1; }
+  majTout();
+  return true;
+}
+async function sonder(){
+  clearTimeout(S.sondage);
+  if (!ROUL.ouvert) return;
+  const r = await demander('roulette-etat');
+  if (r && r.assis === false && ROUL.ouvert) { await envoyer('roulette-asseoir', {}); }
+  else recevoir(r);
+  S.sondage = setTimeout(sonder, 500);
+}
+async function miser(z){
+  const e = S.etat; if (!e || e.phase !== 'mise') return toast('Attends le prochain tour');
+  if (S.jeton > e.solde + 1e-9) return toast('Solde insuffisant');
+  Son.jeton();
+  // tout de suite a l'ecran, puis confirme par le serveur
+  e.mesMises = Object.assign({}, e.mesMises); e.mesMises[z] = Math.round(((e.mesMises[z] || 0) + S.jeton) * 100) / 100; e.solde = Math.round((e.solde - S.jeton)*100)/100;
+  majTout();
+  const r = await envoyer('roulette-miser', { zone: z, montant: S.jeton });
+  if (!recevoir(r)) { toast(r && r.erreur && r.erreur !== 'reseau' ? (r.erreur === 'trop tard' ? 'Trop tard, la roue tourne' : r.erreur) : 'Connexion perdue'); const rr = await demander('roulette-etat'); recevoir(rr); }
+}
+
+/* ---------- branchements ---------- */
+R('roGrille').addEventListener('click', ev => { const b = ev.target.closest('.ro-case'); if (b) miser(b.dataset.z); });
+R('roJetons').addEventListener('click', ev => {
+  const b = ev.target.closest('.ro-jt'); if (!b) return; Son.jeton();
+  if (b.dataset.v === 'autre') { ClavierMise.ouvrir({ valeur: S.jeton, min: .1, max: 10000, son: Son.jeton, surValider: v => { S.jeton = v; construireJetons(); R('roJetons').querySelectorAll('.ro-jt').forEach(x => x.classList.remove('choisi')); b.classList.add('choisi'); b.textContent = court(v); } }); return; }
+  S.jeton = +b.dataset.v; construireJetons();
+});
+R('roEffacer').onclick = async () => { Son.jeton(); recevoir(await envoyer('roulette-effacer', {})); };
+R('roRepeter').onclick = async () => { const e = S.etat; if (!e) return; Son.jeton(); const r = await envoyer('roulette-lot', { mises: e.dernieresMises || {} }); if (!recevoir(r)) toast(r && r.erreur ? r.erreur : 'Erreur'); };
+R('roDoubler').onclick = async () => { const e = S.etat; if (!e) return; Son.jeton(); const r = await envoyer('roulette-lot', { mises: e.mesMises || {} }); if (!recevoir(r)) toast(r && r.erreur ? r.erreur : 'Erreur'); };
+function majBoutonSon(){ R('roSon').innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/>' + (son ? '<path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>' : '<path d="m16 9 6 6M22 9l-6 6"/>') + '</svg>'; }
+R('roSon').onclick = () => { son = !son; try { localStorage.setItem('pouletSon', son ? '1' : '0'); } catch (e) {} majBoutonSon(); Son.jeton(); };
+R('roQuitter').onclick = () => ROUL.fermer();
+window.addEventListener('resize', () => { if (ROUL.ouvert) taille(); });
+
+construireTapis(); construireJetons();
+ROUL.ouvrir = async function(){
+  ROUL.ouvert = true; racine.hidden = false; document.body.classList.add('poulet-actif');
+  try { son = localStorage.getItem('pouletSon') !== '0'; } catch (e) {}
+  majBoutonSon(); S.spin = null; S.vuLancement = null; bille.visible = false;
+  requestAnimationFrame(() => { taille(); if (!raf) raf = requestAnimationFrame(boucle); });
+  const r = await envoyer('roulette-asseoir', {});
+  if (r && r.erreur) { toast(r.erreur === 'table complete' ? 'La table est complète (7 joueurs)' : r.erreur); }
+  recevoir(r); sonder();
+};
+ROUL.fermer = function(){
+  ROUL.ouvert = false; racine.hidden = true; document.body.classList.remove('poulet-actif');
+  clearTimeout(S.sondage); cancelAnimationFrame(raf); raf = 0; dernierT = 0;
+  envoyer('roulette-quitter', {}).then(r => { const j = joueur(); if (j && r && typeof r.solde === 'number') { j.solde = r.solde; if (typeof window.majSolde === 'function') window.majSolde(); } });
+};
+})();
+</script>
+
 <div id="pontPlein" class="pont-plein" hidden>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -17316,20 +17691,18 @@ const $ = s => R.querySelector(s);
 const $$ = s => R.querySelectorAll(s);
 const G = id => document.getElementById(id);   // elements de l'ancien casino
 
-const LEVELS = [
-  { n:1,   min:0 },
-  { n:2,     min:10000 },
-  { n:3,  min:50000 },
-  { n:4, min:150000 },
-  { n:5,   min:400000 },
-  { n:6,         min:1000000 }];
+/* niveaux 1 a 1000 : il faut 1 000 x (n-1)^2 points pour le niveau n
+   (100 points par euro mise). Niveau 2 = 10 EUR mises, niveau 10 = 810 EUR,
+   niveau 100 = 98 000 EUR, niveau 1000 = pres de 10 millions d'EUR mises. */
+const NIVEAU_MAX = 1000;
+const seuilNiveau = n => 1000 * (n - 1) * (n - 1);
 const D = { pseudo:'', solde:0, points:0, depuis:'', stats:{ mains:0, gagnees:0, perdues:0, poissons:0, tirs:0, buts:0, periphs:0, portes:0, kroad:0 }, tx:[], gains:[], salon:null };
 
 /* ---------- outils ---------- */
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const eurx = v => (Math.round(v*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
 const nb = v => Math.round(v).toLocaleString('fr-FR');
-function level(p){ let L = LEVELS[0]; for (const l of LEVELS) if (p >= l.min) L = l; const nx = LEVELS.find(l => l.n === L.n + 1); return { L, nx, pct: nx ? (p - L.min) / (nx.min - L.min) : 1 }; }
+function level(p){ p = Math.max(0, p || 0); const n = Math.min(NIVEAU_MAX, Math.floor(Math.sqrt(p / 1000)) + 1); const L = { n, min: seuilNiveau(n) }; const nx = n < NIVEAU_MAX ? { n: n + 1, min: seuilNiveau(n + 1) } : null; return { L, nx, pct: nx ? (p - L.min) / (nx.min - L.min) : 1 }; }
 function toast(msg){ const s = $('#toastSlot'); s.innerHTML = '<div class="toast" role="status">' + msg + '</div>'; clearTimeout(toast.t); toast.t = setTimeout(() => s.innerHTML = '', 2600); }
 let shown = 0;
 function afficherSolde(v, anime){
@@ -17601,6 +17974,7 @@ function go(p){
   if (p === 'profil' || p === 'peche') chargerMoi().then(() => { if (current === p && p === 'profil') $('#main').innerHTML = pageProfil(); });
 }
 function ouvrirJeuMS(id){
+  if (id === 'roulette' && window.ROUL) return ROUL.ouvrir();
   if (id === 'blackjack' || id === 'poker' || id === 'roulette') return go('casino');
   if (id === 'peche') return go('peche');
   if (id === 'penalty') { go('penalty'); ouvrirJeu('penalty'); return; }
@@ -17913,7 +18287,7 @@ R.addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); return; }
   const s = e.target.closest('[data-slide]'); if (s) { const id = s.dataset.slide; id === 'kroad' ? ouvrirJeuMS('kroad') : go(id); return; }
   const tb = e.target.closest('[data-table]'); if (tb) { rejoindreTable(tb.dataset.table); return; }
-  const rl = e.target.closest('[data-roulette]'); if (rl) { rejoindreRoulette(); return; }
+  const rl = e.target.closest('[data-roulette]'); if (rl) { window.ROUL ? ROUL.ouvrir() : rejoindreRoulette(); return; }
   const gm = e.target.closest('[data-game]'); if (gm) { ouvrirJeuMS(gm.dataset.game); return; }
   if (!e.target.closest('#menu') && !e.target.closest('#profBtn') && $('#menu')) closeMenu();
 });

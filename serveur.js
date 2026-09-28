@@ -674,7 +674,7 @@ function pkPeutParler(table) {
 }
 function pkEligibles(table) {
   const out = [];
-  table.places.forEach((p, i) => { if (p && p.type === 'humain' && cts(p.solde) >= 1) out.push(i); });
+  table.places.forEach((p, i) => { if (p && p.type === 'humain') majSoldeCompte(p); if (p && p.type === 'humain' && cts(p.solde) >= 1) out.push(i); });
   return out;
 }
 function pkHumains(table) { return table.places.filter(p => p && p.type === 'humain').length; }
@@ -696,7 +696,7 @@ function pkCrediter(table, i, c) {
   if (compte) {
     compte.solde = sous((cts(compte.solde) + c) / 100);
     const info = siegeDe(compte);
-    if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+    if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
     Carnet.enregistrer(compte);
   }
 }
@@ -705,6 +705,7 @@ function pkCrediter(table, i, c) {
 function pkPoser(table, i, montantC) {
   const j = table.main.joueurs[i], p = table.places[i];
   if (!j || !p) return 0;
+  majSoldeCompte(p);
   const a = Math.max(0, Math.min(Math.round(montantC), cts(p.solde)));
   p.solde = sous((cts(p.solde) - a) / 100);
   majSoldeCompte(p);
@@ -1240,6 +1241,7 @@ function nouvelleManche(table) {
     p.mains = [neuveMain(0)];
     p.resultat = null;
     p.provocation = false;
+    majSoldeCompte(p);
     // sans argent, on reste spectateur (on ne bloque pas la table)
     p.etat = p.solde >= 0.01 ? 'attente' : 'spectateur';
     if (p.etat === 'attente') quelquUnPeutJouer = true;
@@ -1272,6 +1274,7 @@ function nouvelleManche(table) {
 function demarrerDistribution(table) {
   // mise automatique pour les humains qui n\'ont rien pose
   for (const p of table.places) {
+    if (p && p.type === 'humain') majSoldeCompte(p);
     if (p && p.type === 'humain' && p.etat === 'attente' && p.mains[0].mise === 0) {
       const auto = Math.min(1, p.solde);
       if (auto >= 0.01) {
@@ -1505,10 +1508,20 @@ function conclure(table) {
 
 function eur(v) { return Number(v).toFixed(2).replace('.', ',') + ' €'; }
 
+/* Le siege (blackjack, poker) garde une copie du solde. AVANT, cette copie
+   ECRASAIT le vrai solde a chaque fin de main : tout ce qui avait ete perdu
+   ailleurs entre-temps (roulette, tower, pont...) revenait tout seul, et on
+   pouvait jouer gratuitement. Maintenant on ne pousse que ce qui a vraiment
+   change A LA TABLE (la difference), puis on relit le vrai solde. */
 function majSoldeCompte(p) {
-  if (p.type !== 'humain' || !p.jeton) return;
+  if (!p || p.type !== 'humain' || !p.jeton) return;
   const c = comptes.get(p.jeton);
-  if (c) c.solde = p.solde;
+  if (!c) return;
+  if (typeof p.soldeRef !== 'number') p.soldeRef = p.solde;
+  const d = sous(p.solde - p.soldeRef);
+  if (d) c.solde = sous(Math.max(0, c.solde + d));
+  p.solde = c.solde;
+  p.soldeRef = c.solde;
 }
 
 /* ===================================================================
@@ -1728,7 +1741,7 @@ function rembourserMisesRoulette(p) {
   if (!c) return;
   let total = 0;
   Object.keys(p.mises).forEach(id => { total += p.mises[id]; });
-  if (total > 0) { c.solde = sous(c.solde + total); }
+  if (total > 0) { c.solde = sous(c.solde + total); soldeAuSiege(c); }
   p.mises = {};
 }
 
@@ -1736,7 +1749,7 @@ function nouvelleMancheRoulette() {
   tableRoulette.phase = 'mise';
   tableRoulette.echeance = Date.now() + DUREE_MISE_ROULETTE;
   tableRoulette.numeroGagnant = null;
-  tableRoulette.places.forEach(p => { if (p) { p.mises = {}; p.dernierGain = 0; p.derniereMiseTotale = 0; } });
+  tableRoulette.places.forEach(p => { if (p) { p.mises = {}; p.misesTour = {}; p.dernierGain = 0; p.derniereMiseTotale = 0; } });
   toucheRoulette();
 }
 
@@ -1758,17 +1771,19 @@ function demarrerLancementRoulette() {
       }
     });
     if (c) {
-      if (gains > 0) c.solde = sous(c.solde + gains);
-      c.roulettes = (c.roulettes | 0) + 1;
+      if (gains > 0) { c.solde = sous(c.solde + gains); soldeAuSiege(c); }
+      if (miseTotale > 0) c.roulettes = (c.roulettes | 0) + 1;
       Carnet.enregistrer(c);
     }
     p.dernierGain = gains;
     p.derniereMiseTotale = miseTotale;
+    if (miseTotale > 0) p.dernieresMises = Object.assign({}, p.mises);
+    p.misesTour = Object.assign({}, p.mises);         // restent affichees pendant que la roue tourne
     p.mises = {};
   });
 
   tableRoulette.historique.unshift({ n: numero, c: couleur });
-  tableRoulette.historique = tableRoulette.historique.slice(0, 5);
+  tableRoulette.historique = tableRoulette.historique.slice(0, 14);
 
   tableRoulette.phase = 'lancement';
   tableRoulette.echeance = Date.now() + DUREE_LANCEMENT_ROULETTE;
@@ -1830,8 +1845,11 @@ function etatRoulette(jeton) {
     dureeResultat: DUREE_RESULTAT_ROULETTE,
     numeroGagnant: (t.phase === 'lancement' || t.phase === 'resultat') ? t.numeroGagnant : null,
     historique: t.historique,
-    places: t.places.map((p, i) => p ? { nom: p.nom, moi: i === moiIndex } : null),
-    mesMises: moi ? moi.mises : {},
+    places: t.places.map((p, i) => { if (!p) return null; const ms = t.phase === 'mise' ? p.mises : (p.misesTour || {});
+      return { nom: p.nom, moi: i === moiIndex, couleur: p.couleur | 0, mises: ms,
+      total: sous(Object.values(ms).reduce((a, b) => a + b, 0)), dernierGain: p.dernierGain || 0 }; }),
+    dernieresMises: moi ? (moi.dernieresMises || {}) : {},
+    mesMises: moi ? (t.phase === 'mise' ? moi.mises : (moi.misesTour || {})) : {},
     dernierGain: moi ? (moi.dernierGain || 0) : 0,
     derniereMiseTotale: moi ? (moi.derniereMiseTotale || 0) : 0,
     solde: c ? c.solde : 0
@@ -1875,7 +1893,7 @@ function demarrerCourseInterne(compte, mise, voitureDemandee) {
   compte.periphs = (compte.periphs | 0) + 1;
 
   const info = siegeDe(compte);
-  if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+  if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
   Carnet.enregistrer(compte);
 
   return voiture;
@@ -2269,7 +2287,7 @@ function tirerPont(m) {
 
 function soldeAuSiege(compte) {
   const info = siegeDe(compte);
-  if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+  if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
 }
 
 /* ---------- multijoueur : file d\'attente, puis salons ---------- */
@@ -3477,7 +3495,7 @@ const serveur = http.createServer(async (req, res) => {
         const place = table.places.findIndex((p, i) => !p && !fantome(i));
         if (place < 0) return repondre(res, 409, { erreur: 'table complete' });
         table.places[place] = {
-          type: 'humain', jeton: compte.jetonRef, nom: compte.pseudo,
+          type: 'humain', jeton: compte.jetonRef, nom: compte.pseudo, soldeRef: compte.solde,
           solde: compte.solde, soldeVisible: !!compte.soldeVisible
         };
         compte.table = table.id;
@@ -3492,7 +3510,7 @@ const serveur = http.createServer(async (req, res) => {
       if (place < 0) return repondre(res, 409, { erreur: 'table complete' });
 
       table.places[place] = {
-        type: 'humain', jeton: compte.jetonRef, nom: compte.pseudo,
+        type: 'humain', jeton: compte.jetonRef, nom: compte.pseudo, soldeRef: compte.solde,
         mains: [neuveMain(0)],
         etat: (table.phase === 'mise' || table.phase === 'attente') ? 'attente' : 'spectateur',
         solde: compte.solde, resultat: null, pertesDeSuite: 0, provocation: false,
@@ -3521,7 +3539,9 @@ const serveur = http.createServer(async (req, res) => {
       if (i < 0) {
         i = tableRoulette.places.findIndex(p => !p);
         if (i < 0) return repondre(res, 409, { erreur: 'table complete' });
-        tableRoulette.places[i] = { jeton: compte.jetonRef, nom: compte.pseudo, mises: {}, dernierGain: 0, derniereMiseTotale: 0 };
+        const prises = tableRoulette.places.filter(Boolean).map(x => x.couleur);
+        const couleur = [0, 1, 2, 3, 4, 5, 6].find(k => !prises.includes(k)) || 0;
+        tableRoulette.places[i] = { jeton: compte.jetonRef, nom: compte.pseudo, couleur, mises: {}, dernierGain: 0, derniereMiseTotale: 0, dernieresMises: {} };
         compte.tableRoulette = true;
         toucheRoulette();
       }
@@ -3553,8 +3573,34 @@ const serveur = http.createServer(async (req, res) => {
       v = sous(v);
       if (v > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'solde insuffisant' });
 
+      const dejaMise = Object.values(p.mises).reduce((a, b) => a + b, 0);
+      if (dejaMise + v > 10000 + 1e-9) return repondre(res, 400, { erreur: 'Mise maximum : 10 000 € par tour.' });
       compte.solde = sous(compte.solde - v);
+      soldeAuSiege(compte);
       p.mises[zone.id] = sous((p.mises[zone.id] || 0) + v);
+      toucheRoulette();
+      return repondre(res, 200, etatRoulette(compte.jetonRef));
+    }
+
+    // --- plusieurs mises d'un coup (bouton Repeter / Doubler) ---
+    if (route === '/api/roulette-lot' && req.method === 'POST') {
+      const p = tableRoulette.places.find(x => x && x.jeton === compte.jetonRef);
+      if (!p) return repondre(res, 409, { erreur: 'pas a table' });
+      if (tableRoulette.phase !== 'mise') return repondre(res, 409, { erreur: 'trop tard' });
+      const lot = body.mises && typeof body.mises === 'object' ? body.mises : {};
+      let total = 0; const propre = {};
+      for (const id of Object.keys(lot)) {
+        const zone = trouverZoneRoulette(id), m = sous(Number(lot[id]));
+        if (!zone || !isFinite(m) || m < 0.01) return repondre(res, 400, { erreur: 'mise invalide' });
+        propre[id] = m; total = sous(total + m);
+      }
+      if (!total) return repondre(res, 400, { erreur: 'rien a miser' });
+      const dejaMise = Object.values(p.mises).reduce((a, b) => a + b, 0);
+      if (dejaMise + total > 10000 + 1e-9) return repondre(res, 400, { erreur: 'Mise maximum : 10 000 € par tour.' });
+      if (total > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'solde insuffisant' });
+      compte.solde = sous(compte.solde - total);
+      soldeAuSiege(compte);
+      for (const id of Object.keys(propre)) p.mises[id] = sous((p.mises[id] || 0) + propre[id]);
       toucheRoulette();
       return repondre(res, 200, etatRoulette(compte.jetonRef));
     }
@@ -3585,6 +3631,9 @@ const serveur = http.createServer(async (req, res) => {
       if (table.jeu === 'poker') return repondre(res, 409, { erreur: 'pas au poker' });
       if (table.phase !== 'mise') return repondre(res, 409, { erreur: 'trop tard' });
       if (p.etat !== 'attente')   return repondre(res, 409, { erreur: 'spectateur' });
+      majSoldeCompte(p);                      // le vrai solde, pas une vieille copie
+      // on change sa mise : l'ancienne est rendue avant de poser la nouvelle
+      if (p.mains[0].mise > 0) { p.solde = sous(p.solde + p.mains[0].mise); p.mains[0].mise = 0; majSoldeCompte(p); }
 
       let v = Number(body.mise);
       if (!isFinite(v) || v < 0.01) return repondre(res, 400, { erreur: 'mise trop faible' });
@@ -3630,6 +3679,7 @@ const serveur = http.createServer(async (req, res) => {
 
       const action = String(body.action || '');
       const m = p.mains[table.mainActive];
+      majSoldeCompte(p);
 
       if (action === 'carte') {
         m.cartes.push(tirer(table));
@@ -3687,6 +3737,7 @@ const serveur = http.createServer(async (req, res) => {
       if (!cible || cible.type !== 'humain' || cible === p) {
         return repondre(res, 404, { erreur: 'destinataire introuvable' });
       }
+      majSoldeCompte(p); majSoldeCompte(cible);
       let v = Number(body.montant);
       if (!isFinite(v) || v < 0.01) return repondre(res, 400, { erreur: 'montant trop faible' });
       v = sous(v);
@@ -3745,7 +3796,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.solde    = sous(compte.solde + 1);
       compte.poissons = compte.poissons + 1;
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
       return repondre(res, 200, { solde: compte.solde, poissons: compte.poissons, restant: PECHE_MAX_JOUR - compte.pecheAuj });
     }
@@ -3782,7 +3833,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.penalty = { mise: mise, palier: 0 };
 
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, {
@@ -3841,7 +3892,7 @@ const serveur = http.createServer(async (req, res) => {
         compte.solde   = sous(compte.solde + gainPotentiel);
         compte.penalty = null;
         const info = siegeDe(compte);
-        if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte);
         return repondre(res, 200, {
           but: true, zone: zone, zoneGardien: zoneGardien, secret: secret,
@@ -3874,7 +3925,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.penalty = null;
 
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
@@ -3921,7 +3972,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.voiturePremium = true;
 
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, { ok: true, solde: compte.solde, voiturePremium: true });
@@ -3989,7 +4040,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.periphMulti = null;
 
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
@@ -4608,7 +4659,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.tours = (compte.tours | 0) + 1;
 
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, {
@@ -4642,7 +4693,7 @@ const serveur = http.createServer(async (req, res) => {
         compte.solde = sous(compte.solde + gain);
         compte.tower = null;
         const info = siegeDe(compte);
-        if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte);
         return repondre(res, 200, {
           ok: true, rate: false, glisse: false, facteur: r.facteur, parfait: r.parfait,
@@ -4678,7 +4729,7 @@ const serveur = http.createServer(async (req, res) => {
       compte.tower = null;
 
       const info = siegeDe(compte);
-      if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+      if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
       Carnet.enregistrer(compte);
 
       return repondre(res, 200, { ok: true, gain: gain, solde: compte.solde });
@@ -4716,7 +4767,7 @@ const serveur = http.createServer(async (req, res) => {
         compte.codesUtilises.push('50EUROS');
         compte.solde = sous(compte.solde + 50);
         const info = siegeDe(compte);
-        if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte);
         return repondre(res, 200, { ok: true, genre: 'credit', solde: compte.solde });
       }
@@ -4972,7 +5023,7 @@ const serveur = http.createServer(async (req, res) => {
           if (compte.solde < RZ_PRIX_LIMOUSINE) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
           compte.solde = sous(compte.solde - RZ_PRIX_LIMOUSINE); moi.limousine = true;
         } else return repondre(res, 400, { erreur: 'Achat inconnu.' });
-        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
         return repondre(res, 200, rzVue(compte, now));
       }
@@ -4987,7 +5038,7 @@ const serveur = http.createServer(async (req, res) => {
         if (compte.solde < prix) return repondre(res, 409, { erreur: 'Pas assez d\'argent.' });
         compte.solde = sous(compte.solde - prix);
         if (quoi === 'defense') moi.defense++; else moi.armurerie++;
-        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
         return repondre(res, 200, rzVue(compte, now));
       }
@@ -5019,7 +5070,7 @@ const serveur = http.createServer(async (req, res) => {
         if (compte.solde < RZ_REPARATION) return repondre(res, 409, { erreur: 'Il faut 5 000 € pour réparer.' });
         compte.solde = sous(compte.solde - RZ_REPARATION);
         moi.feuJusqua = 0;
-        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
         return repondre(res, 200, rzVue(compte, now));
       }
@@ -5041,7 +5092,7 @@ const serveur = http.createServer(async (req, res) => {
         compte.solde = sous(compte.solde - cout);
         const m = { id: 'm' + (rzMurCompteur++), proprio: pb, a, b, garnison: rzVide(), portail, ouvert: false, basculeLe: 0 };
         RZ_MURS[m.id] = m;
-        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
         return repondre(res, 200, rzVue(compte, now));
       }
@@ -5064,7 +5115,7 @@ const serveur = http.createServer(async (req, res) => {
         RZ_TYPES.forEach(t => { moi.stock[t] += m.garnison[t] | 0; });   // la garnison rentre a la base, saine et sauve
         delete RZ_MURS[m.id];
         compte.solde = sous(compte.solde + remboursement);
-        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; touche(info.table); }
+        const info = siegeDe(compte); if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
         Carnet.enregistrer(compte); rzSauver();
         return repondre(res, 200, Object.assign(rzVue(compte, now), { remboursement }));
       }
