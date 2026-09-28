@@ -9860,7 +9860,7 @@ ui();
         <li>L'étage se balance sous la grue. Appuyez sur <b>BUILD</b> quand il passe au-dessus de son ombre, au sommet de la tour.</li>
         <li>La tour ne tombe que si vous posez <b>mal</b> : un lâcher trop imprécis fait tomber l'étage à côté et la tour est perdue (x0). Bien visé, l'étage tient toujours — vous pouvez monter très haut sans risque si vous avez le coup en main.</li>
         <li>Plus vous montez, plus la grue balance vite et sur une amplitude réduite : viser juste devient plus difficile en hauteur.</li>
-        <li>Une cote est tirée à chaque étage bien posé et se <b>multiplie</b> avec les précédentes. Elle est <b>plus souvent inférieure à x1</b> qu'au-dessus de x2 ou x3 : la cote fait perdre une partie du gain bien plus souvent qu'elle n'en rapporte gros. C'est ce qui rend la tour difficile à faire grossir, jamais la tour elle-même qui s'effondre pour ça.</li>
+        <li>Une cote est tirée à chaque étage bien posé et se <b>multiplie</b> avec les précédentes. Elle va de x0,72 à x1,90 : un peu moins de la moitié des étages font baisser le gain, la plupart le laissent presque pareil, et quelques-uns le font bien monter. Plus tu montes, plus c'est risqué : le mieux est souvent d'encaisser tôt. Le gain d'une tour est plafonné à <b>30 000 €</b>.</li>
         <li>La tour reste toujours <b>bien droite</b> : elle ne penche pas et ne glisse jamais, quelle que soit sa hauteur.</li>
         <li><b>CASHOUT</b> encaisse à tout moment mise × multiplicateur cumulé.</li>
         <li>Le sommet est au <b>30ᵉ niveau</b> ou au plafond <b>x5000</b> : gain encaissé d'office. L'atteindre demande d'enchaîner de nombreux lâchers bien visés.</li>
@@ -11702,7 +11702,7 @@ function finirCourse(v){
    sont comptés que par le serveur : chaque choc et chaque balle lui
    sont annoncés, et c'est lui qui verse le gain.
    ===================================================================== */
-const BOIS_VIE=600, BOIS_MULT=100, BOIS_DEPART_POLICE=3000, DIST_BOIS=3500;
+const BOIS_VIE=600, BOIS_MULT=100, BOIS_DEPART_POLICE=3000, DIST_BOIS=3000;
 const BOIS_SORTIE_DEBUT=470, BOIS_SORTIE_FIN=650;
 const BOIS_VMAX=220, BOIS_VMAX_PREMIUM=300, BOIS_ACCEL=40, BOIS_TURBO=45;
 let ZONES_PERIPH=null, PALIERS_PERIPH=null, ZONE_BOIS=null;
@@ -11711,7 +11711,7 @@ function planToledo(graine){
   let s=graine>>>0;
   const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
     t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
-  const PAS=50, VOIE=3.5, DIST=3500;
+  const PAS=50, VOIE=3.5, DIST=3000;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
   for(let d=260; d<DIST-160; d+=380+r()*140)
@@ -17538,10 +17538,10 @@ function tablesHtml(){
   const cartes = [];
   const bj = r.tables.filter(t => t.jeu !== 'poker'), pk = r.tables.filter(t => t.jeu === 'poker');
   if (bj.length) cartes.push({ art:'blackjack', nom:'BLACKJACK', desc:'Don Koala distribue. ' + (bj.length > 1 ? bj.length + ' tables de trois places.' : 'Trois places.'),
-    seats: bj.map(t => { const o = t.places.filter(Boolean).length; return { id:t.id, lib:t.nom + ' · ' + o + '/3', full:o >= 3 }; }) });
+    seats: bj.map(t => { const o = t.places.filter(p => p && !p.bot).length; return { id:t.id, lib:t.nom + ' · ' + o + '/3', full:o >= 3 }; }) });
   if (r.roulette) cartes.push({ art:'roulette', nom:'ROULETTE', desc:'Rouge, noir, ou le zéro. La bille décide.', roulette:true,
     seats:[{ lib:r.roulette.nom + ' · ' + r.roulette.joueurs + ' joueur' + (r.roulette.joueurs > 1 ? 's' : ''), full:r.roulette.joueurs >= r.roulette.places }] });
-  pk.forEach(t => { const o = t.places.filter(Boolean).length; cartes.push({ art:'poker', nom:'POKER', desc:'Texas Hold\'em à ' + t.places.length + '. Il faut au moins deux joueurs.',
+  pk.forEach(t => { const o = t.places.filter(p => p && !p.bot).length; cartes.push({ art:'poker', nom:'POKER', desc:'Texas Hold\'em à ' + t.places.length + '. Il faut au moins deux joueurs.',
     seats:[{ id:t.id, lib:t.nom + ' · ' + o + '/' + t.places.length, full:o >= t.places.length }] }); });
   return cartes.map(c => `<div class="tcard"><div class="tart">${svg(c.art)}</div><div class="tinfo"><h3>${c.nom}</h3><p>${esc(c.desc)}</p>
       <div class="seats">${c.seats.map(s=>`<span class="seat${s.full?' full':''}"><i></i>${esc(s.lib)}</span>`).join('')}</div>
@@ -17804,6 +17804,7 @@ function sheetPromo(){
           <h4>+${eurx(g)}</h4><p>Le code a été ajouté à ton solde.</p><button class="cta ghost full" id="pDone" style="padding:14px;margin-top:6px">Super</button></div>`);
         $('#pDone').onclick = closeSheet; confetti(); return;
       }
+      if (r.genre === 'gains') { GAINS_ADMIN.code = c; GAINS_ADMIN.liste = r.gains || []; closeSheet(); sheetGains(); return; }
       if (r.genre === 'admin' || r.genre === 'liste') {
         ADMIN.code = c; ADMIN.modif = r.genre === 'admin'; ADMIN.joueurs = r.joueurs || [];
         closeSheet(); toast('Accès admin débloqué'); sheetAdmin(); return;
@@ -17822,7 +17823,7 @@ function sheetAdmin(){
     $('#aStats').innerHTML = `<div><b>${J.length}</b><span>joueurs</span></div><div><b>${bans}</b><span>exclus</span></div><div><b>${ADMIN.modif ? nb(total) + ' €' : J.filter(p=>p.enLigne).length}</b><span>${ADMIN.modif ? 'en jeu' : 'en ligne'}</span></div>`;
     const list = J.filter(p => p.pseudo.toLowerCase().includes(q));
     $('#aList').innerHTML = list.map(p => { const moi = p.pseudoBas === (D.pseudo||'').toLowerCase();
-      return `<div class="pl${p.banni?' ban':''}" data-id="${esc(p.pseudoBas)}"><div class="pl-top"><span class="pl-av">${esc((p.pseudo[0]||'?').toUpperCase())}</span><div><b>${esc(p.pseudo)}${moi?' (toi)':''}</b>${p.banni?'<span class="ban-tag">EXCLU</span>':''}<small>${p.enLigne ? 'en ligne' : 'vu ' + esc(tempsEcoule(p.vuLe))}</small></div>${ADMIN.modif?`<span class="bal">${eurx(Number(p.solde)||0)}</span>`:''}</div>
+      return `<div class="pl${p.banni?' ban':''}" data-id="${esc(p.pseudoBas)}"><div class="pl-top"><span class="pl-av">${esc((p.pseudo[0]||'?').toUpperCase())}</span><div><b>${esc(p.pseudo)}${moi?' (toi)':''}</b>${p.banni?'<span class="ban-tag">EXCLU</span>':''}<small>${p.enLigne ? (p.activite ? 'en ligne · ' + esc(p.activite) : 'en ligne · dans le menu') : 'vu ' + esc(tempsEcoule(p.vuLe))}</small></div>${ADMIN.modif?`<span class="bal">${eurx(Number(p.solde)||0)}</span>`:''}</div>
         ${ADMIN.modif ? `<div class="pl-act"><button class="mini g" data-a="add">+ Ajouter</button><button class="mini r" data-a="sub">− Retirer</button><button class="mini" data-a="zero">Solde à 0</button>
         <button class="mini${p.banni?' g':' r'}" data-a="ban" ${moi?'disabled':''}>${p.banni?'Réintégrer':'Exclure'}</button><button class="mini r" data-a="del" ${moi?'disabled':''}>Supprimer</button></div>` : ''}</div>`; }).join('') || '<p class="note">Aucun joueur trouvé.</p>';
   };
@@ -17859,6 +17860,27 @@ function sheetAdmin(){
         render();
       };
     }
+    render();
+  });
+}
+
+/* ---------- code des gros gains : effacer ce qui s'affiche sur l'accueil ---------- */
+const GAINS_ADMIN = { code:null, liste:[] };
+function sheetGains(){
+  const render = () => {
+    const L = GAINS_ADMIN.liste, el = $('#gList'); if (!el) return;
+    el.innerHTML = L.length ? L.map(g => `<div class="pl" data-id="${g.id}"><div class="pl-top"><span class="pl-av">${esc((g.pseudo[0]||'?').toUpperCase())}</span><div><b>${esc(g.pseudo)}</b><small>${eurx(g.m)} sur ${esc(g.jeu)} · ${esc(tempsEcoule(new Date(g.t).toISOString()))}</small></div></div>
+      <div class="pl-act"><button class="mini r" data-g="un">Effacer ce gain</button><button class="mini r" data-g="tous">Effacer tous les gains de ${esc(g.pseudo)}</button></div></div>`).join('')
+      : '<p class="note">Aucun gain affiché sur l\'accueil pour l\'instant.</p>';
+  };
+  openSheet('Gros gains de l\'accueil', `<p class="note">Voici les gains affichés dans le bandeau de l'accueil. Efface ceux que tu ne veux plus voir.</p><div id="gList"></div>`, () => {
+    $('#gList').onclick = async e => {
+      const b = e.target.closest('button[data-g]'); if (!b) return;
+      const g = GAINS_ADMIN.liste.find(x => String(x.id) === b.closest('.pl').dataset.id); if (!g) return;
+      const r = await envoyer('gains-effacer', { code: GAINS_ADMIN.code, id: g.id, pseudo: b.dataset.g === 'tous' ? g.pseudo : '' });
+      if (!r || r.erreur) return toast(r && r.erreur ? r.erreur : 'Erreur réseau');
+      GAINS_ADMIN.liste = r.gains || []; D.gains = GAINS_ADMIN.liste; toast('Effacé de l\'accueil'); render();
+    };
     render();
   });
 }

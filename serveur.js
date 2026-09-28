@@ -117,13 +117,17 @@ function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
    sans une serie de coups exceptionnelle).                              */
 const TOWER_NIVEAUX  = 30;
 const TOWER_MULT_MAX = 5000;
+const TOWER_GAIN_MAX = 30000;   // on ne gagne jamais plus de 30 000 EUR sur une tour
 
 function towerRollFactor() {
   const r = Math.random();
-  if (r < 0.62) return towerRand(0.25, 0.95);   // perte partielle : le cas le plus frequent
-  if (r < 0.87) return towerRand(0.95, 1.30);   // quasi neutre
-  if (r < 0.97) return towerRand(1.30, 2.00);   // bon coup
-  return towerRand(2.00, 3.60);                  // gros coup, rare
+  /* refonte v3 : ~98 % de retour en encaissant apres 3 etages (avant : injouable).
+     30 000 EUR (le plafond) : environ 1 chance sur 200 000 a la mise maxi.
+     Monter reste risque, mais une bonne serie peut vraiment payer. */
+  if (r < 0.42) return towerRand(0.72, 0.95);   // perte partielle
+  if (r < 0.86) return towerRand(0.95, 1.12);   // quasi neutre
+  if (r < 0.98) return towerRand(1.12, 1.45);   // bon coup
+  return towerRand(1.45, 1.90);                  // gros coup, rare
 }
 
 /* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l\'issue :
@@ -2022,7 +2026,7 @@ function planToledo(graine){
   let s=graine>>>0;
   const r=()=>{ s=(s+0x6D2B79F5)|0; let t=Math.imul(s^(s>>>15),1|s);
     t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
-  const PAS=50, VOIE=3.5, DIST=3500;
+  const PAS=50, VOIE=3.5, DIST=3000;
   const voieX=k=>(k-1.5)*VOIE;
   const objets=[], bananes=[];
   for(let d=260; d<DIST-160; d+=380+r()*140)
@@ -2406,6 +2410,7 @@ function corpsJSON(req) {
    ajustement admin) est range a part. Mises -> points de niveau (100 par
    euro mise). Gains de 5 EUR ou plus -> fil des gros gains de l'accueil. */
 const GROS_GAINS = [];
+let grosGainsId = 0;
 const NOMS_ROUTES = [
   ['peche', 'Pêche avec Jeffrey', 'peche'], ['poulet', 'Le Poulet', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
@@ -2425,7 +2430,18 @@ function noterMouvement(compte, nom, type, m, statut) {
   if (!statut && d && !d.statut && d.jeu === nom && d.type === type && (d.m > 0) === (m > 0) && t - d.t < 30 * 60000) { d.m = sous(d.m + m); d.t = t; }
   else { compte.tx.unshift(statut ? { t, type, jeu: nom, m, statut } : { t, type, jeu: nom, m }); if (compte.tx.length > 60) compte.tx.length = 60; }
   if (type === 'jeu' && m < 0) compte.points = (compte.points | 0) + Math.round(-m * 100);
-  if (type === 'jeu' && m >= 5) { GROS_GAINS.unshift({ pseudo: compte.pseudo, jeu: nom, m, t }); if (GROS_GAINS.length > 15) GROS_GAINS.length = 15; }
+  if (type === 'jeu' && m >= 5) { GROS_GAINS.unshift({ id: ++grosGainsId, pseudo: compte.pseudo, jeu: nom, m, t }); if (GROS_GAINS.length > 15) GROS_GAINS.length = 15; }
+}
+/* ce que le joueur est en train de faire, d'apres la derniere route qu'il utilise */
+function activiteDe(c, route) {
+  const r = route.slice(5);
+  if (['moi', 'salon', 'accueil', 'code', 'bannir', 'supprimer-compte', 'modifier-solde', 'gains-effacer', 'perso', 'retrait', 'quitter', 'roulette-quitter'].includes(r)) return null;
+  if (r === 'etat' || r === 'asseoir' || r === 'miser' || r === 'action' || r.startsWith('table-')) { const i = siegeDe(c); return i && i.table && i.table.jeu === 'poker' ? 'joue au Poker' : 'joue au Blackjack'; }
+  if (r.startsWith('poker')) return 'joue au Poker';
+  if (r.startsWith('roulette')) return 'joue à la Roulette';
+  if (r === 'peche') return 'pêche avec Jeffrey';
+  if (r.startsWith('bois')) return 'joue au Périph (Bois)';
+  const n = nomDeRoute(route); return n.nom === 'Casino' ? null : 'joue à ' + n.nom;
 }
 function suivreSolde(res) {
   const s = res.__suivi; if (!s) return; res.__suivi = null;
@@ -2501,7 +2517,9 @@ function listeJoueursAvecPresence(liste) {
         break;
       }
     }
-    return { pseudo: j.pseudo, pseudoBas: j.pseudoBas, creeLe: j.creeLe || null, vuLe: vuLe, enLigne: enLigne };
+    let activite = null;
+    for (const c of comptes.values()) if (c.pseudoBas === j.pseudoBas && enLigne && c.activite && maintenant - c.activite.t < 90000) activite = c.activite.nom;
+    return { pseudo: j.pseudo, pseudoBas: j.pseudoBas, creeLe: j.creeLe || null, vuLe: vuLe, enLigne: enLigne, activite: activite };
   });
   joueurs.sort((a, b) => new Date(b.vuLe || 0) - new Date(a.vuLe || 0));
   return joueurs;
@@ -3406,10 +3424,21 @@ const serveur = http.createServer(async (req, res) => {
     // un compte banni ne peut plus rien faire, meme avec une session encore ouverte
     if (compte.banni) return repondre(res, 403, { erreur: 'Ce compte a ete banni du casino.' });
     res.__suivi = { compte, route, avant: compte.solde };
+    { const a = activiteDe(compte, route); if (a) compte.activite = { nom: a, t: Date.now() }; }
 
     // --- l'accueil : les vrais gros gains recents de tout le casino ---
     if (route === '/api/accueil') {
       return repondre(res, 200, { gains: GROS_GAINS.slice(0, 10).map(g => ({ pseudo: g.pseudo, jeu: g.jeu, m: g.m })) });
+    }
+
+    // --- effacer un gros gain (ou tous ceux d'un joueur) du bandeau de l'accueil : code KQ8 ---
+    if (route === '/api/gains-effacer' && req.method === 'POST') {
+      if (String(body.code || '').trim().toLowerCase().replace(/\s+/g, '') !== 'kq8') return repondre(res, 403, { erreur: 'Code invalide.' });
+      const qui = String(body.pseudo || '');
+      for (let i = GROS_GAINS.length - 1; i >= 0; i--) {
+        if (qui ? GROS_GAINS[i].pseudo === qui : GROS_GAINS[i].id === Number(body.id)) GROS_GAINS.splice(i, 1);
+      }
+      return repondre(res, 200, { ok: true, gains: GROS_GAINS.slice(0, 10) });
     }
 
     // --- retrait (argent fictif) : le solde baisse, rien d'autre ne se passe.
@@ -4607,9 +4636,9 @@ const serveur = http.createServer(async (req, res) => {
         });
       }
 
-      // le sommet (niveau TOWER_NIVEAUX, ou le plafond TOWER_MULT_MAX) : on encaisse d\'office
-      if (r.sommet) {
-        const gain = sous(tour.mise * tour.totalMult);
+      // le sommet (niveau TOWER_NIVEAUX, plafond TOWER_MULT_MAX, ou 30 000 EUR atteints) : on encaisse d\'office
+      if (r.sommet || tour.mise * tour.totalMult >= TOWER_GAIN_MAX) {
+        const gain = Math.min(TOWER_GAIN_MAX, sous(tour.mise * tour.totalMult));
         compte.solde = sous(compte.solde + gain);
         compte.tower = null;
         const info = siegeDe(compte);
@@ -4644,7 +4673,7 @@ const serveur = http.createServer(async (req, res) => {
       if (!tour) return repondre(res, 409, { erreur: 'Aucune tour en cours.' });
       if (tour.floors.length < 1) return repondre(res, 400, { erreur: 'Posez au moins un etage avant d\'encaisser.' });
 
-      const gain = sous(tour.mise * Math.min(TOWER_MULT_MAX, tour.totalMult));   // plafond dur x100
+      const gain = Math.min(TOWER_GAIN_MAX, sous(tour.mise * Math.min(TOWER_MULT_MAX, tour.totalMult)));
       compte.solde = sous(compte.solde + gain);
       compte.tower = null;
 
@@ -4696,6 +4725,9 @@ const serveur = http.createServer(async (req, res) => {
       // quelqu\'un d\'autre les connait : c\'est la seule protection, donc ils
       // ne doivent JAMAIS apparaitre dans index.html, ni dans un fichier
       // partage avec quelqu\'un d\'autre, ni etre dits a voix haute.
+      if (normalise === 'kq8') {                     // les gros gains de l'accueil, pour pouvoir en effacer
+        return repondre(res, 200, { ok: true, genre: 'gains', gains: GROS_GAINS.slice(0, 10) });
+      }
       if (normalise === 'martins') {                 // liste des comptes, lecture seule
         const liste = await Carnet.listerJoueurs();
         return repondre(res, 200, { ok: true, genre: 'liste', joueurs: listeJoueursAvecPresence(liste) });
