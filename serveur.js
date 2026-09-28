@@ -231,10 +231,11 @@ function pouletMult(nbOs, k) {
 }
 
 /* Koala Road (chicken road) : a chaque voie franchie, une chance fixe de
-   croiser une voiture. Cotes identiques a MyStake : Faible 1/6, Moyen
-   1/9, Eleve 1/12, Casse-cou 1/15. Cote de la voie k = 0,99 / (1-p)^k. */
-const KROAD_RISQUES  = { faible: 1 / 6, moyen: 1 / 9, eleve: 1 / 12, cassecou: 1 / 15 };
-const KROAD_VOIES_MAX = 60;
+   se faire ecraser. Faible 1/25, Moyen 3/25, Eleve 5/25, Casse-cou 10/25
+   (plus le risque est grand, plus la cote monte vite). 20 voies.
+   Cote de la voie k = 0,99 / (1-p)^k. */
+const KROAD_RISQUES  = { faible: 1 / 25, moyen: 3 / 25, eleve: 5 / 25, cassecou: 10 / 25 };
+const KROAD_VOIES_MAX = 20;
 function kroadMult(risque, k) { const p = KROAD_RISQUES[risque]; return 0.99 * Math.pow(1 / (1 - p), k); }
 
 /* ===================================================================
