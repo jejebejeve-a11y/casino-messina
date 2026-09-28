@@ -231,11 +231,10 @@ function pouletMult(nbOs, k) {
 }
 
 /* Koala Road (chicken road) : a chaque voie franchie, une chance fixe de
-   se faire ecraser. Faible 1/25, Moyen 3/25, Eleve 5/25, Casse-cou 10/25
-   (plus le risque est grand, plus la cote monte vite). 20 voies.
-   Cote de la voie k = 0,99 / (1-p)^k. */
-const KROAD_RISQUES  = { faible: 1 / 25, moyen: 3 / 25, eleve: 5 / 25, cassecou: 10 / 25 };
-const KROAD_VOIES_MAX = 20;
+   croiser une voiture. Cotes identiques a MyStake : Faible 1/6, Moyen
+   1/9, Eleve 1/12, Casse-cou 1/15. Cote de la voie k = 0,99 / (1-p)^k. */
+const KROAD_RISQUES  = { faible: 1 / 6, moyen: 1 / 9, eleve: 1 / 12, cassecou: 1 / 15 };
+const KROAD_VOIES_MAX = 60;
 function kroadMult(risque, k) { const p = KROAD_RISQUES[risque]; return 0.99 * Math.pow(1 / (1 - p), k); }
 
 /* ===================================================================
@@ -343,6 +342,11 @@ const Carnet = {
       voiturePremium: !!compte.voiturePremium,
       perso:     compte.perso || ancienne.perso || null,
       codesUtilises: Array.isArray(compte.codesUtilises) ? compte.codesUtilises : (ancienne.codesUtilises || []),
+      points:    compte.points | 0,
+      kroadVoies: compte.kroadVoies | 0,
+      tx:        Array.isArray(compte.tx) ? compte.tx.slice(0, 60) : (ancienne.tx || []),
+      pecheJour: compte.pecheJour || null,
+      pecheAuj:  compte.pecheAuj | 0,
       vuLe:      new Date().toISOString()
     });
     this.memoire.set(compte.pseudoBas, fiche);
@@ -2394,7 +2398,52 @@ function corpsJSON(req) {
     });
   });
 }
+/* ---------- historique, points et gros gains ----------
+   Chaque requete note le solde avant ; a la reponse, la difference est
+   rangee dans l'historique du joueur sous le nom du jeu. Ce qui a bouge
+   ENTRE deux requetes (blackjack et roulette se reglent sur minuterie,
+   ajustement admin) est range a part. Mises -> points de niveau (100 par
+   euro mise). Gains de 5 EUR ou plus -> fil des gros gains de l'accueil. */
+const GROS_GAINS = [];
+const NOMS_ROUTES = [
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['poulet', 'Le Poulet', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['kroad', 'Koala Road', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
+  ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
+  ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
+  ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+function nomDeRoute(route) {
+  const r = route.slice(5);
+  for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
+  return { nom: 'Casino', type: 'jeu' };
+}
+function noterMouvement(compte, nom, type, m, statut) {
+  m = sous(m); if (!m) return;
+  if (!Array.isArray(compte.tx)) compte.tx = [];
+  const t = Date.now(), d = compte.tx[0];
+  // les petits mouvements repetes (poissons, plinko...) se cumulent sur une seule ligne
+  if (!statut && d && !d.statut && d.jeu === nom && d.type === type && (d.m > 0) === (m > 0) && t - d.t < 30 * 60000) { d.m = sous(d.m + m); d.t = t; }
+  else { compte.tx.unshift(statut ? { t, type, jeu: nom, m, statut } : { t, type, jeu: nom, m }); if (compte.tx.length > 60) compte.tx.length = 60; }
+  if (type === 'jeu' && m < 0) compte.points = (compte.points | 0) + Math.round(-m * 100);
+  if (type === 'jeu' && m >= 5) { GROS_GAINS.unshift({ pseudo: compte.pseudo, jeu: nom, m, t }); if (GROS_GAINS.length > 15) GROS_GAINS.length = 15; }
+}
+function suivreSolde(res) {
+  const s = res.__suivi; if (!s) return; res.__suivi = null;
+  const c = s.compte, apres = c.solde;
+  if (typeof c.soldeSuivi !== 'number') c.soldeSuivi = s.avant;
+  const hors = sous(s.avant - c.soldeSuivi);
+  if (hors) {
+    let nom = c.soldeHorsNom || 'Casino', type = c.soldeHorsNom ? 'admin' : 'jeu';
+    if (!c.soldeHorsNom) { const info = siegeDe(c); if (info && info.table) nom = info.table.jeu === 'poker' ? 'Poker' : 'Blackjack'; else if (c.tableRoulette) nom = 'Roulette'; }
+    noterMouvement(c, nom, type, hors);
+  }
+  c.soldeHorsNom = null;
+  const delta = sous(apres - s.avant);
+  if (delta && !s.deja) { const n = nomDeRoute(s.route); noterMouvement(c, n.nom, n.type, delta); }
+  c.soldeSuivi = apres;
+}
+
 function repondre(res, code, objet) {
+  suivreSolde(res);
   const corps = JSON.stringify(objet);
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -3355,6 +3404,28 @@ const serveur = http.createServer(async (req, res) => {
     if (!compte) return repondre(res, 401, { erreur: 'session expiree' });
     // un compte banni ne peut plus rien faire, meme avec une session encore ouverte
     if (compte.banni) return repondre(res, 403, { erreur: 'Ce compte a ete banni du casino.' });
+    res.__suivi = { compte, route, avant: compte.solde };
+
+    // --- l'accueil : les vrais gros gains recents de tout le casino ---
+    if (route === '/api/accueil') {
+      return repondre(res, 200, { gains: GROS_GAINS.slice(0, 10).map(g => ({ pseudo: g.pseudo, jeu: g.jeu, m: g.m })) });
+    }
+
+    // --- retrait (argent fictif) : le solde baisse, rien d'autre ne se passe.
+    // Seuls le montant et les 4 derniers chiffres arrivent ici : le reste de
+    // la carte ne quitte jamais la page. ---
+    if (route === '/api/retrait' && req.method === 'POST') {
+      const montant = sous(Number(body.montant) || 0);
+      const fin = /^\d{4}$/.test(String(body.fin || '')) ? String(body.fin) : '????';
+      if (!(montant >= 1)) return repondre(res, 400, { erreur: 'Retrait minimum : 1,00 €.' });
+      if (montant > compte.solde) return repondre(res, 400, { erreur: 'Tu ne peux pas retirer plus que ton solde.' });
+      compte.solde = sous(compte.solde - montant);
+      noterMouvement(compte, 'Retrait vers carte •••• ' + fin, 'retrait', -montant, 'En traitement · 48 h');
+      res.__suivi.deja = true;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, montant, solde: compte.solde });
+    }
 
     // --- liste des tables ---
     if (route === '/api/salon') {
@@ -4285,6 +4356,7 @@ const serveur = http.createServer(async (req, res) => {
         return repondre(res, 200, { ok: true, heurte: true, voie: k.voie + 1, perdu: k.mise, solde: compte.solde });
       }
       k.voie++;
+      compte.kroadVoies = (compte.kroadVoies | 0) + 1;
       const mult = kroadMult(k.risque, k.voie);
       const gain = Math.min(10000, sous(k.mise * mult));
       if (k.voie >= KROAD_VOIES_MAX || gain >= 10000) {      // trop loin ou plafond : on encaisse d'office
@@ -4740,7 +4812,7 @@ const serveur = http.createServer(async (req, res) => {
 
       await Carnet.definirSolde(cibleSol, nouveauSolde);
       for (const c of comptes.values()) {
-        if (c.pseudoBas === cibleSol) c.solde = nouveauSolde;
+        if (c.pseudoBas === cibleSol) { c.soldeHorsNom = 'Ajustement admin'; c.solde = nouveauSolde; }
       }
       return repondre(res, 200, { ok: true, pseudo: ficheSol.pseudo, solde: nouveauSolde });
     }
@@ -5086,6 +5158,9 @@ const serveur = http.createServer(async (req, res) => {
         periphs:  compte.periphs | 0,
         portes:   compte.portes  | 0,
         roulettes: compte.roulettes | 0,
+        points:   compte.points | 0,
+        kroadVoies: compte.kroadVoies | 0,
+        tx:       (compte.tx || []).slice(0, 60),
         voiturePremium: !!compte.voiturePremium,
         penalty:  compte.penalty
           ? { mise: compte.penalty.mise, palier: compte.penalty.palier }
@@ -5145,6 +5220,12 @@ function ouvrirSession(fiche) {
     perso:     fiche.perso || null,
     voiturePremium: !!fiche.voiturePremium,
     codesUtilises: Array.isArray(fiche.codesUtilises) ? fiche.codesUtilises.slice() : [],
+    points:    fiche.points | 0,
+    kroadVoies: fiche.kroadVoies | 0,
+    tx:        Array.isArray(fiche.tx) ? fiche.tx.slice(0, 60) : [],
+    pecheJour: fiche.pecheJour || null,
+    pecheAuj:  fiche.pecheAuj | 0,
+    soldeSuivi: sous(Number(fiche.solde)),
     banni:     !!fiche.banni,
     penalty: null,                       // aucune serie de penaltys en cours
     periph:  null,                       // aucune course de periph en cours
