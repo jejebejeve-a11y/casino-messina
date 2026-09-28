@@ -2518,11 +2518,6 @@ body.pont-actif{overflow:hidden}
             <div class="cj-texte">Une pyramide de clous, des balles qui rebondissent jusqu’en bas. Le centre paie peu, les bords jusqu’à mille fois la balle. De 8 à 16 rangées, trois niveaux de risque, jusqu’à 20 balles.</div>
             <div class="cj-pied">Jouer</div>
           </button>
-          <button class="carte-jeu" data-jeu="razzia">
-            <div class="cj-titre serif">Razzia</div>
-            <div class="cj-texte">La vraie carte de Paris. Pose ta base sur un vrai bâtiment, arme tes koalas, tiens un poste (Bat B ou l'un des quatre autres, éparpillés sur la carte), attaque des camps de bandits pour du butin, et va piller les autres joueurs par les rues ou par le métro.</div>
-            <div class="cj-pied">Jouer</div>
-          </button>
         </div>
       </div>
 
@@ -17499,8 +17494,7 @@ const MINI = [
   { id:'tower',   nom:'TOWER RUSH' },
   { id:'pont',    nom:'PONT DE CRISTAL' },
   { id:'penalty', nom:'PENALTY',        badge:'x100' },
-  { id:'periph',  nom:'LE PÉRIPH' },
-  { id:'razzia',  nom:'RAZZIA' } ];
+  { id:'periph',  nom:'LE PÉRIPH' } ];
 const TABLES_ART = [ { id:'blackjack', nom:'BLACKJACK' }, { id:'roulette', nom:'ROULETTE' }, { id:'poker', nom:'POKER' } ];
 function gcard(g){ return `<button class="gcard" data-game="${g.id}" aria-label="${esc(g.nom)}">${svg(g.id)}${g.badge?`<span class="badge${g.badge==='NOUVEAU'?' new':''}">${g.badge}</span>`:''}<span class="gt">${g.nom}</span><span class="shine"></span></button>`; }
 
