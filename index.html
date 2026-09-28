@@ -2502,6 +2502,11 @@ body.pont-actif{overflow:hidden}
             <div class="cj-texte">Vingt-cinq cloches, des poulets et des os. Choisis ton nombre d’os, soulève les cloches une à une et encaisse avant de tomber sur l’os. Jusqu’à 10&nbsp;000&nbsp;€.</div>
             <div class="cj-pied">Jouer</div>
           </button>
+          <button class="carte-jeu" data-jeu="kroad">
+            <div class="cj-titre serif">Koala Road</div>
+            <div class="cj-texte">Ton koala traverse la route voie par voie. Une voiture peut débarquer à tout moment. Quatre niveaux de risque, encaisse quand tu veux avant l’accident.</div>
+            <div class="cj-pied">Jouer</div>
+          </button>
           <button class="carte-jeu" data-jeu="plinko">
             <div class="cj-titre serif">Plinko</div>
             <div class="cj-texte">Une pyramide de clous, des balles qui rebondissent jusqu’en bas. Le centre paie peu, les bords jusqu’à mille fois la balle. De 8 à 16 rangées, trois niveaux de risque, jusqu’à 20 balles.</div>
@@ -3768,6 +3773,7 @@ function fermerJeu() {
   if (window.TOUR && TOUR.ouvert) TOUR.fermer();
   if (window.POULET && POULET.ouvert) POULET.fermer();
   if (window.PLINKO && PLINKO.ouvert) PLINKO.fermer();
+  if (window.KROAD && KROAD.ouvert) KROAD.fermer();
   if (window.PONT && PONT.ouvert) PONT.fermer(true);
   if (window.RAZZIA && RAZZIA.ouvert) RAZZIA.fermer();
 }
@@ -3782,6 +3788,10 @@ function ouvrirJeu(nom) {
   }
   if (nom === 'razzia') {                 // Razzia : la carte de Paris en plein ecran
     if (window.RAZZIA && RAZZIA.ouvrir) RAZZIA.ouvrir();
+    return;
+  }
+  if (nom === 'kroad') {                  // Koala Road, plein ecran
+    if (window.KROAD && KROAD.ouvrir) KROAD.ouvrir();
     return;
   }
   if (nom === 'plinko') {                 // Plinko, plein ecran
@@ -9120,6 +9130,317 @@ PLINKO.fermer = function () {
   PLINKO.ouvert = false; racine.hidden = true; document.body.classList.remove('poulet-actif');
   balles = []; S.enVol = 0; S.enAttente = 0; chocs.clear(); casesTouchees.clear(); flottants = [];
   R('pkRegles').hidden = true;
+};
+})();
+</script>
+
+<!-- ===== LE KOALA ROAD ===== -->
+<style>
+.kr-route{position:relative;border-radius:20px;overflow:hidden;background:linear-gradient(180deg,#16283c,#0d1826);border:1px solid rgba(116,228,255,.14);box-shadow:0 24px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05)}
+#krCanvas{display:block;width:100%;aspect-ratio:1/.72}
+#krEtinc{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.kr-risques{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.kr-risques button{padding:10px 0;border-radius:10px;border:1px solid #24405a;background:#0b1723;color:var(--txt);font:800 12px 'Inter',sans-serif;cursor:pointer}
+.kr-risques button.choisi{background:linear-gradient(180deg,#2d5273,#24425e);border-color:var(--ice);color:#fff;box-shadow:0 0 12px rgba(116,228,255,.25)}
+.kr-risques button:disabled{opacity:.45}
+.kr-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
+
+<div id="kroadPlein" class="poulet-plein" hidden>
+  <div class="pl-cadre">
+    <div class="pl-haut">
+      <button class="pl-rond" id="krQuitter" aria-label="Retour aux jeux">‹</button>
+      <div class="pl-logo"><b>Koala Road</b></div>
+      <button class="pl-rond" id="krSon" aria-label="Son"></button>
+      <button class="pl-rond" id="krAide" aria-label="Règles">?</button>
+      <div class="pl-solde"><small>Solde</small><span id="krSolde">0,00 €</span></div>
+    </div>
+
+    <div class="pl-panneau" style="padding:12px 12px 6px">
+      <button class="pl-go" id="krGo"><span id="krGoTxt">Traverser</span><small id="krGoSous" hidden></small></button>
+      <div class="pl-gain-ligne" style="margin-top:2px"><span>Gain en cours <span id="krGainX"></span></span><b id="krGain">0,00 €</b></div>
+    </div>
+
+    <div class="pk-histo" id="krRail"></div>
+    <div class="kr-route" id="krRoute">
+      <canvas id="krCanvas"></canvas>
+      <canvas id="krEtinc"></canvas>
+    </div>
+
+    <div class="pl-panneau">
+      <div>
+        <div class="pl-lab">Mise <em>0,20 € – 1 000 €</em></div>
+        <div class="pl-mise">
+          <label>€</label>
+          <button type="button" class="pl-mise-val" id="krMise">1,00</button>
+          <button id="krMoitie">½</button><button id="krDouble">2×</button><button id="krMax">MAX</button>
+        </div>
+      </div>
+      <div>
+        <div class="pl-lab">Risque <em id="krDesc">1 chance sur 6 par voie</em></div>
+        <div class="kr-risques">
+          <button data-r="faible">Faible</button><button data-r="moyen">Moyen</button>
+          <button data-r="eleve">Élevé</button><button data-r="cassecou">Casse-cou</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pl-regles" id="krRegles" hidden><div>
+    <h3>Règles du Koala Road</h3>
+    <p>Ton koala traverse une route voie par voie. À chaque voie, une voiture peut débarquer n'importe quand : rien n'est décidé à l'avance, c'est tiré au moment où tu avances.</p>
+    <p>Chaque voie franchie augmente ton gain. Une voiture, et la mise est perdue. Encaisse quand tu veux.</p>
+    <p>Quatre niveaux de risque, chacun avec sa chance de croiser une voiture par voie : Faible 1 sur 6, Moyen 1 sur 9, Élevé 1 sur 12, Casse-cou 1 sur 15. Retour au joueur : 99 %.</p>
+    <p>Mise de 0,20 € à 1 000 €, gain plafonné à 10 000 € par traversée.</p>
+    <button id="krReglesOk">Compris</button>
+  </div></div>
+  <div class="pl-toast" id="krToast"></div>
+</div>
+
+<script>
+/* ===== LE KOALA ROAD =====
+   Le serveur (routes /api/kroad-*) tire, voie par voie et au moment ou
+   le joueur avance, si une voiture arrive. La page ne fait qu'animer
+   la reponse : rien n'est connu ni decide a l'avance cote client. */
+window.KROAD = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const RISQUES = { faible: { p: 1/6, nom: '1 chance sur 6 par voie' }, moyen: { p: 1/9, nom: '1 chance sur 9 par voie' },
+  eleve: { p: 1/12, nom: '1 chance sur 12 par voie' }, cassecou: { p: 1/15, nom: '1 chance sur 15 par voie' } };
+const VOIES_MAX = 60;
+const R = id => document.getElementById(id);
+const racine = R('kroadPlein'), cv = R('krCanvas'), c = cv.getContext('2d'), route = R('krRoute');
+const eclats = window.Etincelles(R('krEtinc'));
+const S = { phase: 'repos', risque: 'faible', mise: 1, voie: 0, gain: 0, occupe: false };
+let son = true; try { son = localStorage.getItem('pouletSon') !== '0'; } catch (e) {}
+
+/* ---------- sons ---------- */
+let ac = null;
+function ctx() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; }
+function note(f, d, type, vol, retard, glisse) {
+  const a = son && ctx(); if (!a) return;
+  const t = a.currentTime + (retard || 0), o = a.createOscillator(), g = a.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (glisse) o.frequency.exponentialRampToValueAtTime(glisse, t + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .006); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d + .03);
+}
+function bruit(d, vol, freq) {
+  const a = son && ctx(); if (!a) return;
+  const t = a.currentTime, n = Math.floor(a.sampleRate * d), b = a.createBuffer(1, n, a.sampleRate), ch = b.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.2);
+  const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  f.type = 'bandpass'; f.frequency.value = freq || 900; g.gain.value = vol; s.buffer = b; s.connect(f); f.connect(g); g.connect(a.destination); s.start(t);
+}
+const Son = {
+  clic() { note(1300, .03, 'square', .05); },
+  pas(k) { note(480 * Math.pow(1.05, Math.min(k, 30)), .1, 'triangle', .18); note(720 * Math.pow(1.05, Math.min(k, 30)), .13, 'sine', .1, .04); },
+  klaxon() { note(320, .16, 'sawtooth', .16); note(240, .22, 'sawtooth', .16, .05); },
+  crash() { bruit(.35, .55, 350); note(140, .4, 'sawtooth', .2, 0, 60); },
+  cash() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => note(660 * Math.pow(2, s / 12), .22, 'triangle', .13, i * .055)); note(1760, .6, 'sine', .08, .4); }
+};
+
+/* ---------- geometrie & sprites ---------- */
+let dpr = 1, W = 0, H = 0, lw = 0, koalaX = 0, sKoala = null, sVoiture = null;
+function sprite(w, h, dessin) { const s = document.createElement('canvas'); s.width = Math.ceil(w * dpr); s.height = Math.ceil(h * dpr); const x = s.getContext('2d'); x.scale(dpr, dpr); dessin(x, w, h); return s; }
+function faireSprites() {
+  const t = Math.max(40, lw * .62);
+  sKoala = sprite(t, t, (x, w, h) => {
+    const m = w / 2, cy = h * .58, rc = w * .34;
+    x.fillStyle = 'rgba(0,0,0,.28)'; x.beginPath(); x.ellipse(m, h * .93, w * .3, h * .07, 0, 0, 6.2832); x.fill();
+    x.fillStyle = '#8a97a6'; x.beginPath(); x.arc(m - rc * .92, cy - rc * .95, rc * .42, 0, 6.2832); x.fill();
+    x.fillStyle = '#c8d0da'; x.beginPath(); x.arc(m - rc * .92, cy - rc * .95, rc * .22, 0, 6.2832); x.fill();
+    x.fillStyle = '#8a97a6'; x.beginPath(); x.arc(m + rc * .92, cy - rc * .95, rc * .42, 0, 6.2832); x.fill();
+    x.fillStyle = '#c8d0da'; x.beginPath(); x.arc(m + rc * .92, cy - rc * .95, rc * .22, 0, 6.2832); x.fill();
+    const g = x.createRadialGradient(m - rc * .3, cy - rc * .3, rc * .1, m, cy, rc); g.addColorStop(0, '#aab6c4'); g.addColorStop(1, '#6d7a89');
+    x.fillStyle = g; x.beginPath(); x.arc(m, cy, rc, 0, 6.2832); x.fill();
+    x.fillStyle = '#eef1f4'; x.beginPath(); x.ellipse(m, cy + rc * .18, rc * .62, rc * .5, 0, 0, 6.2832); x.fill();
+    x.fillStyle = '#1c2430'; x.beginPath(); x.arc(m - rc * .32, cy - rc * .08, rc * .1, 0, 6.2832); x.fill();
+    x.beginPath(); x.arc(m + rc * .32, cy - rc * .08, rc * .1, 0, 6.2832); x.fill();
+    x.beginPath(); x.ellipse(m, cy + rc * .28, rc * .16, rc * .11, 0, 0, 6.2832); x.fill();
+  });
+  sVoiture = sprite(t * 1.5, t, (x, w, h) => {
+    const g = x.createLinearGradient(0, h * .2, 0, h * .8); g.addColorStop(0, '#ff5d7e'); g.addColorStop(1, '#9c0c33');
+    x.fillStyle = g; x.beginPath();
+    x.moveTo(w * .05, h * .78); x.lineTo(w * .12, h * .48); x.lineTo(w * .32, h * .3); x.lineTo(w * .7, h * .3);
+    x.lineTo(w * .88, h * .48); x.lineTo(w * .95, h * .78); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(180,225,255,.75)'; x.beginPath(); x.moveTo(w * .34, h * .34); x.lineTo(w * .66, h * .34); x.lineTo(w * .6, h * .48); x.lineTo(w * .4, h * .48); x.closePath(); x.fill();
+    x.fillStyle = '#1a1f28'; x.beginPath(); x.arc(w * .24, h * .8, h * .12, 0, 6.2832); x.fill(); x.beginPath(); x.arc(w * .76, h * .8, h * .12, 0, 6.2832); x.fill();
+    x.fillStyle = '#fff3c4'; x.beginPath(); x.arc(w * .9, h * .58, h * .05, 0, 6.2832); x.fill();
+  });
+}
+function geometrie() {
+  const r = cv.getBoundingClientRect(); if (!r.width) return;
+  dpr = Math.min(2.5, window.devicePixelRatio || 1); W = r.width; H = r.height;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  lw = Math.min(W * .34, H * .62); koalaX = W * .27;
+  faireSprites(); dessiner(performance.now());
+}
+
+/* ---------- circulation decorative (juste de l'ambiance) ---------- */
+let trafic = [];
+function semerTrafic() { trafic = []; for (let i = 0; i < 5; i++) trafic.push({ x: Math.random() * 3 - 1, v: .00018 + Math.random() * .00025, y: .3 + Math.random() * .5 }); }
+function avancerTrafic(dt) { for (const t of trafic) { t.x += t.v * dt; if (t.x > 1.3) t.x = -1.3 - Math.random(); } }
+
+/* ---------- animation de deplacement ---------- */
+let anim = null, secousse = 0, flashT = 0, voitureImpact = null, raf = 0;
+function lancerAnim(reussi) {
+  anim = { t0: performance.now(), d: reussi ? 360 : 480, reussi };
+  if (!reussi) { secousse = performance.now(); voitureImpact = { x0: koalaX + lw * 1.4, x1: koalaX, t0: performance.now(), d: 260 }; }
+}
+function dessiner(t) {
+  if (!W) return;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  let decal = 0, saut = 0;
+  if (anim) { const u = Math.min(1, (t - anim.t0) / anim.d); const e = 1 - Math.pow(1 - u, 3);
+    if (anim.reussi) { decal = e * lw; saut = Math.sin(u * Math.PI) * lw * .28; }
+    if (u >= 1) anim = null;
+  }
+  let sx = -8;
+  if (secousse) { const a = (t - secousse) / 260; if (a < 1) sx = Math.sin(a * 40) * 7 * (1 - a); else secousse = 0; }
+  c.save(); c.translate(sx, 0);
+  // route
+  const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1c3350'); g.addColorStop(1, '#0e1c2c'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+  c.fillStyle = 'rgba(255,255,255,.05)'; c.fillRect(0, 0, W, H * .12); c.fillRect(0, H * .88, W, H * .12);
+  const decalPix = -decal;
+  c.save(); c.beginPath(); c.rect(0, 0, W, H); c.clip();
+  for (let i = -2; i < Math.ceil(W / lw) + 2; i++) {
+    const lx = koalaX + i * lw + decalPix;
+    c.strokeStyle = 'rgba(255,255,255,.16)'; c.setLineDash([10, 12]); c.lineWidth = 2;
+    c.beginPath(); c.moveTo(lx + lw / 2, 0); c.lineTo(lx + lw / 2, H); c.stroke(); c.setLineDash([]);
+  }
+  // circulation decorative
+  for (const tr of trafic) {
+    const vx = W / 2 + tr.x * W * 1.6, vy = H * tr.y, w = lw * .9, h = lw * .58;
+    c.save(); c.translate(vx, vy); c.scale(tr.v > 0 ? 1 : -1, 1); c.globalAlpha = .8;
+    c.drawImage(sVoiture, -w / 2, -h / 2, w, h); c.restore();
+  }
+  c.restore();
+  // koala
+  const ky = H * .5 - saut, kw = lw * .62;
+  c.drawImage(sKoala, koalaX - kw / 2, ky - kw / 2, kw, kw);
+  // impact
+  if (voitureImpact) {
+    const u = Math.min(1, (t - voitureImpact.t0) / voitureImpact.d);
+    const vx = voitureImpact.x0 + (voitureImpact.x1 - voitureImpact.x0) * u, vw = lw * .95;
+    c.drawImage(sVoiture, vx - vw / 2, ky - vw * .64 / 2, vw, vw * .64);
+    if (u >= 1) voitureImpact = null;
+  }
+  if (flashT) { const a = 1 - (t - flashT) / 500; if (a > 0) { c.fillStyle = 'rgba(227,23,79,' + (a * .5) + ')'; c.fillRect(0, 0, W, H); } else flashT = 0; }
+  c.restore();
+}
+function boucle(t) {
+  avancerTrafic(16);
+  dessiner(t);
+  raf = (anim || voitureImpact || secousse || flashT) ? requestAnimationFrame(boucle) : (raf = 0, setTimeout(() => { if (KROAD.ouvert) { raf = requestAnimationFrame(boucleLente); } }, 0));
+}
+let lenteId = 0;
+function boucleLente(t) { avancerTrafic(16); dessiner(t); if (KROAD.ouvert) lenteId = requestAnimationFrame(boucleLente); }
+function relancerAnimee() { cancelAnimationFrame(lenteId); if (!raf) raf = requestAnimationFrame(boucle); }
+
+/* ---------- affichage ---------- */
+const eu = v => (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const xm = m => 'x' + m.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function multVoie(k) { const p = RISQUES[S.risque].p; return 0.99 * Math.pow(1 / (1 - p), k); }
+function joueur() { try { return (typeof E !== 'undefined' && E && E.joueur) ? E.joueur : null; } catch (e) { return null; } }
+let chronoToast;
+function toast(t) { const el = R('krToast'); el.textContent = t; el.classList.add('voir'); clearTimeout(chronoToast); chronoToast = setTimeout(() => el.classList.remove('voir'), 2600); }
+function poserSolde(v) { const j = joueur(); if (j && typeof v === 'number') { j.solde = v; if (typeof window.majSolde === 'function') window.majSolde(); } R('krSolde').textContent = eu(v ?? (j ? j.solde : 0)); }
+function majRail() {
+  const rail = R('krRail'); let h = '', jusque = Math.max(8, S.voie + 6);
+  for (let k = 1; k <= jusque; k++) { const cl = k <= S.voie ? (k === S.voie ? 'ici' : 'fait') : ''; h += '<div class="' + cl + '">' + xm(Math.floor(multVoie(k) * 100) / 100) + '</div>'; }
+  rail.innerHTML = h;
+  const ici = rail.querySelector('.ici') || rail.children[0];
+  if (ici) rail.scrollLeft = Math.max(0, ici.offsetLeft - rail.clientWidth / 2 + ici.offsetWidth / 2);
+}
+function majPanneau() {
+  const jeu = S.phase === 'jeu';
+  R('krMise').textContent = S.mise.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  ['krMoitie', 'krDouble', 'krMax', 'krMise'].forEach(id => R(id).disabled = jeu || S.occupe);
+  Array.prototype.forEach.call(racine.querySelectorAll('.kr-risques button'), b => { b.classList.toggle('choisi', b.dataset.r === S.risque); b.disabled = jeu || S.occupe; });
+  R('krDesc').textContent = RISQUES[S.risque].nom;
+  R('krGain').textContent = eu(jeu ? S.gain : 0);
+  R('krGainX').textContent = jeu && S.voie ? '(' + xm(Math.floor(multVoie(S.voie) * 100) / 100) + ')' : '';
+  const go = R('krGo'), sous = R('krGoSous');
+  if (!jeu) { R('krGoTxt').textContent = 'Traverser'; sous.hidden = true; go.classList.remove('cash'); go.disabled = S.occupe; }
+  else { R('krGoTxt').textContent = S.voie ? 'Encaisser' : 'Avancer'; if (S.voie) { sous.textContent = eu(S.gain); sous.hidden = false; go.classList.add('cash'); } else { sous.hidden = true; go.classList.remove('cash'); } go.disabled = S.occupe; }
+  majRail();
+}
+
+/* ---------- actions ---------- */
+async function demarrer() {
+  if (S.occupe) return;
+  const j = joueur();
+  if (S.mise > (j ? j.solde : 0)) { toast('Solde insuffisant.'); return; }
+  S.occupe = true; Son.clic(); majPanneau();
+  const r = await envoyer('kroad-demarrer', { mise: S.mise, risque: S.risque });
+  S.occupe = false;
+  if (!r || r.erreur) { toast(r && r.erreur !== 'reseau' ? r.erreur : 'Connexion perdue, réessaie.'); majPanneau(); return; }
+  poserSolde(r.solde);
+  S.phase = 'jeu'; S.voie = 0; S.gain = 0; semerTrafic(); majPanneau(); relancerAnimee();
+}
+async function avancerOuEncaisser() {
+  if (S.phase !== 'jeu' || S.occupe) return;
+  if (S.voie > 0) return encaisser();
+  S.occupe = true; majPanneau();
+  const r = await envoyer('kroad-avancer', {});
+  S.occupe = false;
+  if (!r || r.erreur) { toast(r && r.erreur !== 'reseau' ? r.erreur : 'Connexion perdue, réessaie.'); majPanneau(); return; }
+  if (r.heurte) {
+    lancerAnim(false); relancerAnimee(); Son.klaxon(); setTimeout(() => Son.crash(), 90); flashT = performance.now();
+    if (navigator.vibrate) try { navigator.vibrate(150); } catch (e) {}
+    poserSolde(r.solde); S.phase = 'repos'; S.voie = 0; S.gain = 0; majPanneau();
+    return;
+  }
+  S.voie = r.voie; S.gain = r.gain; lancerAnim(true); relancerAnimee(); Son.pas(S.voie);
+  eclats.eclat(koalaX, route.clientHeight * .5, 10, ['#ffcf5a', '#fff'], 2.5);
+  if (r.fini) { setTimeout(() => Son.cash(), 150); poserSolde(r.solde); S.phase = 'repos'; const g = S.gain; S.voie = 0; S.gain = 0; majPanneau(); toast('Plafond atteint : encaissé ' + eu(g) + ' !'); return; }
+  majPanneau();
+}
+async function encaisser() {
+  if (S.phase !== 'jeu' || !S.voie || S.occupe) return;
+  S.occupe = true; majPanneau();
+  const r = await envoyer('kroad-encaisser', {});
+  S.occupe = false;
+  if (!r || r.erreur) { toast(r && r.erreur !== 'reseau' ? r.erreur : 'Connexion perdue, réessaie.'); majPanneau(); return; }
+  Son.cash(); eclats.eclat(W / 2, H / 2, 70, ['#ffcf5a', '#1fe07a', '#fff'], 6);
+  poserSolde(r.solde); S.phase = 'repos'; S.voie = 0; S.gain = 0; majPanneau();
+}
+function choisirRisque(r) { if (S.phase === 'jeu' || S.occupe) return; S.risque = r; Son.clic(); majPanneau(); }
+const bornerMise = v => Math.max(.2, Math.min(1000, Math.round(v * 100) / 100));
+
+/* ---------- branchements ---------- */
+R('krGo').onclick = () => S.phase === 'jeu' ? avancerOuEncaisser() : demarrer();
+Array.prototype.forEach.call(racine.querySelectorAll('.kr-risques button'), b => b.onclick = () => choisirRisque(b.dataset.r));
+R('krMoitie').onclick = () => { S.mise = bornerMise(S.mise / 2); Son.clic(); majPanneau(); };
+R('krDouble').onclick = () => { S.mise = bornerMise(S.mise * 2); Son.clic(); majPanneau(); };
+R('krMax').onclick = () => { const j = joueur(); S.mise = bornerMise(Math.floor((j ? j.solde : 0) * 100) / 100 || .2); Son.clic(); majPanneau(); };
+R('krMise').onclick = () => { Son.clic(); ClavierMise.ouvrir({ valeur: S.mise, min: .2, max: 1000, son: Son.clic, surValider: v => { S.mise = v; majPanneau(); } }); };
+R('krAide').onclick = () => { Son.clic(); R('krRegles').hidden = false; };
+R('krReglesOk').onclick = () => { R('krRegles').hidden = true; };
+R('krRegles').onclick = e => { if (e.target === R('krRegles')) R('krRegles').hidden = true; };
+function majBoutonSon() { R('krSon').innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/>' + (son ? '<path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>' : '<path d="m16 9 6 6M22 9l-6 6"/>') + '</svg>'; }
+R('krSon').onclick = () => { son = !son; try { localStorage.setItem('pouletSon', son ? '1' : '0'); } catch (e) {} majBoutonSon(); Son.clic(); };
+R('krQuitter').onclick = () => KROAD.fermer();
+window.addEventListener('resize', () => { if (KROAD.ouvert) geometrie(); });
+
+KROAD.ouvrir = async function () {
+  KROAD.ouvert = true; racine.hidden = false; document.body.classList.add('poulet-actif');
+  try { son = localStorage.getItem('pouletSon') !== '0'; } catch (e) {}
+  majBoutonSon(); poserSolde(); S.phase = 'repos'; S.occupe = true; semerTrafic(); majPanneau();
+  requestAnimationFrame(() => { geometrie(); relancerAnimee(); });
+  const r = await envoyer('kroad-etat', {});
+  S.occupe = false;
+  if (r && r.ok && r.enCours) {
+    S.phase = 'jeu'; S.risque = r.risque; S.mise = r.mise; S.voie = r.voie; S.gain = Math.min(10000, Math.round(r.mise * r.mult * 100) / 100);
+    toast('Ta traversée en cours a été reprise.');
+  }
+  if (r && typeof r.solde === 'number') poserSolde(r.solde);
+  majPanneau();
+};
+KROAD.fermer = function () {
+  KROAD.ouvert = false; racine.hidden = true; document.body.classList.remove('poulet-actif');
+  cancelAnimationFrame(raf); cancelAnimationFrame(lenteId); raf = 0; lenteId = 0;
+  R('krRegles').hidden = true;
 };
 })();
 </script>

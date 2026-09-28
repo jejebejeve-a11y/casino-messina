@@ -230,6 +230,13 @@ function pouletMult(nbOs, k) {
   return m;   // brut : le gain est arrondi au centime, l'affichage tronque a 2 decimales
 }
 
+/* Koala Road (chicken road) : a chaque voie franchie, une chance fixe de
+   croiser une voiture. Cotes identiques a MyStake : Faible 1/6, Moyen
+   1/9, Eleve 1/12, Casse-cou 1/15. Cote de la voie k = 0,99 / (1-p)^k. */
+const KROAD_RISQUES  = { faible: 1 / 6, moyen: 1 / 9, eleve: 1 / 12, cassecou: 1 / 15 };
+const KROAD_VOIES_MAX = 60;
+function kroadMult(risque, k) { const p = KROAD_RISQUES[risque]; return 0.99 * Math.pow(1 / (1 - p), k); }
+
 /* ===================================================================
    LE CARNET DES JOUEURS
    -------------------------------------------------------------------
@@ -4242,6 +4249,71 @@ const serveur = http.createServer(async (req, res) => {
       soldeAuSiege(compte);
       Carnet.enregistrer(compte);
       return repondre(res, 200, { ok: true, chemins, gains, mults, total, solde: compte.solde });
+    }
+
+    /* ===============================================================
+       LE KOALA ROAD
+       ---------------------------------------------------------------
+       A chaque voie, une chance de croiser une voiture est tiree ICI,
+       au moment ou le joueur avance (jamais a l'avance) : les voitures
+       peuvent vraiment debarquer n'importe quand, rien n'est ecrit
+       d'avance sur le trajet. =============================================================== */
+    if (route === '/api/kroad-demarrer' && req.method === 'POST') {
+      if (compte.kroad) return repondre(res, 409, { erreur: 'Une traversee est deja en cours.' });
+      const mise = sous(Number(body.mise) || 0);
+      const risque = body.risque;
+      if (!KROAD_RISQUES[risque]) return repondre(res, 400, { erreur: 'Niveau de risque inconnu.' });
+      if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - mise);
+      compte.kroad = { mise, risque, voie: 0 };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise, risque, solde: compte.solde });
+    }
+
+    if (route === '/api/kroad-avancer' && req.method === 'POST') {
+      const k = compte.kroad;
+      if (!k) return repondre(res, 409, { erreur: 'Aucune traversee en cours.' });
+      const p = KROAD_RISQUES[k.risque];
+      const heurte = crypto.randomInt(1000000) < Math.round(p * 1000000);
+      if (heurte) {
+        compte.kroad = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, heurte: true, voie: k.voie + 1, perdu: k.mise, solde: compte.solde });
+      }
+      k.voie++;
+      const mult = kroadMult(k.risque, k.voie);
+      const gain = Math.min(10000, sous(k.mise * mult));
+      if (k.voie >= KROAD_VOIES_MAX || gain >= 10000) {      // trop loin ou plafond : on encaisse d'office
+        compte.solde = sous(compte.solde + gain);
+        compte.kroad = null;
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, heurte: false, voie: k.voie, mult, gain, fini: true, solde: compte.solde });
+      }
+      return repondre(res, 200, { ok: true, heurte: false, voie: k.voie, mult, gain, suivant: kroadMult(k.risque, k.voie + 1), solde: compte.solde });
+    }
+
+    if (route === '/api/kroad-encaisser' && req.method === 'POST') {
+      const k = compte.kroad;
+      if (!k) return repondre(res, 409, { erreur: 'Aucune traversee en cours.' });
+      if (k.voie < 1) return repondre(res, 400, { erreur: 'Avancez au moins une voie avant d\'encaisser.' });
+      const mult = kroadMult(k.risque, k.voie);
+      const gain = Math.min(10000, sous(k.mise * mult));
+      compte.solde = sous(compte.solde + gain);
+      compte.kroad = null;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gain, mult, voie: k.voie, solde: compte.solde });
+    }
+
+    if (route === '/api/kroad-etat' && req.method === 'POST') {
+      const k = compte.kroad;
+      if (!k) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
+      return repondre(res, 200, { ok: true, enCours: true, mise: k.mise, risque: k.risque, voie: k.voie,
+        mult: k.voie ? kroadMult(k.risque, k.voie) : 0, solde: compte.solde });
     }
 
     /* ===============================================================
