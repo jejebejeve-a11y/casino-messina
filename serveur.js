@@ -2427,6 +2427,152 @@ function corpsJSON(req) {
    ENTRE deux requetes (blackjack et roulette se reglent sur minuterie,
    ajustement admin) est range a part. Mises -> points de niveau (100 par
    euro mise). Gains de 5 EUR ou plus -> fil des gros gains de l'accueil. */
+
+/* ===== SLOT GAMES : le moteur (le meme que dans la page) ===== */
+const SLOTS_HOTE = {};
+/* ===== MOTEUR DES MACHINES A SOUS (partage : page + serveur) =====
+   Deux familles :
+   - 'lignes'  : rouleaux, lignes de paiement de gauche a droite, joker (W)
+                 qui remplace tout, symbole bonus (S) -> tours gratuits (gains x2),
+                 ou pieces (C) -> chaque piece porte une valeur, 3+ pieces paient.
+   - 'cascade' : grille 6x5, 8 symboles identiques ou plus n'importe ou gagnent,
+                 ils disparaissent et d'autres tombent ; les multiplicateurs (M)
+                 multiplient le gain du tour ; 4+ bonus (S) -> 15 tours gratuits
+                 ou les multiplicateurs s'accumulent.
+   Toutes les cotes sont en "fois la mise totale", multipliees par ech (reglage RTP). */
+(function (racine) {
+'use strict';
+const L5x3 = [[1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],[0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],[2,2,1,0,0],[1,0,0,0,1],[1,2,2,2,1],[1,0,1,2,1]];
+const L5x5 = [[0,0,0,0,0],[1,1,1,1,1],[2,2,2,2,2],[3,3,3,3,3],[4,4,4,4,4],[0,1,2,3,4],[4,3,2,1,0],[0,1,0,1,0],[1,0,1,0,1],[1,2,1,2,1],[2,1,2,1,2],[2,3,2,3,2],[3,2,3,2,3],[3,4,3,4,3],[4,3,4,3,4]];
+const lettres = (h) => ({ A:{w:h,p:{3:.1,4:.5,5:1}}, K:{w:h,p:{3:.1,4:.5,5:1}}, Q:{w:h+2,p:{3:.1,4:.5,5:1}}, J:{w:h+2,p:{3:.1,4:.5,5:1}}, T:{w:h+2,p:{3:.1,4:.5,5:1}} });
+
+const L5x4 = [[0,0,0,0,0],[1,1,1,1,1],[2,2,2,2,2],[3,3,3,3,3],[0,1,2,1,0],[1,2,3,2,1],[3,2,1,2,3],[2,1,0,1,2],[0,1,0,1,0],[1,0,1,0,1],
+              [2,3,2,3,2],[3,2,3,2,3],[1,2,1,2,1],[2,1,2,1,2],[0,0,1,2,3],[3,3,2,1,0],[0,1,1,1,0],[3,2,2,2,3],[1,1,0,1,1],[2,2,3,2,2]];
+const JEUX = {
+  /* Mythology Zeus : 5 rouleaux x 4 rangees, 20 lignes. Wild expansif (remplit sa colonne),
+     3 scatters ou plus = 10 tours gratuits ; pendant les tours gratuits chaque gain a un multiplicateur (x2 a x500). */
+  zeus: { nom:'MYTHOLOGY ZEUS', type:'lignes', rows:4, cols:5, lignes:L5x4, ech:0.5258, fs:10, fsMult:1, etend:true, fsMultAlea:true,
+          sym:{ ZE:{w:3,p:{3:2,4:8,5:25}}, EA:{w:4,p:{3:1,4:4,5:12}}, HE:{w:5,p:{3:.8,4:3,5:8}}, DI:{w:7,p:{3:.5,4:1.5,5:4}}, SP:{w:8,p:{3:.4,4:1.2,5:3}}, HT:{w:9,p:{3:.3,4:1,5:2.5}}, CL:{w:9,p:{3:.3,4:1,5:2.5}} },
+          W:{w:1.1}, S:{w:0.95} }
+};
+const VAL_PIECES = [[1,40],[2,25],[3,15],[5,10],[10,6],[25,3],[50,1]];
+const VAL_MULT   = [[2,30],[3,22],[5,16],[10,12],[15,7],[25,5],[50,3],[100,1.5],[250,.4],[500,.1]];
+const GAIN_MAX = 5000;       // jamais plus de 5000 fois la mise
+
+function tirerPoids(liste, r) { let t = 0; for (const [, w] of liste) t += w; let x = r() * t; for (const [v, w] of liste) { x -= w; if (x < 0) return v; } return liste[liste.length - 1][0]; }
+function sac(jeu, avecSpeciaux) {
+  const l = Object.keys(jeu.sym).map(k => [k, jeu.sym[k].w]);
+  if (avecSpeciaux) { for (const k of ['W','S','C','M']) if (jeu[k]) l.push([k, jeu[k].w]); }
+  return l;
+}
+function cellule(jeu, r, fs) {
+  const k = tirerPoids(sac(jeu, true), r);
+  if (k === 'C') return { k, v: tirerPoids(VAL_PIECES, r) };
+  if (k === 'M') return { k, v: tirerPoids(VAL_MULT, r) };
+  if (fs && k === 'S' && jeu.type === 'lignes') return { k: tirerPoids(sac(jeu, false), r) };   // pas de relance infinie en tours gratuits
+  return { k };
+}
+
+/* --- un tour a lignes --- */
+function tourLignes(jeu, r, fs) {
+  const g = [];
+  for (let c = 0; c < jeu.cols; c++) { g.push([]); for (let l = 0; l < jeu.rows; l++) g[c].push(cellule(jeu, r, fs)); }
+  // Joker Lines : un joker qui tombe remplit toute sa colonne
+  let avant = null; const etendues = [];
+  if (jeu.etend) { avant = g.map(col => col.map(x => Object.assign({}, x)));
+    g.forEach((col, c) => { if (col.some(x => x.k === 'W')) { etendues.push(c); for (let l = 0; l < jeu.rows; l++) col[l] = { k: 'W' }; } }); }
+  const gains = []; let total = 0;
+  const lire = (ln, i, ordre) => {
+    let base = null, n = 0;
+    for (const c of ordre) {
+      const k = g[c][ln[c]].k;
+      if (k === 'S' || k === 'C') break;
+      if (k === 'W') { n++; continue; }
+      if (base === null) { base = k; n++; continue; }
+      if (k === base) n++; else break;
+    }
+    if (base === null && n >= 3) base = Object.keys(jeu.sym)[0];      // que des jokers : paie comme le meilleur symbole
+    if (base && n >= 3 && jeu.sym[base].p[n]) {
+      const m = jeu.sym[base].p[n] * jeu.ech * (fs ? jeu.fsMult || 1 : 1);
+      total += m; gains.push({ ligne: i, n, m, cells: ordre.slice(0, n).map(c => [c, ln[c]]) });
+      return n;
+    }
+    return 0;
+  };
+  const gd = [...Array(jeu.cols).keys()], dg = gd.slice().reverse();
+  jeu.lignes.forEach((ln, i) => {
+    const n = lire(ln, i, gd);
+    if (jeu.deuxSens && n < jeu.cols) lire(ln, i, dg);   // Diamonds : les lignes paient aussi de droite a gauche
+  });
+  // Big Dollars : chaque tour gagnant tire un multiplicateur
+  let multX = 1;
+  if (jeu.fsMultAlea && fs && total > 0) { const x = r(); multX = x < .45 ? 2 : x < .75 ? 3 : x < .9 ? 5 : x < .97 ? 10 : x < .993 ? 25 : x < .999 ? 100 : 500; total *= multX; }
+  if (jeu.multAleatoire && total > 0) { const x = r(); multX = x < .70 ? 1 : x < .88 ? 2 : x < .95 ? 3 : x < .99 ? 5 : 10; total *= multX; }
+  let fsGagnes = 0, bonusPieces = 0; const cellsSpec = [];
+  let nS = 0, nC = 0, sommeC = 0;
+  g.forEach((col, c) => col.forEach((x, l) => { if (x.k === 'S') { nS++; cellsSpec.push([c,l]); } if (x.k === 'C') { nC++; sommeC += x.v; cellsSpec.push([c,l]); } }));
+  if (jeu.fs && nS >= 3) fsGagnes = jeu.fs + (nS - 3) * 5;
+  if (jeu.pieces && nC >= 3) { bonusPieces = sommeC * jeu.ech * .6; total += bonusPieces; }
+  return { grille: g, avant, etendues, multX, gains, total, fsGagnes, bonusPieces, special: (fsGagnes || bonusPieces) ? cellsSpec : [] };
+}
+
+/* --- un tour en cascade --- */
+function tourCascade(jeu, r, fs, multCumul) {
+  const g = []; for (let c = 0; c < jeu.cols; c++) { g.push([]); for (let l = 0; l < jeu.rows; l++) g[c].push(cellule(jeu, r, fs)); }
+  const etapes = []; let total = 0;
+  for (let garde = 0; garde < 40; garde++) {
+    const cpt = {};
+    g.forEach(col => col.forEach(x => { if (jeu.sym[x.k]) cpt[x.k] = (cpt[x.k] || 0) + 1; }));
+    const gagnants = Object.keys(cpt).filter(k => cpt[k] >= 8);
+    if (!gagnants.length) break;
+    let gainEtape = 0; const cells = [];
+    gagnants.forEach(k => { const n = cpt[k], t = n >= 12 ? 2 : n >= 10 ? 1 : 0; gainEtape += jeu.sym[k].p[t] * jeu.ech;
+      g.forEach((col, c) => col.forEach((x, l) => { if (x.k === k) cells.push([c, l]); })); });
+    total += gainEtape;
+    const avant = g.map(col => col.map(x => Object.assign({}, x)));
+    // les gagnants disparaissent, le reste tombe, de nouveaux symboles arrivent par le haut
+    for (let c = 0; c < jeu.cols; c++) {
+      const reste = g[c].filter((x, l) => !cells.some(([cc, ll]) => cc === c && ll === l));
+      const neufs = []; while (neufs.length + reste.length < jeu.rows) neufs.push(cellule(jeu, r, fs));
+      g[c] = neufs.concat(reste);
+    }
+    etapes.push({ avant, cells, gain: gainEtape, apres: g.map(col => col.map(x => Object.assign({}, x))) });
+  }
+  let sommeM = 0; g.forEach(col => col.forEach(x => { if (x.k === 'M') sommeM += x.v; }));
+  let mult = 1;
+  if (total > 0 && sommeM > 0) { if (fs) { multCumul.v += sommeM; mult = multCumul.v; } else mult = sommeM; }
+  else if (fs && multCumul.v > 0 && total > 0) mult = multCumul.v;
+  let nS = 0; g.forEach(col => col.forEach(x => { if (x.k === 'S') nS++; }));
+  // on compte aussi les bonus vus pendant les cascades
+  etapes.forEach(e => e.avant.forEach(col => col.forEach(x => {})));
+  let payeS = 0; if (nS >= 6) payeS = 100; else if (nS === 5) payeS = 5; else if (nS === 4) payeS = 3;
+  payeS *= jeu.ech * .5;
+  const fsGagnes = nS >= 4 ? (fs ? 5 : 15) : 0;
+  return { grille: etapes.length ? etapes[0].avant : g, etapes, fin: g, gainBase: total, mult, total: total * mult + payeS, payeS, fsGagnes, sommeM };
+}
+
+/* --- une mise complete : le tour, puis les tours gratuits eventuels --- */
+function jouer(id, r) {
+  const jeu = JEUX[id];
+  const multCumul = { v: 0 };
+  const base = jeu.type === 'lignes' ? tourLignes(jeu, r, false) : tourCascade(jeu, r, false, multCumul);
+  const gratuits = [];
+  let reste = base.fsGagnes, total = base.total;
+  while (reste > 0 && gratuits.length < 60) {
+    reste--;
+    const t = jeu.type === 'lignes' ? tourLignes(jeu, r, true) : tourCascade(jeu, r, true, multCumul);
+    gratuits.push(t); total += t.total; reste += t.fsGagnes;
+  }
+  total = Math.min(GAIN_MAX, total);
+  return { base, gratuits, total };
+}
+racine.SLOTS = { JEUX, jouer, GAIN_MAX };
+})(SLOTS_HOTE);
+
+const SLOTS = SLOTS_HOTE.SLOTS;
+const SLOTS_OUVERTS = ['zeus'];
+const SLOTS_MISES = [0.2,0.4,0.6,1,2,5,10,20,50,100,200,500];
+const NOMS_SLOTS = { zeus:'Mythology Zeus' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
@@ -2434,7 +2580,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -2473,7 +2619,7 @@ function suivreSolde(res) {
   }
   c.soldeHorsNom = null;
   const delta = sous(apres - s.avant);
-  if (delta && !s.deja) { const n = nomDeRoute(s.route); noterMouvement(c, n.nom, n.type, delta); }
+  if (delta && !s.deja) { const n = s.nomJeu ? { nom: s.nomJeu, type: 'jeu' } : nomDeRoute(s.route); noterMouvement(c, n.nom, n.type, delta); }
   c.soldeSuivi = apres;
 }
 
@@ -4379,6 +4525,25 @@ const serveur = http.createServer(async (req, res) => {
        choix du gobelet : 1 chance sur 3 avec 1 bille (x2,97), 2 sur 3
        avec 2 billes (x1,48). Gain plafonne a mise + 10 000 EUR.
        =============================================================== */
+    /* ===============================================================
+       SLOT GAMES : une mise = un tour complet (avec les tours gratuits).
+       Tout est tire ICI ; la page ne fait qu'animer le resultat.
+       =============================================================== */
+    if (route === '/api/slot-jouer' && req.method === 'POST') {
+      const id = String(body.jeu || '');
+      if (!SLOTS_OUVERTS.includes(id)) return repondre(res, 400, { erreur: 'Jeu inconnu.' });
+      const mise = sous(Number(body.mise) || 0);
+      if (!SLOTS_MISES.some(m => Math.abs(m - mise) < 1e-9)) return repondre(res, 400, { erreur: 'Mise invalide.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const tirage = SLOTS.jouer(id, () => crypto.randomInt(0, 1000000000) / 1000000000);
+      const gain = sous(tirage.total * mise);
+      compte.solde = sous(compte.solde - mise + gain);
+      if (res.__suivi) res.__suivi.nomJeu = NOMS_SLOTS[id];
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, res: tirage, gain, solde: compte.solde });
+    }
+
     if (route === '/api/thimbles-demarrer' && req.method === 'POST') {
       if (compte.thimbles) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
       const mise = sous(Number(body.mise) || 0), billes = Number(body.billes) === 2 ? 2 : 1;
