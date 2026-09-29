@@ -2431,7 +2431,7 @@ const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
   ['peche', 'Pêche avec Jeffrey', 'peche'], ['poulet', 'Le Poulet', 'jeu'], ['plinko', 'Plinko', 'jeu'],
-  ['kroad', 'Koala Road', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
+  ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
   ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
@@ -4370,6 +4370,41 @@ const serveur = http.createServer(async (req, res) => {
       if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
       return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, os: p.nbOs, ouverts: p.ouverts,
         mult: p.ouverts.length ? pouletMult(p.nbOs, p.ouverts.length) : 0, solde: compte.solde });
+    }
+
+    /* ===============================================================
+       THIMBLES (les gobelets)
+       ---------------------------------------------------------------
+       La mise part au depart. Le resultat est tire ICI au moment du
+       choix du gobelet : 1 chance sur 3 avec 1 bille (x2,97), 2 sur 3
+       avec 2 billes (x1,48). Gain plafonne a mise + 10 000 EUR.
+       =============================================================== */
+    if (route === '/api/thimbles-demarrer' && req.method === 'POST') {
+      if (compte.thimbles) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
+      const mise = sous(Number(body.mise) || 0), billes = Number(body.billes) === 2 ? 2 : 1;
+      if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - mise);
+      compte.thimbles = { mise, billes };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise, billes, solde: compte.solde });
+    }
+    if (route === '/api/thimbles-choisir' && req.method === 'POST') {
+      const t = compte.thimbles;
+      if (!t) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      compte.thimbles = null;
+      const mult = t.billes === 2 ? 1.48 : 2.97;
+      const gagne = crypto.randomInt(3) < t.billes;
+      const gain = gagne ? Math.min(sous(t.mise * mult), sous(t.mise + 10000)) : 0;
+      if (gain) { compte.solde = sous(compte.solde + gain); soldeAuSiege(compte); }
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gagne, mult, gain, mise: t.mise, solde: compte.solde });
+    }
+    if (route === '/api/thimbles-etat' && req.method === 'POST') {
+      const t = compte.thimbles;
+      return repondre(res, 200, t ? { ok: true, enCours: true, mise: t.mise, billes: t.billes, solde: compte.solde } : { ok: true, enCours: false, solde: compte.solde });
     }
 
     /* ===============================================================
