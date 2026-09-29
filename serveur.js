@@ -4533,7 +4533,7 @@ const serveur = http.createServer(async (req, res) => {
       const id = String(body.jeu || '');
       if (!SLOTS_OUVERTS.includes(id)) return repondre(res, 400, { erreur: 'Jeu inconnu.' });
       const mise = sous(Number(body.mise) || 0);
-      if (!SLOTS_MISES.some(m => Math.abs(m - mise) < 1e-9)) return repondre(res, 400, { erreur: 'Mise invalide.' });
+      if (!(mise >= 0.2 && mise <= 500)) return repondre(res, 400, { erreur: 'Mise entre 0,20 € et 500 €.' });
       if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       const tirage = SLOTS.jouer(id, () => crypto.randomInt(0, 1000000000) / 1000000000);
       const gain = sous(tirage.total * mise);

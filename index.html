@@ -10068,6 +10068,36 @@ ROUL.fermer = function(){
 #zsRacine .zs-gros span{display:block;font-size:clamp(30px,9vw,46px);margin-top:10px;font-variant-numeric:tabular-nums;text-shadow:0 3px 0 #000}
 #zsRacine .zs-gros i{display:block;font:700 14px system-ui,sans-serif;font-style:normal;color:#cfe8ff;margin-top:14px}
 @keyframes zsZoom{from{transform:scale(.2) rotate(-8deg);opacity:0}}
+#zsHaut{position:absolute;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px;background:linear-gradient(#05070fee,#05070fcc);border-bottom:1px solid #ffd35a33}
+#zsRacine .zs-quit{display:flex;align-items:center;gap:6px;height:44px;padding:0 16px 0 10px;border-radius:14px;background:linear-gradient(#2a2f48,#12152a);box-shadow:inset 0 0 0 1.5px #ffd35a88;font:800 15px system-ui,sans-serif}
+#zsRacine .zs-quit svg{width:20px;height:20px}
+#zsRacine .zs-solde{display:inline-block;padding:9px 14px;border-radius:14px;background:#0a0d1c;box-shadow:inset 0 0 0 1.5px #ffd35a88;font:900 17px 'Arial Black',sans-serif;color:#fff;-webkit-text-fill-color:#fff;font-variant-numeric:tabular-nums}
+#zsRacine .zs-titre{text-align:center;font:900 15px 'Arial Black',sans-serif;letter-spacing:.5px;background:linear-gradient(#fff,#ffd35a);-webkit-background-clip:text;background-clip:text;color:transparent;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#zsRacine .zs-rond{width:44px;height:44px;border-radius:14px;background:linear-gradient(#2a2f48,#12152a);box-shadow:inset 0 0 0 1.5px #ffd35a88;display:grid;place-items:center}
+#zsRacine .zs-rond svg{width:22px;height:22px}
+#zsPanneau{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;flex-direction:column;gap:7px;padding:6px 12px calc(12px + env(safe-area-inset-bottom,0px));background:linear-gradient(#05070f00,#05070fee 14%,#05070f)}
+#zsRacine .zs-ligne{display:flex;gap:10px;align-items:stretch}
+#zsRacine .zs-boite{flex:1;min-width:0;border-radius:16px;background:linear-gradient(#141a33,#0a0d1c);box-shadow:inset 0 0 0 1.5px #ffd35a77,0 4px 14px #0008;padding:8px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#zsRacine .zs-boite small{font:800 11px system-ui,sans-serif;letter-spacing:1.5px;color:#c9b77a}
+#zsRacine .zs-boite b{font:900 clamp(20px,6vw,26px) 'Arial Black',sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+#zsRacine .zs-boite b.or{background:linear-gradient(#fff,#ffd35a 50%,#ff9c1a);-webkit-background-clip:text;background-clip:text;color:transparent}
+#zsRacine .zs-mise{flex-direction:row;gap:10px;padding:4px 6px}
+#zsRacine .zs-mise>div{flex:1;display:flex;flex-direction:column;align-items:center}
+#zsRacine .zs-pm{width:42px;height:42px;border-radius:50%;flex:none;background:radial-gradient(circle at 35% 30%,#fff3b0,#ffc42a 45%,#a8660a);color:#3a2200;font:900 26px system-ui;display:grid;place-items:center;box-shadow:0 3px 0 #6a3a04}
+#zsRacine .zs-pm:active{transform:translateY(2px);box-shadow:0 1px 0 #6a3a04}
+#zsRacine .zs-chips{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding:2px}
+#zsRacine .zs-chips::-webkit-scrollbar{display:none}
+#zsRacine .zs-chip{flex:1 0 auto;min-width:50px;height:34px;padding:0 10px;border-radius:12px;background:#12162c;box-shadow:inset 0 0 0 1.5px #ffffff26;font:800 14px system-ui,sans-serif;white-space:nowrap}
+#zsRacine .zs-chip.on{background:linear-gradient(#ffe27a,#d88b12);color:#2a1800;box-shadow:none}
+#zsRacine .zs-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#zsRacine .zs-act{flex:1;height:50px;border-radius:16px;background:linear-gradient(#1c2240,#0c0f22);box-shadow:inset 0 0 0 1.5px #ffd35a88;font:900 16px 'Arial Black',sans-serif;letter-spacing:.5px}
+#zsRacine .zs-act.on{background:linear-gradient(#ffe27a,#d88b12);color:#2a1800}
+#zsGo{width:84px;height:84px;border-radius:50%!important;flex:none;background:radial-gradient(circle at 50% 40%,#2a2f4a,#07080f 70%)!important;box-shadow:0 0 0 5px #ffc42a,0 0 0 9px #7a4a08,0 0 34px #ffb21a,inset 0 0 20px #000;display:grid;place-items:center;transition:transform .1s}
+#zsGo:active{transform:scale(.94)}
+#zsGo svg{width:44px;height:44px;filter:drop-shadow(0 0 8px #ffc42a)}
+#zsGo.tourne svg{animation:zsRot .8s linear infinite}
+@keyframes zsRot{to{transform:rotate(360deg)}}
+#zsRacine.tel #zsSolde,#zsRacine.tel #zsMiseV,#zsRacine.tel #zsAutoTxt{display:none!important}
 #zsMenu{position:absolute;z-index:26;inset:0;background:#0008;display:flex;align-items:flex-end;justify-content:center}
 #zsRacine .zs-feuille{width:100%;max-width:560px;max-height:86%;overflow:auto;background:linear-gradient(#141c3c,#0a0f22);border:1px solid #ffd35a55;border-bottom:0;border-radius:22px 22px 0 0;padding:18px 16px calc(24px + env(safe-area-inset-bottom,0px));font:600 14px/1.45 system-ui,sans-serif;color:#dfe6ff}
 #zsRacine .zs-feuille h3{font:900 20px 'Arial Black',sans-serif;margin:2px 0 12px;background:linear-gradient(#fff,#ffd35a);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -10099,6 +10129,18 @@ ROUL.fermer = function(){
     <button class="zs-btn" id="zsBRegles" style="left:1077px;top:1112px;width:154px;height:74px" aria-label="Règles"></button>
     <div id="zsMultBox"></div>
   </div></div>
+  <div id="zsHaut">
+    <button class="zs-quit" id="zsQuit"><svg viewBox="0 0 24 24" fill="none" stroke="#ffd35a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Quitter</button>
+    <div class="zs-titre"><span class="zs-solde" id="zsPSolde"></span></div>
+    <button class="zs-rond" id="zsSonB" aria-label="Son"></button>
+    <button class="zs-rond" id="zsInfoB" aria-label="Règles"><svg viewBox="0 0 24 24" fill="none" stroke="#ffd35a" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.5"/></svg></button>
+  </div>
+  <div id="zsPanneau" hidden>
+    <b id="zsPGain" hidden></b>
+    <div class="zs-ligne"><div class="zs-boite zs-mise"><button class="zs-pm" id="zsPMoins">−</button><div id="zsPMiseBox"><small>MISE</small><b id="zsPMise"></b></div><button class="zs-pm" id="zsPPlus">+</button></div></div>
+    <div class="zs-chips" id="zsChips"></div>
+    <div class="zs-actions"><button class="zs-act" id="zsPAuto">AUTO</button><button id="zsGo" aria-label="Tourner"><svg viewBox="0 0 24 24"><path d="M13.5 2 4 13.5h6.5L9 22l10-12.5h-6.6z" fill="#ffd35a" stroke="#fff3b0" stroke-width=".8" stroke-linejoin="round"/></svg></button><button class="zs-act" id="zsPTurbo">RAPIDE</button></div>
+  </div>
   <canvas class="zs-pluie" id="zsPluie"></canvas>
   <div id="zsMenu" hidden><div class="zs-feuille"><h3>MYTHOLOGY ZEUS</h3>
     <button class="zs-mb" id="zsMSon">Son : oui</button>
@@ -10263,15 +10305,17 @@ const $ = id => document.getElementById(id), S = window.SLOTS, IMG = window.ZEUS
 SLOTG.covers = { zeus: IMG.cover };
 const J = S.JEUX.zeus, COLS = 5, ROWS = 4, CW = 168, RH = 130;
 const MISES = [0.2,0.4,0.6,1,2,5,10,20,50,100,200,500];
-let iMise = 3, occupe = false, autoN = 0, turbo = false, son = true, soldeFinal = null, derniere = null;
+let miseV = 1, occupe = false, autoN = 0, turbo = false, son = true, soldeFinal = null, derniere = null;
 try { son = localStorage.getItem('pouletSon') !== '0'; } catch (e) {}
 const eur = v => (Math.round(v*100)/100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
 const dort = ms => new Promise(r => setTimeout(r, ms));
 const soldeLu = () => { try { return SLOT_SOLDE.get(); } catch (e) { return 0; } };
-const mise = () => MISES[iMise];
-function afficherSolde(v){ $('zsSolde').textContent = eur(v == null ? soldeLu() : v); }
-function majMise(){ $('zsMiseV').textContent = eur(mise()); }
-function majAuto(){ $('zsAutoTxt').hidden = !(autoN > 0); $('zsAutoTxt').textContent = autoN; $('zsBAuto').classList.toggle('on', autoN > 0); }
+const mise = () => miseV;
+const CHIPS = [0.2, 1, 2, 5, 10, 50, 100, 500];
+function poserMise(v){ miseV = Math.max(.2, Math.min(500, Math.round(v*100)/100)); majMise(); }
+function afficherSolde(v){ const t = eur(v == null ? soldeLu() : v); $('zsSolde').textContent = t; $('zsPSolde').textContent = t; }
+function majMise(){ $('zsMiseV').textContent = eur(mise()); $('zsPMise').textContent = eur(mise()); $('zsChips').innerHTML = CHIPS.map(c => `<button class="zs-chip${Math.abs(c - miseV) < 1e-9 ? ' on' : ''}" data-v="${c}">${c < 1 ? '0,20' : c} €</button>`).join('') + '<button class="zs-chip" data-v="max">MAX</button>'; }
+function majAuto(){ $('zsAutoTxt').hidden = !(autoN > 0); $('zsAutoTxt').textContent = autoN; $('zsBAuto').classList.toggle('on', autoN > 0); $('zsPAuto').classList.toggle('on', autoN > 0); $('zsPAuto').textContent = autoN > 0 ? 'STOP ' + autoN : 'AUTO'; }
 
 /* ---------- sons ---------- */
 let AC = null;
@@ -10383,9 +10427,21 @@ function bouclePluie(){ px.clearRect(0,0,PW,PH); pluie = pluie.filter(p => p.y <
 
 /* ---------- mise en page : la photo entiere, le plus grand possible ---------- */
 function taille(){
-  const W = innerWidth, H = innerHeight, s = Math.min(W, H);
-  const c = $('zsCadre'); c.style.width = c.style.height = s + 'px'; c.style.left = (W - s)/2 + 'px'; c.style.top = (H - s)/2 + 'px';
-  $('zsScene').style.transform = `scale(${s/1254})`;
+  const W = innerWidth, H = innerHeight, c = $('zsCadre'), hHaut = $('zsHaut').offsetHeight || 60;
+  const tel = H > W * 1.15;          // telephone debout : on zoome sur la grille et on met nos gros boutons dessous
+  $('zsRacine').classList.toggle('tel', tel); $('zsPanneau').hidden = !tel;
+  if (tel) {
+    const X0 = 196, X1 = 1068, Y1 = 1056, hPan = $('zsPanneau').offsetHeight || 330;
+    const k = Math.min(W / (X1 - X0), (H - hHaut - hPan + 10) / Y1);
+    const w = (X1 - X0) * k, h = Y1 * k;
+    c.style.width = w + 'px'; c.style.height = h + 'px'; c.style.left = (W - w)/2 + 'px';
+    c.style.top = Math.max(hHaut, hHaut + (H - hHaut - hPan - h) / 2) + 'px';
+    $('zsScene').style.transform = `translate(${-X0*k}px,0) scale(${k})`;
+  } else {
+    const s = Math.min(W, H - hHaut);
+    c.style.width = c.style.height = s + 'px'; c.style.left = (W - s)/2 + 'px'; c.style.top = hHaut + (H - hHaut - s)/2 + 'px';
+    $('zsScene').style.transform = `scale(${s/1254})`;
+  }
   PW = pc.width = W; PH = pc.height = H;
 }
 
@@ -10445,10 +10501,10 @@ async function voile(html, ms){ const v = document.createElement('div'); v.class
 async function lancer(){
   if (occupe || !SLOTG.ouvert) return; const m = mise();
   if (soldeLu() < m - 1e-9) { $('zsInfo').innerHTML = '<span style="font-size:32px">Solde insuffisant</span>'; autoN = 0; majAuto(); return; }
-  occupe = true; nettoyer(); $('zsInfo').innerHTML = '';
+  occupe = true; nettoyer(); $('zsInfo').innerHTML = ''; $('zsGo').classList.add('tourne');
   afficherSolde(soldeLu() - m);
   const rep = await SLOT_API('zeus', m);
-  if (!rep || rep.erreur || !rep.res) { afficherSolde(); $('zsInfo').innerHTML = `<span style="font-size:30px">${rep && rep.erreur && rep.erreur !== 'reseau' ? rep.erreur : 'Connexion perdue, réessaie.'}</span>`; occupe = false; autoN = 0; majAuto(); return; }
+  if (!rep || rep.erreur || !rep.res) { afficherSolde(); $('zsInfo').innerHTML = `<span style="font-size:30px">${rep && rep.erreur && rep.erreur !== 'reseau' ? rep.erreur : 'Connexion perdue, réessaie.'}</span>`; occupe = false; $('zsGo').classList.remove('tourne'); autoN = 0; majAuto(); return; }
   soldeFinal = rep.solde; try { SLOT_SOLDE.set(rep.solde - rep.gain, true); } catch (e) {}
   const r = rep.res; let vu = await jouerTour(r.base, turbo, 0);
   if (r.gratuits.length) {
@@ -10466,6 +10522,7 @@ async function lancer(){
   if (r.total >= 15) { sGros(); pleuvoir(r.total >= 50 ? 300 : 160); flash = 1; eclair(); await voile(`<div class="zs-gros"><b>${r.total >= 100 ? 'ÉNORME GAIN' : r.total >= 50 ? 'MEGA GAIN' : 'GROS GAIN'}</b><span>${eur(gain)}</span><i>×${Math.round(r.total*10)/10} la mise</i></div>`, 3200); }
   try { SLOT_SOLDE.set(rep.solde); } catch (e) {} soldeFinal = null; afficherSolde();
   $('zsInfo').innerHTML = gain > 0 ? `<span><b>GAIN ${eur(gain)}</b></span>` : '';
+  $('zsPGain').textContent = eur(gain); $('zsGo').classList.remove('tourne');
   occupe = false;
   if (autoN > 0) { autoN--; majAuto(); if (autoN > 0 && SLOTG.ouvert) { await dort(gain > 0 ? 800 : 350); lancer(); } }
 }
@@ -10484,7 +10541,7 @@ function regles(){
 SLOTG.ouvrir = function(){
   SLOTG.ouvert = true; const racine = $('zsRacine'); racine.hidden = false; document.body.classList.add('poulet-actif');
   if (!$('zsImg').src) { $('zsImg').onload = preparerEau; $('zsImg').src = IMG.fond; $('zsFlou').style.backgroundImage = `url(${IMG.fond})`; }
-  taille(); parts = []; eclairs = [];
+  majMise(); afficherSolde(); majAuto(); iconeSon(); taille(); parts = []; eclairs = [];
   $('zsInfo').innerHTML = ''; $('zsFs').hidden = true; $('zsMultBox').innerHTML = '';
   derniere = null; dessiner(grilleRepos()); afficherSolde(); majMise(); majAuto(); $('zsBTurbo').classList.toggle('on', turbo);
   cancelAnimationFrame(raf); raf = requestAnimationFrame(boucle);
@@ -10495,17 +10552,30 @@ SLOTG.fermer = function(){
   if (soldeFinal != null) { try { SLOT_SOLDE.set(soldeFinal); } catch (e) {} soldeFinal = null; }
   $('zsRacine').hidden = true; $('zsMenu').hidden = true; $('zsRegles').hidden = true; document.body.classList.remove('poulet-actif');
   document.querySelectorAll('#zsRacine .zs-voile').forEach(v => v.click());
-  occupe = false;
+  occupe = false; $('zsGo').classList.remove('tourne');
   if (typeof SLOTG.apresFermer === 'function') SLOTG.apresFermer();
 };
 $('zsTourner').onclick = () => { ac(); if (autoN > 0) { autoN = 0; majAuto(); } lancer(); };
 $('zsBAuto').onclick = () => { ac(); sClic(); if (autoN > 0) { autoN = 0; majAuto(); return; } autoN = 10; majAuto(); lancer(); };
-$('zsBTurbo').onclick = () => { ac(); sClic(); turbo = !turbo; $('zsBTurbo').classList.toggle('on', turbo); };
-$('zsBMoins').onclick = () => { ac(); if (!occupe && iMise > 0) { iMise--; majMise(); sClic(); } };
-$('zsBPlus').onclick = () => { ac(); if (!occupe && iMise < MISES.length-1) { iMise++; majMise(); sClic(); } };
+function basculerTurbo(){ ac(); sClic(); turbo = !turbo; $('zsBTurbo').classList.toggle('on', turbo); $('zsPTurbo').classList.toggle('on', turbo); }
+$('zsBTurbo').onclick = basculerTurbo; $('zsPTurbo').onclick = basculerTurbo;
+function iconeSon(){ $('zsSonB').innerHTML = son ? '<svg viewBox="0 0 24 24" fill="none" stroke="#ffd35a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="#8a8aa8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>'; }
+$('zsSonB').onclick = () => { son = !son; try { localStorage.setItem('pouletSon', son ? '1' : '0'); } catch (e) {} iconeSon(); ac(); if (AC) musique(); };
+$('zsQuit').onclick = () => SLOTG.fermer();
+$('zsInfoB').onclick = () => { ac(); sClic(); regles(); };
+const plusBas = () => { const l = MISES.filter(m => m < miseV - 1e-9); return l.length ? l[l.length-1] : MISES[0]; };
+const plusHaut = () => MISES.find(m => m > miseV + 1e-9) || MISES[MISES.length-1];
+$('zsPMoins').onclick = () => { ac(); if (!occupe) { poserMise(plusBas()); sClic(); } };
+$('zsPPlus').onclick = () => { ac(); if (!occupe) { poserMise(plusHaut()); sClic(); } };
+$('zsChips').onclick = e => { const b = e.target.closest('.zs-chip'); if (!b || occupe) return; ac(); sClic(); poserMise(b.dataset.v === 'max' ? Math.max(.2, Math.min(500, Math.floor(soldeLu()*100)/100)) : +b.dataset.v); };
+$('zsPMiseBox').onclick = () => { if (occupe || !window.ClavierMise) return; ac(); window.ClavierMise.ouvrir({ valeur: miseV, min: .2, max: 500, son, surValider: v => poserMise(v) }); const cm = document.querySelector('.cm-voile'); if (cm) cm.style.zIndex = 10000; };
+$('zsPAuto').onclick = () => $('zsBAuto').onclick();
+$('zsGo').onclick = () => $('zsTourner').onclick();
+$('zsBMoins').onclick = () => { ac(); if (!occupe) { poserMise(plusBas()); sClic(); } };
+$('zsBPlus').onclick = () => { ac(); if (!occupe) { poserMise(plusHaut()); sClic(); } };
 $('zsBRegles').onclick = () => { ac(); sClic(); regles(); };
 $('zsBMenu').onclick = () => { ac(); sClic(); $('zsMSon').textContent = 'Son : ' + (son ? 'oui' : 'non'); $('zsMenu').hidden = false; };
-$('zsMSon').onclick = () => { son = !son; if (AC) musique(); try { localStorage.setItem('pouletSon', son ? '1' : '0'); } catch (e) {} $('zsMSon').textContent = 'Son : ' + (son ? 'oui' : 'non'); };
+$('zsMSon').onclick = () => { son = !son; iconeSon(); if (AC) musique(); try { localStorage.setItem('pouletSon', son ? '1' : '0'); } catch (e) {} $('zsMSon').textContent = 'Son : ' + (son ? 'oui' : 'non'); };
 $('zsMRegles').onclick = regles;
 $('zsMQuitter').onclick = () => SLOTG.fermer();
 $('zsMenu').onclick = e => { if (e.target.id === 'zsMenu') $('zsMenu').hidden = true; };
