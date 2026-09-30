@@ -64,8 +64,8 @@ const MARGE_TEMPS      = 0.80;          // on tolere un peu de retard d\'horloge
 const PRIX_VOITURE_PREMIUM     = 1200;
 const VOITURE_PREMIUM_INDICE   = 4;
 const VITESSE_MAX_PERIPH_PREMIUM = 300 / 3.6;   // metres par seconde
-/* la GT Hybride : 500 km/h, 65 000 € */
-const PRIX_VOITURE_HYBRIDE     = 65000;
+/* la GT Hybride : 500 km/h, 45 000 € */
+const PRIX_VOITURE_HYBRIDE     = 45000;
 const VOITURE_HYBRIDE_INDICE   = 5;
 const VITESSE_MAX_PERIPH_HYBRIDE = 500 / 3.6;
 function choisirVoiture(compte, v) {
