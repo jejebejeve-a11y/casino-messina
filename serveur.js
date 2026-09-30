@@ -64,6 +64,20 @@ const MARGE_TEMPS      = 0.80;          // on tolere un peu de retard d\'horloge
 const PRIX_VOITURE_PREMIUM     = 1200;
 const VOITURE_PREMIUM_INDICE   = 4;
 const VITESSE_MAX_PERIPH_PREMIUM = 300 / 3.6;   // metres par seconde
+/* la GT Hybride : 500 km/h, 65 000 € */
+const PRIX_VOITURE_HYBRIDE     = 65000;
+const VOITURE_HYBRIDE_INDICE   = 5;
+const VITESSE_MAX_PERIPH_HYBRIDE = 500 / 3.6;
+function choisirVoiture(compte, v) {
+  v = Number(v) | 0;
+  if (v === VOITURE_HYBRIDE_INDICE && compte.voitureHybride) return VOITURE_HYBRIDE_INDICE;
+  if (v === VOITURE_PREMIUM_INDICE && compte.voiturePremium) return VOITURE_PREMIUM_INDICE;
+  return bornerVoitureNormale(v);
+}
+function vmaxPeriph(voiture) {
+  return voiture === VOITURE_HYBRIDE_INDICE ? VITESSE_MAX_PERIPH_HYBRIDE
+       : voiture === VOITURE_PREMIUM_INDICE ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+}
 
 /* ---------- le periph en multijoueur ----------
    Une file d\'attente toute simple : des qu\'un deuxieme joueur reel la
@@ -345,6 +359,7 @@ const Carnet = {
       portes:    compte.portes  | 0,
       roulettes: compte.roulettes | 0,
       voiturePremium: !!compte.voiturePremium,
+      voitureHybride: !!compte.voitureHybride,
       perso:     compte.perso || ancienne.perso || null,
       codesUtilises: Array.isArray(compte.codesUtilises) ? compte.codesUtilises : (ancienne.codesUtilises || []),
       points:    compte.points | 0,
@@ -1885,8 +1900,7 @@ function quitterTableRoulette(compte) {
    la course exactement de la meme facon.
    =================================================================== */
 function demarrerCourseInterne(compte, mise, voitureDemandee) {
-  const voiture = (Number(voitureDemandee) | 0) === VOITURE_PREMIUM_INDICE && compte.voiturePremium
-    ? VOITURE_PREMIUM_INDICE : bornerVoitureNormale(voitureDemandee);
+  const voiture = choisirVoiture(compte, voitureDemandee);
 
   compte.solde  = sous(compte.solde - mise);
   compte.periph = { mise: mise, palier: 0, depart: Date.now(), voiture: voiture };
@@ -2038,7 +2052,7 @@ const BOIS_SORTIE_MIN    = 460;       // metres depuis la Porte Dauphine
 const BOIS_DEGAT_CHOC    = 25;
 const BOIS_DEGAT_BALLE   = 40;
 const BOIS_BALLES        = 5;
-const BOIS_VITESSE_MAX   = 330 / 3.6; // metres par seconde, turbo compris (marge au-dessus des 300 km/h de la voiture premium)
+const BOIS_VITESSE_MAX   = 550 / 3.6; // metres par seconde, turbo compris (marge au-dessus des 300 km/h de la voiture premium)
 
 function planToledo(graine){
   let s=graine>>>0;
@@ -4169,6 +4183,18 @@ const serveur = http.createServer(async (req, res) => {
     }
 
     // --- la boutique : on achete la voiture premium ---
+    if (route === '/api/periph-acheter-voiture' && req.method === 'POST' && body.modele === 'hybride') {
+      if (compte.voitureHybride) return repondre(res, 409, { erreur: 'Vous avez deja cette voiture.' });
+      if (compte.periph) return repondre(res, 409, { erreur: 'Terminez votre course avant d\'aller a la boutique.' });
+      if (compte.solde < PRIX_VOITURE_HYBRIDE) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - PRIX_VOITURE_HYBRIDE);
+      compte.voitureHybride = true;
+      if (res.__suivi) res.__suivi.deja = true;
+      noterMouvement(compte, 'Boutique : GT Hybride', 'cadeau', -PRIX_VOITURE_HYBRIDE);
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, solde: compte.solde, voitureHybride: true });
+    }
     if (route === '/api/periph-acheter-voiture' && req.method === 'POST') {
       if (compte.voiturePremium) {
         return repondre(res, 409, { erreur: 'Vous avez deja cette voiture.' });
@@ -4199,8 +4225,7 @@ const serveur = http.createServer(async (req, res) => {
       // la porte annoncee doit etre la suivante, et pas trop tot :
       // meme a fond, il faut le temps de parcourir la distance
       const suivant   = course.palier + 1;
-      const vitesseMax = course.voiture === VOITURE_PREMIUM_INDICE
-        ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+      const vitesseMax = vmaxPeriph(course.voiture);
       const attendu  = distancePeriph(suivant) / vitesseMax * MARGE_TEMPS;
       const ecoule   = (Date.now() - course.depart) / 1000;
       if (ecoule < attendu) {
@@ -4294,8 +4319,7 @@ const serveur = http.createServer(async (req, res) => {
       if (mise > MISE_MAXI_PERIPH) return repondre(res, 400, { erreur: 'Mise maximum : 100,00 €.' });
       if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
 
-      const voitureDemandee = (Number(body.voiture) | 0) === VOITURE_PREMIUM_INDICE && compte.voiturePremium
-        ? VOITURE_PREMIUM_INDICE : bornerVoitureNormale(body.voiture);
+      const voitureDemandee = choisirVoiture(compte, body.voiture);
       const couleur = bornerVoitureNormale(body.couleur);
 
       compte.periphMultiErreur = null;
@@ -4363,7 +4387,7 @@ const serveur = http.createServer(async (req, res) => {
            a ce qui est physiquement possible depuis le depart. */
         if (body.d !== undefined) {
           const course = compte.periph;
-          const vmax = course && course.voiture === VOITURE_PREMIUM_INDICE ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+          const vmax = course ? vmaxPeriph(course.voiture) : VITESSE_MAX_PERIPH;
           const possible = course ? (Date.now() - course.depart) / 1000 * vmax + 30 : Infinity;
           m.d = Math.max(0, Math.min(distancePeriph(ECHELLE_PERIPH.length), possible, Number(body.d) || 0));
           m.v = Math.max(0, Math.min(300, Number(body.v) || 0));
@@ -4395,7 +4419,7 @@ const serveur = http.createServer(async (req, res) => {
       const course = compte.periph;
       if (!course) return repondre(res, 409, { erreur: 'Aucune course en cours.' });
       if (course.palier !== 0) return repondre(res, 409, { erreur: 'La sortie du bois est passee.' });
-      const vitesseMax = course.voiture === VOITURE_PREMIUM_INDICE ? VITESSE_MAX_PERIPH_PREMIUM : VITESSE_MAX_PERIPH;
+      const vitesseMax = vmaxPeriph(course.voiture);
       if ((Date.now() - course.depart) / 1000 < BOIS_SORTIE_MIN / vitesseMax * MARGE_TEMPS) {
         return repondre(res, 400, { erreur: 'Course invalide.' });
       }
@@ -5561,6 +5585,7 @@ const serveur = http.createServer(async (req, res) => {
         kroadVoies: compte.kroadVoies | 0,
         tx:       (compte.tx || []).slice(0, 60),
         voiturePremium: !!compte.voiturePremium,
+        voitureHybride: !!compte.voitureHybride,
         penalty:  compte.penalty
           ? { mise: compte.penalty.mise, palier: compte.penalty.palier }
           : null,
@@ -5618,6 +5643,7 @@ function ouvrirSession(fiche) {
     defaitesPenalty: fiche.defaitesPenalty | 0,
     perso:     fiche.perso || null,
     voiturePremium: !!fiche.voiturePremium,
+    voitureHybride: !!fiche.voitureHybride,
     codesUtilises: Array.isArray(fiche.codesUtilises) ? fiche.codesUtilises.slice() : [],
     points:    fiche.points | 0,
     kroadVoies: fiche.kroadVoies | 0,
@@ -5649,6 +5675,7 @@ function ouvrirSession(fiche) {
     buts:     compte.buts,
     perso:    compte.perso,
     voiturePremium: compte.voiturePremium,
+    voitureHybride: !!compte.voitureHybride,
     creeLe:   fiche.creeLe || null
   };
 }
