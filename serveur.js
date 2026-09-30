@@ -2572,6 +2572,71 @@ racine.SLOTS = { JEUX, jouer, GAIN_MAX };
 const SLOTS = SLOTS_HOTE.SLOTS;
 const SLOTS_OUVERTS = ['zeus'];
 const SLOTS_MISES = [0.2,0.4,0.6,1,2,5,10,20,50,100,200,500];
+
+/* =====================================================================
+   CRASH GAME (avion) : une seule partie partagee par tous les joueurs.
+   Tout se decide ici : le point de crash, les mises, les encaissements.
+   ===================================================================== */
+const AV_K = 0.085, AV_PRE = 5000, AV_PAUSE = 3200, AV_MIN = 0.10, AV_MAX = 150, AV_XMAX = 10000;
+const AVION = { phase: 'attente', debut: Date.now(), crash: 2, round: 1, paris: [], file: [], hist: [], top: [] };
+function avTirage() { const u = crypto.randomInt(0, 1000000000) / 1000000000; return Math.min(AV_XMAX, Math.max(1, Math.floor(0.97 / (1 - u) * 100) / 100)); }
+function avBrut(ms) { return Math.exp(AV_K * ms / 1000); }
+function avMult(ms) { return Math.floor(avBrut(ms) * 100) / 100; }
+for (let i = 0; i < 20; i++) AVION.hist.push(avTirage());
+AVION.crash = avTirage();
+function avCrediter(b, x, horsRequete) {
+  const c = b.compte, w = sous(b.mise * x);
+  b.x = x; b.gain = w; b.encaisse = true;
+  c.solde = sous(c.solde + w);
+  if (horsRequete && typeof c.soldeSuivi === 'number') c.soldeSuivi = sous(c.soldeSuivi + w);
+  noterMouvement(c, 'Crash Game', 'jeu', w);
+  soldeAuSiege(c); Carnet.enregistrer(c);
+  AVION.top.push({ p: c.pseudo, m: b.mise, x, g: w });
+  AVION.top.sort((a, z) => z.g - a.g); if (AVION.top.length > 20) AVION.top.length = 20;
+  return w;
+}
+function avNouveau() {
+  for (const b of AVION.paris) {
+    const c = b.compte; if (!Array.isArray(c.avMes)) c.avMes = [];
+    c.avMes.unshift({ m: b.mise, x: b.encaisse ? b.x : 0, g: b.encaisse ? b.gain : 0, c: AVION.crash });
+    if (c.avMes.length > 30) c.avMes.length = 30;
+  }
+  AVION.phase = 'attente'; AVION.debut = Date.now(); AVION.crash = avTirage(); AVION.round++;
+  AVION.paris = AVION.file; AVION.file = [];
+}
+function battementAvion() {
+  const now = Date.now(), el = now - AVION.debut;
+  if (AVION.phase === 'attente') {
+    if (el >= AV_PRE) { AVION.phase = 'vol'; AVION.debut = now; for (const b of AVION.paris) b.actif = true; }
+  } else if (AVION.phase === 'vol') {
+    const m = avMult(el), fini = avBrut(el) >= AVION.crash;
+    for (const b of AVION.paris) if (b.actif && !b.encaisse && b.auto && b.auto < AVION.crash && (b.auto <= m || fini)) avCrediter(b, b.auto, true);
+    if (fini) { AVION.phase = 'crash'; AVION.debut = now; AVION.hist.unshift(AVION.crash); if (AVION.hist.length > 60) AVION.hist.length = 60; }
+  } else if (el >= AV_PAUSE) avNouveau();
+}
+setInterval(battementAvion, 50);
+function avTrouver(compte, slot) {
+  return AVION.paris.find(b => b.compte === compte && b.slot === slot) || AVION.file.find(b => b.compte === compte && b.slot === slot) || null;
+}
+function avEtat(compte) {
+  const mes = [0, 1].map(s => {
+    const f = AVION.file.find(b => b.compte === compte && b.slot === s);
+    if (f) return { st: 'queued', m: f.mise, auto: f.auto };
+    const b = AVION.paris.find(b => b.compte === compte && b.slot === s);
+    if (!b) return { st: 'idle' };
+    if (b.encaisse) return { st: 'idle', m: b.mise, x: b.x, g: b.gain };
+    if (AVION.phase === 'attente') return { st: 'placed', m: b.mise, auto: b.auto };
+    if (AVION.phase === 'vol') return { st: 'active', m: b.mise, auto: b.auto };
+    return { st: 'idle', perdu: true, m: b.mise };
+  });
+  return {
+    ok: true, phase: AVION.phase, ecoule: Date.now() - AVION.debut, round: AVION.round,
+    crash: AVION.phase === 'crash' ? AVION.crash : null,
+    paris: AVION.paris.map(b => ({ p: b.compte.pseudo, s: b.slot, m: b.mise, x: b.encaisse ? b.x : 0, g: b.encaisse ? b.gain : 0, moi: b.compte === compte })),
+    hist: AVION.hist.slice(0, 30), top: AVION.top, mes, mesParis: (compte.avMes || []).slice(0, 30), solde: compte.solde
+  };
+}
+
 const NOMS_SLOTS = { zeus:'Mythology Zeus' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
@@ -2580,7 +2645,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -4529,6 +4594,56 @@ const serveur = http.createServer(async (req, res) => {
        SLOT GAMES : une mise = un tour complet (avec les tours gratuits).
        Tout est tire ICI ; la page ne fait qu'animer le resultat.
        =============================================================== */
+
+    // ---------- CRASH GAME ----------
+    if (route === '/api/avion-etat') return repondre(res, 200, avEtat(compte));
+    if (route === '/api/avion-miser' && req.method === 'POST') {
+      const slot = Number(body.slot) === 1 ? 1 : 0;
+      const mise = sous(Number(body.mise) || 0);
+      let auto = Number(body.auto) || 0; auto = auto >= 1.01 ? Math.min(AV_XMAX, Math.floor(auto * 100) / 100) : 0;
+      if (!(mise >= AV_MIN && mise <= AV_MAX)) return repondre(res, 400, { erreur: 'Mise entre 0,10 € et 150 €.' });
+      if (AVION.phase === 'attente' && AVION.paris.find(b => b.compte === compte && b.slot === slot)) return repondre(res, 409, { erreur: 'Pari deja place.' });
+      if (mise > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      if (AVION.file.find(b => b.compte === compte && b.slot === slot)) return repondre(res, 409, { erreur: 'Pari deja place.' });
+      compte.solde = sous(compte.solde - mise);
+      const b = { compte, slot, mise, auto, actif: false, encaisse: false, x: 0, gain: 0 };
+      if (AVION.phase === 'attente') AVION.paris.push(b); else AVION.file.push(b);
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, avEtat(compte));
+    }
+    if (route === '/api/avion-annuler' && req.method === 'POST') {
+      const slot = Number(body.slot) === 1 ? 1 : 0;
+      let i = AVION.file.findIndex(b => b.compte === compte && b.slot === slot), liste = AVION.file;
+      if (i < 0 && AVION.phase === 'attente') { liste = AVION.paris; i = liste.findIndex(b => b.compte === compte && b.slot === slot); }
+      if (i < 0) return repondre(res, 409, { erreur: 'Trop tard pour annuler.' });
+      const b = liste.splice(i, 1)[0];
+      compte.solde = sous(compte.solde + b.mise);
+      compte.points = Math.max(0, (compte.points | 0) - Math.round(b.mise * 100));
+      if (res.__suivi) res.__suivi.deja = true;
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, avEtat(compte));
+    }
+    if (route === '/api/avion-auto' && req.method === 'POST') {
+      const b = avTrouver(compte, Number(body.slot) === 1 ? 1 : 0);
+      let auto = Number(body.auto) || 0; auto = auto >= 1.01 ? Math.min(AV_XMAX, Math.floor(auto * 100) / 100) : 0;
+      if (b && !b.encaisse) b.auto = auto;
+      return repondre(res, 200, avEtat(compte));
+    }
+    if (route === '/api/avion-encaisser' && req.method === 'POST') {
+      const slot = Number(body.slot) === 1 ? 1 : 0;
+      const b = AVION.paris.find(x => x.compte === compte && x.slot === slot);
+      if (AVION.phase === 'vol' && b && b.actif && !b.encaisse) {
+        const el = Date.now() - AVION.debut;
+        if (avBrut(el) < AVION.crash) {
+          const gain = avCrediter(b, avMult(el), false);
+          if (res.__suivi) res.__suivi.deja = true;
+          const e = avEtat(compte); e.gain = gain; e.x = b.x;
+          return repondre(res, 200, e);
+        }
+      }
+      return repondre(res, 409, Object.assign(avEtat(compte), { ok: false, erreur: 'Trop tard !' }));
+    }
+
     if (route === '/api/slot-jouer' && req.method === 'POST') {
       const id = String(body.jeu || '');
       if (!SLOTS_OUVERTS.includes(id)) return repondre(res, 400, { erreur: 'Jeu inconnu.' });
