@@ -130,53 +130,54 @@ function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
    c\'est purement theorique - avec cette esperance, personne n\'en approche
    sans une serie de coups exceptionnelle).                              */
 const TOWER_NIVEAUX  = 30;
-const TOWER_MULT_MAX = 5000;
-const TOWER_GAIN_MAX = 30000;   // on ne gagne jamais plus de 30 000 EUR sur une tour
+const TOWER_MULT_MAX = 30;      // gain maximum : 30 fois la mise (100 EUR -> 3 000 EUR)
+const TOWER_GAIN_MAX = 30000;
 
+/* ---------- Tower Rush : les cotes (refonte v4, comme le vrai jeu) ----------
+   Le resultat ne depend PAS de la visee : a chaque etage, le hasard decide.
+     30 % : la tour s'effondre (mise perdue)
+     70 % : l'etage tient et donne un multiplicateur au hasard :
+        14 % x0,8 | 28 % x1,1 | 24 % x1,3 | 16 % x1,6 | 11 % x2 | 5 % x2,5 | 2 % x3
+   Chaque etage rend ~97,5 % en moyenne (0,70 x 1,393) : on gagne souvent
+   sur 1 ou 2 etages, et les gros multiplicateurs sortent vraiment.
+   Plafond : x30 de la mise, encaisse d'office.                          */
+const TOWER_P_CHUTE = 0.30;
+const TOWER_TABLE = [[0.8, .14], [1.1, .28], [1.3, .24], [1.6, .16], [2, .11], [2.5, .05], [3, .02]];
+function towerAlea() { return crypto.randomInt(0, 1000000000) / 1000000000; }
 function towerRollFactor() {
-  const r = Math.random();
-  /* refonte v3 : ~98 % de retour en encaissant apres 3 etages (avant : injouable).
-     30 000 EUR (le plafond) : environ 1 chance sur 200 000 a la mise maxi.
-     Monter reste risque, mais une bonne serie peut vraiment payer. */
-  if (r < 0.42) return towerRand(0.72, 0.95);   // perte partielle
-  if (r < 0.86) return towerRand(0.95, 1.12);   // quasi neutre
-  if (r < 0.98) return towerRand(1.12, 1.45);   // bon coup
-  return towerRand(1.45, 1.90);                  // gros coup, rare
+  let r = towerAlea(), a = 0;
+  for (const [m, p] of TOWER_TABLE) { a += p; if (r < a) return m; }
+  return TOWER_TABLE[0][0];
 }
 
-/* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l\'issue :
-   'rate' (l\'etage part a cote, seulement si le lacher est mal vise) ou
-   'pose'. Exporte en bas de fichier pour la simulation des cotes. */
+/* Un lacher, calcule entierement ici. Modifie `tour` et renvoie l'issue :
+   'rate' (effondrement, tire au hasard) ou 'pose'. */
 function towerTirer(tour, angle) {
   const n = tour.floors.length;
   const niveau = tour.niveau | 0;
   const amp = towerAmpFor(n);
   const etaitGele = tour.frozenLeft > 0;
-  if (etaitGele) angle *= 0.2;
 
-  const errRatio = Math.abs(angle) / amp;
-  /* zone de lacher sans risque : il faut vraiment mal viser (pres du
-     bout du balancement) pour que l'etage parte a cote. En dessous de
-     safeT, aucun risque, quel que soit le niveau deja atteint. */
-  const safeT = 0.60, missT = Math.max(0.85, 1.08 - n * 0.012);
-  const edgeT = towerClamp((errRatio - safeT) / Math.max(0.001, missT - safeT), 0, 1);
-  const missChance = etaitGele ? 0 : edgeT * edgeT;
-  if (Math.random() < missChance) return { issue: 'rate', angle: angle };
+  if (!etaitGele && towerAlea() < TOWER_P_CHUTE) {
+    // pour l'animation : l'etage part franchement sur le cote
+    const sens = angle ? Math.sign(angle) : (Math.random() < 0.5 ? -1 : 1);
+    return { issue: 'rate', angle: sens * amp * 0.95 };
+  }
 
-  const facteur = etaitGele ? towerRand(0.92, 1.06) : towerRollFactor();
+  const facteur = etaitGele ? Math.round(towerRand(0.95, 1.05) * 100) / 100 : towerRollFactor();
   if (etaitGele) tour.frozenLeft--;
   else tour.niveau = niveau + 1;
-  const parfait = !etaitGele && errRatio < 0.1 && facteur >= 1;
+  const parfait = !etaitGele && facteur >= 2;
 
-  // pas d\'arrondi ici : seul le gain final (mise x totalMult) est arrondi
   tour.totalMult = Math.min(TOWER_MULT_MAX, tour.totalMult * facteur);
-  // les etages s'empilent bien droits : plus d'inclinaison qui s'accumule
   tour.leanSum = 0;
   tour.visOffset = 0;
   tour.floors.push({ mult: facteur, lean: 0 });
+  // l'etage pose s'affiche bien centre, quelle que soit la visee
+  angle = angle * 0.15;
 
-  // etage gele une fois toutes les ~14 etages en moyenne, pour souffler un peu
-  if (!etaitGele && Math.random() < 0.07) tour.frozenLeft = 2 + (Math.random() < 0.5 ? 0 : 1);
+  // etage gele (sans risque) de temps en temps
+  if (!etaitGele && Math.random() < 0.05) tour.frozenLeft = 1;
 
   const sommet = tour.niveau >= TOWER_NIVEAUX || tour.totalMult >= TOWER_MULT_MAX;
   return { issue: 'pose', angle: angle, facteur: facteur, parfait: parfait, sommet: sommet };
