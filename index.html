@@ -3556,7 +3556,7 @@ async function entrerAuSalon(route, donnees, champErreur, auto) {
     $('avatarMini').textContent = E.perso.emoji;
     construireSalon();
   } else {
-    montrerEcran('ecranPersonnage');
+    $('btnEntrer').onclick();   // plus d'écran personnage : direct dans le casino
   }
 }
 
@@ -3704,7 +3704,7 @@ async function verifierEmail() {
   window.motDePasseEnVerification = null;
 
   majSolde();
-  montrerEcran('ecranPersonnage');
+  $('btnEntrer').onclick();   // plus d'écran personnage : direct dans le casino
 }
 
 $('btnVerifier').onclick = verifierEmail;
