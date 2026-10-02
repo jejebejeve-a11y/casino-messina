@@ -2652,6 +2652,111 @@ function avEtat(compte) {
   };
 }
 
+/* =====================================================================
+   LIVE BLACKJACK (la croupiere en video) : un joueur contre la banque.
+   Tout est decide ici : le sabot, chaque carte, les gains.
+   Regles : 6 jeux, la banque tire jusqu'a 16 et reste sur tous les 17,
+   blackjack paye 3 pour 2, assurance 2 pour 1 (seulement si la carte
+   visible de la banque est un As), double sur 2 cartes, un seul split.
+   ===================================================================== */
+const LBJ_MIN = 1, LBJ_MAX = 5000;
+function lbjVal(c) { return c.h === 'A' ? 11 : (['10', 'V', 'D', 'R'].includes(c.h) ? 10 : parseInt(c.h, 10)); }
+function lbjTotal(cartes) {
+  let t = 0, as = 0;
+  for (const c of cartes) { t += lbjVal(c); if (c.h === 'A') as++; }
+  while (t > 21 && as) { t -= 10; as--; }
+  return { t, souple: as > 0 && t <= 21 };
+}
+function lbjEstBJ(cartes) { return cartes.length === 2 && lbjTotal(cartes).t === 21; }
+function lbjTirer(compte) {
+  if (!compte.lbjSabot || compte.lbjSabot.length < 80) compte.lbjSabot = neufSabot();
+  const c = compte.lbjSabot.pop();
+  return { h: c.h, s: c.s, r: c.r };
+}
+function lbjPeutSplit(compte, r) {
+  if (r.mains.length !== 1) return false;
+  const m = r.mains[0];
+  return m.cartes.length === 2 && lbjVal(m.cartes[0]) === lbjVal(m.cartes[1]) && compte.solde >= m.mise;
+}
+function lbjEtat(compte) {
+  const r = compte.lbj;
+  if (!r) return { ok: true, phase: 'mise', solde: compte.solde };
+  const cachee = r.phase === 'joueur' || r.phase === 'assurance';
+  const m = r.mains[r.active];
+  return {
+    ok: true, phase: r.phase, solde: compte.solde, active: r.active,
+    mains: r.mains.map(x => ({ cartes: x.cartes, mise: x.mise, total: lbjTotal(x.cartes).t, souple: lbjTotal(x.cartes).souple, fini: x.fini, double: !!x.double, res: x.res || null, gain: x.gain || 0 })),
+    croupier: cachee ? [r.croupier[0], null] : r.croupier,
+    totalCroupier: cachee ? lbjTotal([r.croupier[0]]).t : lbjTotal(r.croupier).t,
+    assurance: r.assurance || 0, resultat: r.resultat || null, gainTotal: r.gainTotal || 0,
+    peut: r.phase !== 'joueur' || !m ? {} : {
+      tirer: true, rester: true,
+      doubler: m.cartes.length === 2 && compte.solde >= m.mise,
+      split: lbjPeutSplit(compte, r)
+    }
+  };
+}
+function lbjSuivante(compte) {
+  const r = compte.lbj;
+  while (r.active < r.mains.length && r.mains[r.active].fini) r.active++;
+  if (r.active < r.mains.length) {
+    const m = r.mains[r.active];
+    if (m.cartes.length === 1) { m.cartes.push(lbjTirer(compte)); r.seq.push({ qui: 'j', main: r.active, c: m.cartes[1] });
+      if (m.splitAs || lbjTotal(m.cartes).t >= 21) { m.fini = true; return lbjSuivante(compte); } }
+    return;
+  }
+  lbjBanque(compte);
+}
+function lbjBanque(compte) {
+  const r = compte.lbj;
+  r.phase = 'fin';
+  r.seq.push({ qui: 'retourne', c: r.croupier[1] });
+  const vivantes = r.mains.some(m => lbjTotal(m.cartes).t <= 21);
+  if (vivantes) while (lbjTotal(r.croupier).t < 17) { const c = lbjTirer(compte); r.croupier.push(c); r.seq.push({ qui: 'c', c }); }
+  lbjRegler(compte);
+}
+function lbjRegler(compte) {
+  const r = compte.lbj;
+  r.phase = 'fin';
+  const tb = lbjTotal(r.croupier).t, bjB = lbjEstBJ(r.croupier);
+  let gainTotal = 0;
+  for (const m of r.mains) {
+    const t = lbjTotal(m.cartes).t, bj = lbjEstBJ(m.cartes) && r.mains.length === 1;
+    let g = 0, res;
+    if (t > 21) res = 'bust';
+    else if (bj && !bjB) { res = 'blackjack'; g = sous(m.mise * 2.5); }
+    else if (bjB && !bj) res = 'perdu';
+    else if (bj && bjB) { res = 'egalite'; g = m.mise; }
+    else if (tb > 21) { res = 'banquebust'; g = sous(m.mise * 2); }
+    else if (t > tb) { res = 'gagne'; g = sous(m.mise * 2); }
+    else if (t === tb) { res = 'egalite'; g = m.mise; }
+    else res = 'perdu';
+    m.res = res; m.gain = g; m.fini = true; gainTotal += g;
+  }
+  if (r.assurance && bjB) gainTotal += sous(r.assurance * 3);
+  r.gainTotal = sous(gainTotal);
+  compte.solde = sous(compte.solde + r.gainTotal);
+  const ordre = ['blackjack', 'banquebust', 'gagne', 'egalite', 'bust', 'perdu'];
+  r.resultat = r.mains.map(m => m.res).sort((a, b) => ordre.indexOf(a) - ordre.indexOf(b))[0];
+  r.fini = true;
+}
+function lbjApresDistribution(compte) {
+  const r = compte.lbj, m = r.mains[0];
+  const bjB = lbjEstBJ(r.croupier);
+  if (lbjEstBJ(m.cartes) || bjB) { r.seq.push({ qui: 'retourne', c: r.croupier[1] }); lbjRegler(compte); return; }
+  r.phase = 'joueur';
+}
+function lbjReponse(compte, res) {
+  const r = compte.lbj;
+  const e = lbjEtat(compte);
+  e.seq = r ? r.seq : [];
+  if (r) r.seq = [];
+  if (r && r.fini) compte.lbj = null;
+  soldeAuSiege(compte); Carnet.enregistrer(compte);
+  if (res && res.__suivi) res.__suivi.nomJeu = 'Live Blackjack';
+  return e;
+}
+
 const NOMS_SLOTS = { zeus:'Mythology Zeus' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
@@ -2660,7 +2765,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -4636,6 +4741,58 @@ const serveur = http.createServer(async (req, res) => {
        SLOT GAMES : une mise = un tour complet (avec les tours gratuits).
        Tout est tire ICI ; la page ne fait qu'animer le resultat.
        =============================================================== */
+
+
+    // ---------- LIVE BLACKJACK ----------
+    if (route === '/api/lbj-etat') {
+      const e = lbjEtat(compte); e.seq = []; return repondre(res, 200, e);
+    }
+    if (route === '/api/lbj-miser' && req.method === 'POST') {
+      if (compte.lbj) return repondre(res, 409, Object.assign(lbjEtat(compte), { erreur: 'Une main est deja en cours.' }));
+      const mise = sous(Number(body.mise) || 0);
+      if (!(mise >= LBJ_MIN && mise <= LBJ_MAX)) return repondre(res, 400, { erreur: 'Mise entre 1 € et 5 000 €.' });
+      if (mise > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - mise);
+      const r = compte.lbj = { mains: [{ cartes: [], mise }], croupier: [], active: 0, seq: [], phase: 'distribution' };
+      const p1 = lbjTirer(compte), d1 = lbjTirer(compte), p2 = lbjTirer(compte), d2 = lbjTirer(compte);
+      r.mains[0].cartes.push(p1, p2); r.croupier.push(d1, d2);
+      r.seq.push({ qui: 'j', main: 0, c: p1 }, { qui: 'c', c: d1 }, { qui: 'j', main: 0, c: p2 }, { qui: 'cachee' });
+      if (d1.h === 'A' && compte.solde >= sous(mise / 2)) r.phase = 'assurance';
+      else lbjApresDistribution(compte);
+      return repondre(res, 200, lbjReponse(compte, res));
+    }
+    if (route === '/api/lbj-assurance' && req.method === 'POST') {
+      const r = compte.lbj;
+      if (!r || r.phase !== 'assurance') return repondre(res, 409, { erreur: 'Pas d\'assurance possible.' });
+      if (body.oui) { const a = sous(r.mains[0].mise / 2); if (a <= compte.solde) { compte.solde = sous(compte.solde - a); r.assurance = a; } }
+      lbjApresDistribution(compte);
+      return repondre(res, 200, lbjReponse(compte, res));
+    }
+    if (route === '/api/lbj-action' && req.method === 'POST') {
+      const r = compte.lbj;
+      if (!r || r.phase !== 'joueur') return repondre(res, 409, { erreur: 'Ce n\'est pas votre tour.' });
+      const m = r.mains[r.active], a = String(body.action || '');
+      if (a === 'tirer') {
+        const c = lbjTirer(compte); m.cartes.push(c); r.seq.push({ qui: 'j', main: r.active, c });
+        if (lbjTotal(m.cartes).t >= 21) { m.fini = true; lbjSuivante(compte); }
+      } else if (a === 'rester') {
+        m.fini = true; lbjSuivante(compte);
+      } else if (a === 'doubler') {
+        if (m.cartes.length !== 2 || compte.solde < m.mise) return repondre(res, 400, { erreur: 'Impossible de doubler.' });
+        compte.solde = sous(compte.solde - m.mise); m.mise = sous(m.mise * 2); m.double = true;
+        const c = lbjTirer(compte); m.cartes.push(c); r.seq.push({ qui: 'j', main: r.active, c });
+        m.fini = true; lbjSuivante(compte);
+      } else if (a === 'split') {
+        if (!lbjPeutSplit(compte, r)) return repondre(res, 400, { erreur: 'Impossible de spliter.' });
+        compte.solde = sous(compte.solde - m.mise);
+        const as = m.cartes[0].h === 'A';
+        const m2 = { cartes: [m.cartes.pop()], mise: m.mise, splitAs: as }; m.splitAs = as;
+        r.mains.push(m2); r.seq.push({ qui: 'split' });
+        const c = lbjTirer(compte); m.cartes.push(c); r.seq.push({ qui: 'j', main: 0, c });
+        if (as || lbjTotal(m.cartes).t >= 21) { m.fini = true; lbjSuivante(compte); }
+      } else return repondre(res, 400, { erreur: 'Action inconnue.' });
+      return repondre(res, 200, lbjReponse(compte, res));
+    }
 
     // ---------- CRASH GAME ----------
     if (route === '/api/avion-etat') return repondre(res, 200, avEtat(compte));
