@@ -135,14 +135,14 @@ const TOWER_GAIN_MAX = 30000;
 
 /* ---------- Tower Rush : les cotes (refonte v4, comme le vrai jeu) ----------
    Le resultat ne depend PAS de la visee : a chaque etage, le hasard decide.
-     30 % : la tour s'effondre (mise perdue)
-     70 % : l'etage tient et donne un multiplicateur au hasard :
-        14 % x0,8 | 28 % x1,1 | 24 % x1,3 | 16 % x1,6 | 11 % x2 | 5 % x2,5 | 2 % x3
-   Chaque etage rend ~97,5 % en moyenne (0,70 x 1,393) : on gagne souvent
-   sur 1 ou 2 etages, et les gros multiplicateurs sortent vraiment.
+     17 % : la tour s'effondre (mise perdue)
+     83 % : l'etage tient et donne un multiplicateur au hasard, bon ou mauvais :
+        13 % x0,3 | 13 % x0,5 | 18 % x0,8 | 17 % x1,1 | 15 % x1,4 | 10 % x1,8
+         8 % x2,2 |  4 % x2,7 |  2 % x3
+   Chaque etage rend ~97 % en moyenne (0,83 x 1,169).
    Plafond : x30 de la mise, encaisse d'office.                          */
-const TOWER_P_CHUTE = 0.30;
-const TOWER_TABLE = [[0.8, .14], [1.1, .28], [1.3, .24], [1.6, .16], [2, .11], [2.5, .05], [3, .02]];
+const TOWER_P_CHUTE = 0.17;
+const TOWER_TABLE = [[0.3, .13], [0.5, .13], [0.8, .18], [1.1, .17], [1.4, .15], [1.8, .10], [2.2, .08], [2.7, .04], [3, .02]];
 function towerAlea() { return crypto.randomInt(0, 1000000000) / 1000000000; }
 function towerRollFactor() {
   let r = towerAlea(), a = 0;
