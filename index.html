@@ -1537,6 +1537,16 @@ body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webki
 #tourPlein .tr-oops,#tourPlein .tr-win{top:calc(var(--k)*1421px)!important;bottom:auto!important;width:100%;z-index:30}
 #tourPlein .tr-win b{top:57%;font:700 calc(var(--k)*92px)/1 Rubik,Arial,sans-serif;-webkit-text-stroke:0;color:#fff;text-shadow:0 3px 6px rgba(120,60,0,.55)}
 #tourPlein .topbar .balance{font-family:Rubik,Arial,sans-serif}
+
+/*TRV4*/
+#tourPlein .app.act .stage{height:calc(var(--k)*1410px)!important}
+#tourPlein .app.act .controls{height:calc(var(--k)*334px)!important;background-size:100% auto!important;background-position:bottom center!important;background-repeat:no-repeat!important;background-color:#2a2d31!important}
+#tourPlein .app.act .controls::before{content:"";display:block!important;position:absolute;left:0;right:0;top:0;height:calc(var(--k)*14px);background:repeating-linear-gradient(135deg,#f0a21a 0 calc(var(--k)*30px),#1b1b1b calc(var(--k)*30px) calc(var(--k)*60px))}
+#tourPlein .app.act .build-btn{top:calc(var(--k)*179px)!important}
+#tourPlein .app.act .cashout-btn{top:calc(var(--k)*179px)!important}
+#tourPlein{background:radial-gradient(ellipse at 50% 50%,#13234a 0%,#0a1330 50%,#03050f 100%)!important}
+#tourPlein::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(45deg,rgba(233,200,105,.07) 0 2px,transparent 2px 26px),repeating-linear-gradient(-45deg,rgba(233,200,105,.07) 0 2px,transparent 2px 26px)}
+#tourPlein .app{box-shadow:0 0 0 3px #e9c869,0 0 0 6px #0a1330,0 0 28px 8px rgba(233,200,105,.45)}
 @media (max-width:380px){ #tourPlein .floor{ width:148px; } #tourPlein .payload{ width:112px; } #tourPlein .shop{ width:196px; } }
 
 /* =====================================================================
@@ -17293,26 +17303,30 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
       var targetDY=(retRect.top-payRect.top)+(payRect.height*0.1);
 
       if (r.rate){
-        var dropT=clamp(0.34+Math.abs(targetDY)/1050,0.34,0.6), slideT=0.55, fallT=0.4;
-        var slideX=dir*Math.min(150,payRect.width*0.55);
+        var dropT=clamp(0.34+Math.abs(targetDY)/1050,0.34,0.6);
+        var SX=dir*Math.min(150,payRect.width*0.6);
+        var steps=[[0.6,'ease-out',0.4,3,0],[0.55,'ease-in-out',0.78,9,5],[0.4,'ease-in',1.02,30,34]];
         payload.style.transition='transform '+dropT.toFixed(2)+'s cubic-bezier(.45,0,.8,1)';
         payload.style.transform='translate(calc(-50% + '+angle.toFixed(1)+'px), '+targetDY.toFixed(0)+'px)';
-        setTimeout(function(){
-          Sound.thud(0.9,n);
-          payload.style.transition='transform '+slideT+'s ease-in';
-          payload.style.transform='translate(calc(-50% + '+(angle+slideX).toFixed(1)+'px), '+(targetDY+6)+'px) rotate('+(dir*14)+'deg)';
-          setTimeout(function(){
-            payload.style.transition='transform '+fallT+'s cubic-bezier(.5,0,1,1), opacity '+fallT+'s ease-in';
-            payload.style.transform='translate(calc(-50% + '+(angle+slideX+dir*70).toFixed(1)+'px), '+(targetDY+420)+'px) rotate('+(dir*80)+'deg)';
+        function stepN(i){
+          if (i>=steps.length){
+            payload.style.transition='transform .45s cubic-bezier(.5,0,1,1), opacity .45s ease-in';
+            payload.style.transform='translate(calc(-50% + '+(angle+SX*1.2).toFixed(1)+'px), '+(targetDY+440)+'px) rotate('+(dir*85)+'deg)';
             payload.style.opacity='0';
             setTimeout(function(){
               Sound.crash(); flashRed(); shakeStage();
               toast('La tour s’effondre ! Tour perdue.','lose');
               pushResult(0,true);
               setTimeout(function(){ S.animBusy=false; endRound(); }, 460);
-            }, fallT*1000*0.7);
-          }, slideT*1000);
-        }, dropT*1000);
+            }, 300);
+            return;
+          }
+          var st=steps[i];
+          payload.style.transition='transform '+st[0]+'s '+st[1];
+          payload.style.transform='translate(calc(-50% + '+(angle+SX*st[2]).toFixed(1)+'px), '+(targetDY+st[4])+'px) rotate('+(dir*st[3])+'deg)';
+          setTimeout(function(){ stepN(i+1); }, st[0]*1000);
+        }
+        setTimeout(function(){ Sound.thud(0.9,n); setTimeout(function(){ stepN(0); }, 180); }, dropT*1000);
         return;
       }
 
@@ -17450,8 +17464,8 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
   layoutHeights=function(){
     var st=$('trStage'), W=st.clientWidth||390, H=st.clientHeight||844, k=trK(), act=trAct();
     var bw=Math.round(TRV2_BGW*k), bgH=Math.round(TRV2_BGW*TRV2_BGH*k), bg=$('trBg');
-    var dn=act?-Math.round(146*k):0;
-    bg.style.width=bw+'px'; bg.style.left=Math.round((W-bw)/2)+'px'; bg.style.bottom=(-dn)+'px';
+    var dn=0, bgDn=0;
+    bg.style.width=bw+'px'; bg.style.left=Math.round((W-bw)/2)+'px'; bg.style.bottom=(-bgDn)+'px';
     $('trSky').style.bottom=(bgH-1-dn)+'px';
     var bal=document.querySelector('#tourPlein .tr-ballon');
     if (bal){ bal.style.width=Math.round(173*k*0.9)+'px'; bal.style.left=Math.round(W/2+(228-563)*k)+'px'; bal.style.top=Math.round(690*k)+'px'; }
