@@ -2585,7 +2585,57 @@ racine.SLOTS = { JEUX, jouer, GAIN_MAX };
 })(SLOTS_HOTE);
 
 const SLOTS = SLOTS_HOTE.SLOTS;
-const SLOTS_OUVERTS = ['zeus'];
+/* ===== 3 COIN VOLCANOES : moteur (partage page + serveur) =====
+   5 rouleaux x 3 rangees, 20 lignes. Volcan = joker. Pieces de lave (C) : chacune porte
+   une valeur ou un jackpot. 6 pieces ou plus = BONUS : les pieces restent collees,
+   3 relances, chaque nouvelle piece remet le compteur a 3. Grille pleine = GRAND. */
+function jouerVolcan(jeu, r) {
+  const ROWS = 3, COLS = 5, L = jeu.lignes;
+  const tire = (liste) => { let t = 0; for (const [, w] of liste) t += w; let x = r() * t; for (const [v, w] of liste) { x -= w; if (x < 0) return v; } return liste[liste.length - 1][0]; };
+  const sacBase = Object.keys(jeu.sym).map(k => [k, jeu.sym[k].w]).concat([['W', jeu.W.w], ['C', jeu.C.w]]);
+  const piece = () => tire(jeu.valeurs);
+  const g = [];
+  for (let c = 0; c < COLS; c++) { g.push([]); for (let l = 0; l < ROWS; l++) { const k = tire(sacBase); g[c].push(k === 'C' ? { k, v: piece() } : { k }); } }
+  // lignes
+  const gains = []; let lignes = 0;
+  L.forEach((ln, i) => {
+    let base = null, n = 0;
+    for (let c = 0; c < COLS; c++) { const k = g[c][ln[c]].k; if (k === 'C') break; if (k === 'W') { n++; continue; } if (base === null) { base = k; n++; continue; } if (k === base) n++; else break; }
+    if (base === null && n >= 3) base = Object.keys(jeu.sym)[0];
+    if (base && n >= 3 && jeu.sym[base].p[n]) { const m = jeu.sym[base].p[n] * jeu.ech; lignes += m; gains.push({ ligne: i, n, m, cells: [...Array(n).keys()].map(c => [c, ln[c]]) }); }
+  });
+  const valeurDe = v => typeof v === 'number' ? v * jeu.echC : jeu.jackpots[v];
+  // bonus
+  let bonus = null;
+  const depart = []; g.forEach((col, c) => col.forEach((x, l) => { if (x.k === 'C') depart.push([c, l, x.v]); }));
+  if (depart.length >= jeu.declenche) {
+    const pris = new Set(depart.map(([c, l]) => c * 3 + l)); const tours = []; let relances = 3;
+    while (relances > 0 && pris.size < 15) {
+      relances--; const nouv = [];
+      for (let i = 0; i < 15; i++) if (!pris.has(i) && r() < jeu.qRelance) { nouv.push([Math.floor(i / 3), i % 3, piece()]); }
+      nouv.forEach(([c, l]) => pris.add(c * 3 + l));
+      if (nouv.length) relances = 3;
+      tours.push({ nouv, relances });
+    }
+    const toutes = depart.concat(...tours.map(t => t.nouv));
+    let somme = toutes.reduce((s, [, , v]) => s + valeurDe(v), 0);
+    const plein = pris.size >= 15; if (plein) somme += jeu.jackpots.GRAND;
+    bonus = { depart, tours, plein, total: somme };
+  }
+  let total = lignes + (bonus ? bonus.total : 0);
+  return { base: { grille: g, gains, total: lignes }, bonus, total };
+}
+
+const VOLCAN = { lignes: [[1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],[0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],[2,2,1,0,0],[1,0,0,0,1],[1,2,2,2,1],[1,0,1,2,1],
+  [1,2,1,0,1],[0,1,1,1,0],[2,1,1,1,2],[0,1,0,1,0],[2,1,2,1,2],[1,1,0,1,1],[1,1,2,1,1],[0,0,2,0,0],[2,2,0,2,2],[0,2,0,2,0]],
+  ech: 1.20, echC: 1, declenche: 6, qRelance: .035,
+  sym: { SEPT:{w:3,p:{3:2,4:6,5:20}}, CRO:{w:4,p:{3:1.2,4:4,5:12}}, BAR:{w:5,p:{3:.8,4:2.5,5:8}}, CLO:{w:6,p:{3:.6,4:1.6,5:5}}, COF:{w:6,p:{3:.6,4:1.6,5:5}},
+         GB:{w:11,p:{3:.2,4:.8,5:2}}, GV:{w:11,p:{3:.2,4:.8,5:2}}, GP:{w:11,p:{3:.2,4:.8,5:2}} },
+  W: { w: 4.5 }, C: { w: 9.8 },
+  valeurs: [[1,30],[2,25],[3,16],[5,10],[8,6],[10,5],[15,3],['MINI',1.6],['MINOR',.45],['MAJOR',.04]],
+  jackpots: { MINI:25, MINOR:100, MAJOR:1000, GRAND:5000 } };
+
+const SLOTS_OUVERTS = ['zeus', 'volcan'];
 const SLOTS_MISES = [0.2,0.4,0.6,1,2,5,10,20,50,100,200,500];
 
 /* =====================================================================
@@ -2757,7 +2807,7 @@ function lbjReponse(compte, res) {
   return e;
 }
 
-const NOMS_SLOTS = { zeus:'Mythology Zeus' };
+const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
@@ -4849,7 +4899,10 @@ const serveur = http.createServer(async (req, res) => {
       const mise = sous(Number(body.mise) || 0);
       if (!(mise >= 0.2 && mise <= 500)) return repondre(res, 400, { erreur: 'Mise entre 0,20 € et 500 €.' });
       if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
-      const tirage = SLOTS.jouer(id, () => crypto.randomInt(0, 1000000000) / 1000000000);
+      const alea = () => crypto.randomInt(0, 1000000000) / 1000000000;
+      let tirage;
+      if (id === 'volcan') { tirage = jouerVolcan(VOLCAN, alea); tirage.total = Math.min(SLOTS.GAIN_MAX, tirage.total); }
+      else tirage = SLOTS.jouer(id, alea);
       const gain = sous(tirage.total * mise);
       compte.solde = sous(compte.solde - mise + gain);
       if (res.__suivi) res.__suivi.nomJeu = NOMS_SLOTS[id];
