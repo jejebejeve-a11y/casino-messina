@@ -368,6 +368,10 @@ const Carnet = {
       tx:        Array.isArray(compte.tx) ? compte.tx.slice(0, 60) : (ancienne.tx || []),
       pecheJour: compte.pecheJour || null,
       pecheAuj:  compte.pecheAuj | 0,
+      blockJour: compte.blockJour || null,
+      blockAuj:  compte.blockAuj | 0,
+      blockBest: compte.blockBest | 0,
+      blockVides: compte.blockVides | 0,
       vuLe:      new Date().toISOString()
     });
     this.memoire.set(compte.pseudoBas, fiche);
@@ -2585,6 +2589,72 @@ racine.SLOTS = { JEUX, jouer, GAIN_MAX };
 })(SLOTS_HOTE);
 
 const SLOTS = SLOTS_HOTE.SLOTS;
+/* =====================================================================
+   BLOCK : grille 8x8, 3 pieces a poser. Tout est verifie ici.
+   Plateau entierement vide apres une explosion = +10 EUR (max 10 000 EUR / jour).
+   ===================================================================== */
+const BLOCK_GAIN = 10, BLOCK_MAX_JOUR = 10000;
+const BK_FORMES = (() => {
+  const L = [];
+  const aj = (p, w) => L.push({ c: p, w });
+  aj([[0,0]], 3);
+  aj([[0,0],[0,1]], 5); aj([[0,0],[1,0]], 5);
+  aj([[0,0],[0,1],[0,2]], 5); aj([[0,0],[1,0],[2,0]], 5);
+  aj([[0,0],[0,1],[0,2],[0,3]], 4); aj([[0,0],[1,0],[2,0],[3,0]], 4);
+  aj([[0,0],[0,1],[0,2],[0,3],[0,4]], 2); aj([[0,0],[1,0],[2,0],[3,0],[4,0]], 2);
+  aj([[0,0],[0,1],[1,0],[1,1]], 6);
+  aj([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]], 3); aj([[0,0],[0,1],[1,0],[1,1],[2,0],[2,1]], 3);
+  aj([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]], 2);
+  // petits coins (3 cases)
+  aj([[0,0],[1,0],[1,1]], 3); aj([[0,1],[1,0],[1,1]], 3); aj([[0,0],[0,1],[1,0]], 3); aj([[0,0],[0,1],[1,1]], 3);
+  // grands coins (5 cases)
+  aj([[0,0],[1,0],[2,0],[2,1],[2,2]], 2); aj([[0,2],[1,2],[2,0],[2,1],[2,2]], 2); aj([[0,0],[0,1],[0,2],[1,0],[2,0]], 2); aj([[0,0],[0,1],[0,2],[1,2],[2,2]], 2);
+  // L (4 cases)
+  aj([[0,0],[1,0],[2,0],[2,1]], 2); aj([[0,1],[1,1],[2,1],[2,0]], 2); aj([[0,0],[0,1],[1,0],[2,0]], 2); aj([[0,0],[0,1],[1,1],[2,1]], 2);
+  aj([[0,0],[0,1],[0,2],[1,0]], 2); aj([[0,0],[0,1],[0,2],[1,2]], 2); aj([[0,0],[1,0],[1,1],[1,2]], 2); aj([[0,2],[1,0],[1,1],[1,2]], 2);
+  // T
+  aj([[0,0],[0,1],[0,2],[1,1]], 2); aj([[0,1],[1,0],[1,1],[1,2]], 2); aj([[0,0],[1,0],[1,1],[2,0]], 2); aj([[0,1],[1,0],[1,1],[2,1]], 2);
+  // S / Z
+  aj([[0,1],[0,2],[1,0],[1,1]], 2); aj([[0,0],[0,1],[1,1],[1,2]], 2); aj([[0,0],[1,0],[1,1],[2,1]], 2); aj([[0,1],[1,0],[1,1],[2,0]], 2);
+  // diagonales
+  aj([[0,0],[1,1]], 1); aj([[0,1],[1,0]], 1);
+  return L;
+})();
+const BK_TOT = BK_FORMES.reduce((a, f) => a + f.w, 0);
+function bkAlea() { return crypto.randomInt(0, 1000000) / 1000000; }
+function bkForme() { let x = bkAlea() * BK_TOT; for (const f of BK_FORMES) { x -= f.w; if (x < 0) return f.c; } return BK_FORMES[0].c; }
+function bkVide() { return Array.from({ length: 8 }, () => Array(8).fill(0)); }
+function bkPeut(g, p, r, c) { for (const [a, b] of p) { const y = r + a, x = c + b; if (y < 0 || y > 7 || x < 0 || x > 7 || g[y][x]) return false; } return true; }
+function bkPlaceQuelquePart(g, p) { for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (bkPeut(g, p, r, c)) return [r, c]; return null; }
+function bkPoserSur(g, p, r, c, col) {
+  const h = g.map(l => l.slice()); for (const [a, b] of p) h[r + a][c + b] = col;
+  const lignes = [], cols = [];
+  for (let y = 0; y < 8; y++) if (h[y].every(v => v)) lignes.push(y);
+  for (let x = 0; x < 8; x++) if (h.every(l => l[x])) cols.push(x);
+  let n = 0; for (const y of lignes) for (let x = 0; x < 8; x++) { if (h[y][x]) { h[y][x] = 0; n++; } }
+  for (const x of cols) for (let y = 0; y < 8; y++) { if (h[y][x]) { h[y][x] = 0; n++; } }
+  return { g: h, lignes, cols, efface: n };
+}
+/* un lot de 3 pieces qu'on peut poser toutes les trois (si possible) */
+function bkLot(g) {
+  let meilleur = null;
+  for (let essai = 0; essai < 40; essai++) {
+    const lot = [bkForme(), bkForme(), bkForme()];
+    let h = g, ok = 0;
+    for (const p of lot) { const o = bkPlaceQuelquePart(h, p); if (!o) break; h = bkPoserSur(h, p, o[0], o[1], 1).g; ok++; }
+    if (ok === 3) { meilleur = lot; break; }
+    if (!meilleur || ok > meilleur.ok) { meilleur = lot; meilleur.ok = ok; }
+  }
+  return meilleur.map(p => ({ f: p, col: 1 + crypto.randomInt(0, 7) }));
+}
+function bkNouvelle(compte) { const g = bkVide(); compte.block = { g, pieces: bkLot(g), score: 0, combo: 0, sansExplo: 0, coups: 0 }; return compte.block; }
+function bkFini(b) { return !b.pieces.some(p => p && bkPlaceQuelquePart(b.g, p.f)); }
+function bkVue(compte, extra) {
+  const b = compte.block, jour = new Date().toISOString().slice(0, 10);
+  if (compte.blockJour !== jour) { compte.blockJour = jour; compte.blockAuj = 0; }
+  return Object.assign({ ok: true, g: b.g, pieces: b.pieces, score: b.score, combo: b.combo, best: compte.blockBest | 0, fini: bkFini(b), gainsJour: compte.blockAuj | 0, maxJour: BLOCK_MAX_JOUR, solde: compte.solde }, extra || {});
+}
+
 /* ===== 3 COIN VOLCANOES : moteur (partage page + serveur) =====
    5 rouleaux x 3 rangees, 20 lignes. Volcan = joker. Pieces de lave (C) : chacune porte
    une valeur ou un jackpot. 6 pieces ou plus = BONUS : les pieces restent collees,
@@ -2811,7 +2881,7 @@ const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['poulet', 'Le Poulet', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -4184,6 +4254,41 @@ const serveur = http.createServer(async (req, res) => {
     }
 
     // --- une prise a la peche : c\'est le serveur qui credite ---
+
+    if (route === '/api/block-etat' && req.method === 'POST') {
+      if (!compte.block || body.nouvelle) bkNouvelle(compte);
+      return repondre(res, 200, bkVue(compte));
+    }
+    if (route === '/api/block-poser' && req.method === 'POST') {
+      const b = compte.block; if (!b) return repondre(res, 409, { erreur: 'Aucune partie.' });
+      const i = Number(body.i), r = Number(body.r), c = Number(body.c);
+      const p = b.pieces[i];
+      if (!p || !Number.isInteger(r) || !Number.isInteger(c) || !bkPeut(b.g, p.f, r, c)) return repondre(res, 200, bkVue(compte, { refuse: true }));
+      const avantCases = b.g.reduce((n, l) => n + l.filter(v => v).length, 0);
+      const o = bkPoserSur(b.g, p.f, r, c, p.col);
+      b.g = o.g; b.pieces[i] = null; b.coups++;
+      const nl = o.lignes.length + o.cols.length;
+      let pts = p.f.length, gain = 0, vide = false, tropTot = false;
+      if (nl) { b.combo++; b.sansExplo = 0; pts += o.efface * 10 * Math.max(1, nl - 0) + (b.combo > 1 ? b.combo * 20 : 0); }
+      else { b.sansExplo++; if (b.sansExplo >= 3) b.combo = 0; }
+      if (nl && !b.g.some(l => l.some(v => v))) {
+        vide = true; pts += 300;
+        const jour = new Date().toISOString().slice(0, 10);
+        if (compte.blockJour !== jour) { compte.blockJour = jour; compte.blockAuj = 0; }
+        // anti-triche : pas de gain sur un plateau presque vide en debut de partie (sinon on relance jusqu'a avoir les bonnes pieces)
+        if (b.coups < 6 || avantCases < 8) tropTot = true;
+        else if ((compte.blockAuj | 0) + BLOCK_GAIN <= BLOCK_MAX_JOUR) {
+          gain = BLOCK_GAIN; compte.blockAuj = (compte.blockAuj | 0) + BLOCK_GAIN;
+          compte.solde = sous(compte.solde + BLOCK_GAIN); compte.blockVides = (compte.blockVides | 0) + 1;
+          soldeAuSiege(compte);
+        }
+      }
+      b.score += pts;
+      if (b.score > (compte.blockBest | 0)) compte.blockBest = b.score;
+      if (b.pieces.every(x => !x)) b.pieces = bkLot(b.g);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, bkVue(compte, { lignes: o.lignes, cols: o.cols, pts, gain, vide, tropTot }));
+    }
     if (route === '/api/peche' && req.method === 'POST') {
       const jour = new Date().toISOString().slice(0, 10);
       if (compte.pecheJour !== jour) { compte.pecheJour = jour; compte.pecheAuj = 0; }
@@ -5811,6 +5916,8 @@ const serveur = http.createServer(async (req, res) => {
         roulettes: compte.roulettes | 0,
         points:   compte.points | 0,
         kroadVoies: compte.kroadVoies | 0,
+        blockBest: compte.blockBest | 0,
+        blockVides: compte.blockVides | 0,
         tx:       (compte.tx || []).slice(0, 60),
         voiturePremium: !!compte.voiturePremium,
         voitureHybride: !!compte.voitureHybride,
@@ -5878,6 +5985,10 @@ function ouvrirSession(fiche) {
     tx:        Array.isArray(fiche.tx) ? fiche.tx.slice(0, 60) : [],
     pecheJour: fiche.pecheJour || null,
     pecheAuj:  fiche.pecheAuj | 0,
+    blockJour: fiche.blockJour || null,
+    blockAuj:  fiche.blockAuj | 0,
+    blockBest: fiche.blockBest | 0,
+    blockVides: fiche.blockVides | 0,
     soldeSuivi: sous(Number(fiche.solde)),
     banni:     !!fiche.banni,
     penalty: null,                       // aucune serie de penaltys en cours
