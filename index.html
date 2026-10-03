@@ -1415,6 +1415,47 @@ body.tour-actif{overflow:hidden;-webkit-user-select:none;user-select:none;-webki
 #tourPlein .rules{ text-align:left; }
 #tourPlein .rules ul{ font-size:12px; color:var(--tr-ink-dim); padding-left:18px; line-height:1.6; margin:0 0 12px;}
 #tourPlein .rules b{ color:var(--tr-ink); }
+/*TRV*/
+/* --- habillage facon dessin anime --- */
+#tourPlein .topbar{position:absolute;left:0;right:0;top:0;z-index:20;background:none!important;border:0!important;box-shadow:none!important;pointer-events:none}
+#tourPlein .topbar>*{pointer-events:auto}
+#tourPlein .topbar .logo{visibility:hidden}
+#tourPlein .topbar .icon-btn{width:34px;height:34px;border-radius:50%;background:rgba(10,40,70,.45);border:1.5px solid rgba(255,255,255,.55);color:#fff;font-size:15px}
+#tourPlein .topbar .balance{background:rgba(10,40,70,.45);border-radius:14px;padding:3px 10px}
+#tourPlein .stage{background:linear-gradient(#59b8cf,#86d0dc 55%,#b6e3e6)!important}
+#tourPlein .sun-glow{left:50%!important;top:auto!important;bottom:22%;width:200px;height:200px;transform:translate(-50%,0)!important;z-index:0;opacity:.75}
+#tourPlein .world{z-index:1}
+#tourPlein .tower-viewport{z-index:6}
+#tourPlein .toast{top:auto!important;bottom:20%!important;font-size:13px!important}
+#tourPlein .toast.lose,#tourPlein .toast.perfect{display:none!important}
+#tourPlein .skyline,#tourPlein .sidewalk,#tourPlein .grain{display:none}
+#tourPlein .tr-ville{position:absolute;left:-2%;right:-2%;bottom:0;height:62%;z-index:3;pointer-events:none}
+#tourPlein .tr-ville svg{width:100%;height:100%;display:block}
+#tourPlein .shop{bottom:12%!important;width:160px!important;z-index:5}
+#tourPlein .tr-ballon{position:absolute;left:5%;top:36%;width:52px;z-index:3;pointer-events:none;animation:trBal 6s ease-in-out infinite}
+@keyframes trBal{50%{transform:translate(8px,-14px)}}
+#tourPlein .current-mult,#tourPlein .floorcount,#tourPlein .hint{display:none!important}
+#tourPlein .results{top:58px!important}
+#tourPlein .results .pill{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(255,236,170,.88);color:#6a4a10;border:1px solid #c9a24a}
+#tourPlein .results .pill.bad{background:rgba(255,190,190,.9);color:#a01a1a;border-color:#d05050}
+#tourPlein .tr-gros{position:absolute;left:0;right:0;top:15%;z-index:12;text-align:center;pointer-events:none;font:900 54px/1 'Baloo 2','Arial Rounded MT Bold',Arial,sans-serif;color:#ffc93a;-webkit-text-stroke:4px #8a4a00;paint-order:stroke fill;text-shadow:0 4px 0 #6a3500,0 0 18px rgba(255,200,60,.6);opacity:0}
+#tourPlein .tr-gros.rouge{color:#ff3b3b;-webkit-text-stroke-color:#5a0000;text-shadow:0 4px 0 #4a0000,0 0 18px rgba(255,60,60,.6)}
+#tourPlein .tr-gros.on{animation:trGros 1.2s cubic-bezier(.2,1.5,.4,1) forwards}
+@keyframes trGros{0%{opacity:0;transform:scale(.3)}15%{opacity:1;transform:scale(1.15)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:translateY(-30px)}}
+#tourPlein .tr-oops{position:absolute;left:0;right:0;bottom:0;height:70px;z-index:14;display:grid;place-items:center;pointer-events:none;background:linear-gradient(90deg,#2a4a7a,#3d2a6a 50%,#6a2a3a);border-top:3px solid #ffd35a;transform:translateY(110%);transition:transform .35s cubic-bezier(.2,1.4,.4,1)}
+#tourPlein .tr-oops b{font:900 40px 'Baloo 2',Arial,sans-serif;color:#fff;-webkit-text-stroke:3px #1a1440;paint-order:stroke fill;letter-spacing:2px}
+#tourPlein .tr-oops.on{transform:none}
+#tourPlein .tr-puff{position:absolute;z-index:11;width:44px;height:30px;pointer-events:none;border-radius:50%;background:radial-gradient(circle at 40% 45%,#fff 0 35%,rgba(255,255,255,.85) 50%,rgba(255,255,255,0) 72%);animation:trPuff .7s ease-out forwards}
+@keyframes trPuff{from{opacity:1;transform:translate(0,0) scale(.5)}to{opacity:0;transform:translate(var(--dx),-14px) scale(1.6)}}
+#tourPlein .controls{background:linear-gradient(#1b2a52,#101a38)!important;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px))!important;gap:7px!important;border-top:2px solid #2d4a8a!important}
+#tourPlein .bet-row .btn{height:36px;border-radius:8px;font:800 13px Arial,sans-serif;letter-spacing:.04em}
+#tourPlein .bet-row .stepper{height:36px;border-radius:8px;background:#0b1430;border:1.5px solid #34507f}
+#tourPlein .build-btn{height:44px!important;border-radius:6px!important;background:repeating-linear-gradient(-45deg,#ffc928 0 14px,#f2a516 14px 18px,#1d1a12 18px 24px,#f2a516 24px 28px)!important;box-shadow:inset 0 0 0 3px #ffde6a,0 3px 0 #6a4a00!important}
+#tourPlein .build-btn span{font:900 18px 'Baloo 2',Arial,sans-serif!important;color:#fff!important;-webkit-text-stroke:3px #3a2a00;paint-order:stroke fill;letter-spacing:.08em}
+#tourPlein .build-btn .sub{display:none}
+#tourPlein .cashout-btn{height:44px!important;border-radius:6px!important;background:linear-gradient(#2f76e8,#1a4fb0)!important;box-shadow:inset 0 0 0 2px #7fb0ff,0 3px 0 #0a2a6a!important;flex-direction:column}
+#tourPlein .cashout-btn span{font:800 11px Arial,sans-serif!important;letter-spacing:.06em}
+#tourPlein .cashout-btn small{font:700 12px Arial,sans-serif!important;opacity:1!important}
 @media (max-width:380px){ #tourPlein .floor{ width:148px; } #tourPlein .payload{ width:112px; } #tourPlein .shop{ width:196px; } }
 
 /* =====================================================================
@@ -12657,22 +12698,43 @@ THIM.fermer = function(){ THIM.ouvert = false; racine.hidden = true; document.bo
 
     <div class="world" id="trWorld">
       <div class="tower-viewport" id="trTowerViewport"><div class="tower" id="trTower"></div></div>
-      <div class="lamp l"></div><div class="lamp r"></div>
+      <div class="tr-ville"><svg viewBox="0 0 400 230" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="trvA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a8fb0"/><stop offset="1" stop-color="#5d6185"/></linearGradient>
+  <linearGradient id="trvB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a99a9a"/><stop offset="1" stop-color="#76686f"/></linearGradient>
+  <linearGradient id="trvC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c7a98a"/><stop offset="1" stop-color="#8e7462"/></linearGradient>
+  <pattern id="trvS" width="14" height="10" patternUnits="userSpaceOnUse"><rect width="7" height="10" fill="#e8463c"/><rect x="7" width="7" height="10" fill="#fff4e6"/></pattern></defs>
+  <rect x="300" y="40" width="42" height="120" fill="url(#trvA)"/><rect x="306" y="50" width="10" height="12" fill="#3d4060"/><rect x="324" y="50" width="10" height="12" fill="#3d4060"/><rect x="306" y="72" width="10" height="12" fill="#3d4060"/><rect x="324" y="72" width="10" height="12" fill="#3d4060"/>
+  <path d="M296 40h50l-6-10h-38z" fill="#4c4f70"/><circle cx="342" cy="28" r="9" fill="#5fa04a"/><circle cx="334" cy="32" r="7" fill="#7cbc5a"/>
+  <rect x="0" y="92" width="78" height="80" fill="url(#trvB)"/><rect x="8" y="102" width="62" height="16" fill="#5b5060"/><rect x="0" y="86" width="82" height="8" fill="#6e6070"/>
+  <rect x="10" y="126" width="14" height="16" fill="#3a3346"/><rect x="32" y="126" width="14" height="16" fill="#3a3346"/><rect x="54" y="126" width="14" height="16" fill="#3a3346"/>
+  <rect x="62" y="122" width="70" height="56" fill="url(#trvC)"/><path d="M58 122h78l-8-14H66z" fill="#8e5e46"/>
+  <rect x="260" y="108" width="140" height="70" fill="url(#trvB)"/><path d="M262 120h70v14h-70z" fill="url(#trvS)"/><path d="M262 134 l5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6 5 6 5-6" fill="none" stroke="#c9302a" stroke-width="2"/>
+  <rect x="340" y="96" width="60" height="82" fill="url(#trvC)"/><rect x="348" y="108" width="14" height="18" fill="#4a3a36"/><rect x="372" y="108" width="14" height="18" fill="#4a3a36"/><rect x="348" y="136" width="44" height="40" fill="#5a4a40"/>
+  <rect x="130" y="138" width="30" height="40" fill="#6a6880"/><rect x="236" y="134" width="30" height="44" fill="#6a6880"/>
+  <rect x="0" y="176" width="400" height="18" fill="#4b3a33"/><rect x="0" y="194" width="400" height="36" fill="#2c2420"/>
+  <path d="M0 200h400" stroke="#e6b84a" stroke-width="2" stroke-dasharray="18 14"/>
+</svg></div>
       <div class="shop" id="trShop"></div>
       <div class="sidewalk"></div>
     </div>
+    <div class="tr-ballon"><svg viewBox="0 0 60 84" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="trbal" cx=".35" cy=".3"><stop offset="0" stop-color="#9bff8a"/><stop offset=".6" stop-color="#2fb34a"/><stop offset="1" stop-color="#156a2a"/></radialGradient></defs>
+  <path d="M30 2C14 2 4 14 4 28c0 14 14 26 22 34h8c8-8 22-20 22-34C56 14 46 2 30 2z" fill="url(#trbal)"/><path d="M30 2c-6 8-9 20-8 60M30 2c6 8 9 20 8 60" stroke="#126a28" stroke-width="1.4" fill="none" opacity=".6"/>
+  <rect x="9" y="22" width="42" height="11" rx="5" fill="#fff"/><text x="30" y="31" text-anchor="middle" font-family="Baloo 2,Arial" font-weight="800" font-size="9" fill="#1d8a35">Messina</text>
+  <path d="M26 62l-2 10M34 62l2 10" stroke="#5a3a20" stroke-width="1.2"/><rect x="22" y="72" width="16" height="10" rx="2" fill="#8a5a30"/></svg></div>
+    <div class="tr-gros" id="trGros"></div>
+    <div class="tr-oops" id="trOops"><b>OOPS</b></div>
     <div class="collapse-flash" id="trFlash"></div>
     <div class="toast" id="trToast"></div>
   </div>
 
   <div class="controls">
     <div class="bet-row" id="trBetRow">
-      <button class="btn btn-blue allin" id="trBtnAllIn">ALL IN</button>
+      <button class="btn btn-blue allin" id="trBtnAllIn">TAPIS</button>
       <div class="stepper"><button id="trBetMinus">−</button><div class="val" id="trBetVal">0,10 €</div><button id="trBetPlus">+</button></div>
       <button class="btn btn-blue x2" id="trBtnX2">x2</button>
     </div>
     <div class="action-row">
-      <button class="btn cashout-btn" id="trBtnCashout" hidden><span>CASHOUT</span><small id="trCashoutAmt">0,00 €</small></button>
+      <button class="btn cashout-btn" id="trBtnCashout" hidden><span>ENCAISSEMENT</span><small id="trCashoutAmt">0,00 €</small></button>
       <button class="btn build-btn" id="trBtnBuild"><span id="trBuildLabel">BUILD</span><span class="sub" id="trBuildSub"></span></button>
     </div>
     <div class="hint" id="trHint">Misez, puis appuyez sur <b>BUILD</b> pour lancer le premier étage.</div>
@@ -17033,7 +17095,14 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
     updateCamera();
   }
 
+  function grosMult(val, bad){
+    var g=$('trGros'); g.className='tr-gros'+(bad?' rouge':''); g.textContent=bad?'x0':('x'+(Math.round(val*100)/100)); void g.offsetWidth; g.classList.add('on');
+    if (bad){ var o=$('trOops'); o.classList.add('on'); setTimeout(function(){ o.classList.remove('on'); }, 1700); return; }
+    var st=$('trStage'), sr=st.getBoundingClientRect(), r=$('trLandingShadow').getBoundingClientRect();
+    [-1,1].forEach(function(d){ for (var k=0;k<2;k++){ var p=document.createElement('div'); p.className='tr-puff'; p.style.left=(sr.width/2+d*(46+k*18)-22)+'px'; p.style.top=(r.top-sr.top-10+k*6)+'px'; p.style.setProperty('--dx',(d*(30+k*12))+'px'); st.appendChild(p); setTimeout(function(pp){ return function(){ pp.remove(); }; }(p),750); } });
+  }
   function pushResult(val, bad){
+    grosMult(val, bad);
     var box=$('trResults');
     var p=document.createElement('div');
     p.className='pill'+(bad?' bad':(val<1?' down':''));
