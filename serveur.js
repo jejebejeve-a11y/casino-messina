@@ -2635,17 +2635,57 @@ function bkPoserSur(g, p, r, c, col) {
   for (const x of cols) for (let y = 0; y < 8; y++) { if (h[y][x]) { h[y][x] = 0; n++; } }
   return { g: h, lignes, cols, efface: n };
 }
-/* un lot de 3 pieces qu'on peut poser toutes les trois (si possible) */
-function bkLot(g) {
-  let meilleur = null;
-  for (let essai = 0; essai < 40; essai++) {
-    const lot = [bkForme(), bkForme(), bkForme()];
-    let h = g, ok = 0;
-    for (const p of lot) { const o = bkPlaceQuelquePart(h, p); if (!o) break; h = bkPoserSur(h, p, o[0], o[1], 1).g; ok++; }
-    if (ok === 3) { meilleur = lot; break; }
-    if (!meilleur || ok > meilleur.ok) { meilleur = lot; meilleur.ok = ok; }
+/* generateur "aidant" : on essaie beaucoup de lots et on garde souvent celui
+   qui permet de faire des lignes, voire de vider tout le plateau */
+/* version rapide en "masques de bits" : chaque rangee = un nombre de 0 a 255 */
+const bkMasques = new Map();
+function bkMasque(p) { let m = bkMasques.get(p); if (m) return m; const h = Math.max(...p.map(q => q[0])) + 1, w = Math.max(...p.map(q => q[1])) + 1; const rows = Array(h).fill(0); for (const [a, b] of p) rows[a] |= 1 << b; m = { rows, h, w, n: p.length }; bkMasques.set(p, m); return m; }
+function bkBits(g) { return g.map(l => l.reduce((m, v, x) => v ? m | (1 << x) : m, 0)); }
+function bkCompte(R) { let n = 0; for (const r of R) { let v = r; while (v) { v &= v - 1; n++; } } return n; }
+function bkMeilleurePose(R, m) {
+  let best = null;
+  for (let r = 0; r + m.h <= 8; r++) for (let c = 0; c + m.w <= 8; c++) {
+    let ok = true; for (let a = 0; a < m.h; a++) if (R[r + a] & (m.rows[a] << c)) { ok = false; break; }
+    if (!ok) continue;
+    const S = R.slice(); for (let a = 0; a < m.h; a++) S[r + a] |= m.rows[a] << c;
+    let col = 255; for (const v of S) col &= v;
+    let n = 0; for (let y = 0; y < 8; y++) if (S[y] === 255) { S[y] = 0; n++; }
+    if (col) { for (let y = 0; y < 8; y++) S[y] &= ~col & 255; let v = col; while (v) { v &= v - 1; n++; } }
+    const reste = bkCompte(S), sc = (reste === 0 ? 5000 : 0) + n * 120 - reste * 2;
+    if (!best || sc > best.sc) best = { sc, S, n };
   }
-  return meilleur.map(p => ({ f: p, col: 1 + crypto.randomInt(0, 7) }));
+  return best;
+}
+function bkJoueLot(g, lot) {
+  const R0 = bkBits(g), M = lot.map(bkMasque); let best = null;
+  const ordres = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  for (const o of ordres) {
+    let R = R0, lignes = 0, ok = 0;
+    for (const k of o) { const b = bkMeilleurePose(R, M[k]); if (!b) break; R = b.S; lignes += b.n; ok++; }
+    const reste = bkCompte(R);
+    const sc = ok * 10000 + (ok === 3 && reste === 0 ? 8000 : 0) + lignes * 150 - reste * 3;
+    if (!best || sc > best.sc) best = { sc, ok, lignes, vide: ok === 3 && reste === 0 };
+  }
+  return best;
+}
+function bkLot(g) {
+  const plein = g.reduce((a, l) => a + l.filter(v => v).length, 0);
+  const essais = plein <= 24 ? 90 : 50;
+  let meilleur = null, jouable = null;
+  for (let e = 0; e < essais; e++) {
+    const lot = [bkForme(), bkForme(), bkForme()];
+    const r = bkJoueLot(g, lot);
+    if (r.ok === 3 && !jouable) jouable = lot;
+    if (!meilleur || r.sc > meilleur.r.sc) meilleur = { lot, r };
+  }
+  // plateau presque vide : on cherche fort un lot qui le vide completement
+  if (!meilleur.r.vide && plein >= 8 && plein <= 24) {
+    for (let e = 0; e < 500; e++) { const lot = [bkForme(), bkForme(), bkForme()]; const r = bkJoueLot(g, lot); if (r.vide) { meilleur = { lot, r }; break; } }
+  }
+  // 80 % du temps : le lot le plus genereux ; sinon un lot jouable au hasard (un peu de difficulte)
+  // plateau (presque) vide : pas d'aide, sinon on pourrait relancer des parties pour gagner sans jouer
+  const lot = (plein >= 8 && (bkAlea() < .8 || !jouable)) ? meilleur.lot : (jouable || meilleur.lot);
+  return lot.map(p => ({ f: p, col: 1 + crypto.randomInt(0, 7) }));
 }
 function bkNouvelle(compte) { const g = bkVide(); compte.block = { g, pieces: bkLot(g), score: 0, combo: 0, sansExplo: 0, coups: 0 }; return compte.block; }
 function bkFini(b) { return !b.pieces.some(p => p && bkPlaceQuelquePart(b.g, p.f)); }
@@ -4276,7 +4316,7 @@ const serveur = http.createServer(async (req, res) => {
         const jour = new Date().toISOString().slice(0, 10);
         if (compte.blockJour !== jour) { compte.blockJour = jour; compte.blockAuj = 0; }
         // anti-triche : pas de gain sur un plateau presque vide en debut de partie (sinon on relance jusqu'a avoir les bonnes pieces)
-        if (b.coups < 6 || avantCases < 8) tropTot = true;
+        if (b.coups < 4 || avantCases < 6) tropTot = true;
         else if ((compte.blockAuj | 0) + BLOCK_GAIN <= BLOCK_MAX_JOUR) {
           gain = BLOCK_GAIN; compte.blockAuj = (compte.blockAuj | 0) + BLOCK_GAIN;
           compte.solde = sous(compte.solde + BLOCK_GAIN); compte.blockVides = (compte.blockVides | 0) + 1;
