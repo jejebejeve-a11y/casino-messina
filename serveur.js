@@ -2595,31 +2595,14 @@ const SLOTS = SLOTS_HOTE.SLOTS;
    ===================================================================== */
 const BLOCK_GAIN = 10, BLOCK_MAX_JOUR = 10000;
 const BK_FORMES = (() => {
-  const L = [];
-  const aj = (p, w) => L.push({ c: p, w });
-  aj([[0,0]], 3);
-  aj([[0,0],[0,1]], 5); aj([[0,0],[1,0]], 5);
-  aj([[0,0],[0,1],[0,2]], 5); aj([[0,0],[1,0],[2,0]], 5);
-  aj([[0,0],[0,1],[0,2],[0,3]], 4); aj([[0,0],[1,0],[2,0],[3,0]], 4);
-  aj([[0,0],[0,1],[0,2],[0,3],[0,4]], 2); aj([[0,0],[1,0],[2,0],[3,0],[4,0]], 2);
-  aj([[0,0],[0,1],[1,0],[1,1]], 6);
-  aj([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]], 3); aj([[0,0],[0,1],[1,0],[1,1],[2,0],[2,1]], 3);
-  aj([[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]], 2);
-  // petits coins (3 cases)
-  aj([[0,0],[1,0],[1,1]], 3); aj([[0,1],[1,0],[1,1]], 3); aj([[0,0],[0,1],[1,0]], 3); aj([[0,0],[0,1],[1,1]], 3);
-  // grands coins (5 cases)
-  aj([[0,0],[1,0],[2,0],[2,1],[2,2]], 2); aj([[0,2],[1,2],[2,0],[2,1],[2,2]], 2); aj([[0,0],[0,1],[0,2],[1,0],[2,0]], 2); aj([[0,0],[0,1],[0,2],[1,2],[2,2]], 2);
-  // L (4 cases)
-  aj([[0,0],[1,0],[2,0],[2,1]], 2); aj([[0,1],[1,1],[2,1],[2,0]], 2); aj([[0,0],[0,1],[1,0],[2,0]], 2); aj([[0,0],[0,1],[1,1],[2,1]], 2);
-  aj([[0,0],[0,1],[0,2],[1,0]], 2); aj([[0,0],[0,1],[0,2],[1,2]], 2); aj([[0,0],[1,0],[1,1],[1,2]], 2); aj([[0,2],[1,0],[1,1],[1,2]], 2);
-  // T
-  aj([[0,0],[0,1],[0,2],[1,1]], 2); aj([[0,1],[1,0],[1,1],[1,2]], 2); aj([[0,0],[1,0],[1,1],[2,0]], 2); aj([[0,1],[1,0],[1,1],[2,1]], 2);
-  // S / Z
-  aj([[0,1],[0,2],[1,0],[1,1]], 2); aj([[0,0],[0,1],[1,1],[1,2]], 2); aj([[0,0],[1,0],[1,1],[2,1]], 2); aj([[0,1],[1,0],[1,1],[2,0]], 2);
-  // diagonales
-  aj([[0,0],[1,1]], 1); aj([[0,1],[1,0]], 1);
+  // pieces simples : petits et gros cubes, comme demande
+  const L = [], aj = (p, w) => L.push({ c: p, w });
+  const rect = (h, w) => { const p = []; for (let a = 0; a < h; a++) for (let b = 0; b < w; b++) p.push([a, b]); return p; };
+  aj(rect(1,1), 3); aj(rect(2,2), 7); aj(rect(3,3), 9); aj(rect(2,3), 5); aj(rect(3,2), 5);
+  aj(rect(1,2), 2); aj(rect(2,1), 2); aj(rect(1,3), 2); aj(rect(3,1), 2);
   return L;
 })();
+const BK_3x3 = BK_FORMES[2].c, BK_2x3 = BK_FORMES[3].c, BK_3x2 = BK_FORMES[4].c;
 const BK_TOT = BK_FORMES.reduce((a, f) => a + f.w, 0);
 function bkAlea() { return crypto.randomInt(0, 1000000) / 1000000; }
 function bkForme() { let x = bkAlea() * BK_TOT; for (const f of BK_FORMES) { x -= f.w; if (x < 0) return f.c; } return BK_FORMES[0].c; }
@@ -2669,6 +2652,10 @@ function bkJoueLot(g, lot) {
   return best;
 }
 function bkLot(g) {
+  // le lot type : 1 piece de 6 + 2 pieces de 9, si elles rentrent
+  const type = [bkAlea() < .5 ? BK_2x3 : BK_3x2, BK_3x3, BK_3x3];
+  const pl0 = g.reduce((a, l) => a + l.filter(v => v).length, 0);
+  if ((pl0 < 6 || pl0 > 40) && bkAlea() < .6 && bkJoueLot(g, type).ok === 3) return type.map(p => ({ f: p, col: 1 + crypto.randomInt(0, 7) }));
   const plein = g.reduce((a, l) => a + l.filter(v => v).length, 0);
   const essais = plein <= 24 ? 90 : 50;
   let meilleur = null, jouable = null;
@@ -2679,8 +2666,8 @@ function bkLot(g) {
     if (!meilleur || r.sc > meilleur.r.sc) meilleur = { lot, r };
   }
   // plateau presque vide : on cherche fort un lot qui le vide completement
-  if (!meilleur.r.vide && plein >= 8 && plein <= 24) {
-    for (let e = 0; e < 500; e++) { const lot = [bkForme(), bkForme(), bkForme()]; const r = bkJoueLot(g, lot); if (r.vide) { meilleur = { lot, r }; break; } }
+  if (!meilleur.r.vide && plein >= 6 && plein <= 40) {
+    for (let e = 0; e < 700; e++) { const lot = [bkForme(), bkForme(), bkForme()]; const r = bkJoueLot(g, lot); if (r.vide) { meilleur = { lot, r }; break; } }
   }
   // 80 % du temps : le lot le plus genereux ; sinon un lot jouable au hasard (un peu de difficulte)
   // plateau (presque) vide : pas d'aide, sinon on pourrait relancer des parties pour gagner sans jouer

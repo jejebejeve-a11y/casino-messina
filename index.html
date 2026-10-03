@@ -10171,15 +10171,36 @@ function ac(){ if (!A) try { A = new (window.AudioContext||window.webkitAudioCon
 function ton(f, v, d, t, type, f2){ if (!son || !ac()) return; const t0 = A.currentTime + (t||0), o = A.createOscillator(), g = A.createGain(); o.type = type||'sine'; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + d); g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + .006); g.gain.exponentialRampToValueAtTime(.0001, t0 + d); o.connect(g).connect(MG); o.start(t0); o.stop(t0 + d + .03); }
 function souffle(v, d, f, t){ if (!son || !ac()) return; const t0 = A.currentTime + (t||0), n = Math.floor(A.sampleRate*d), b = A.createBuffer(1,n,A.sampleRate), x = b.getChannelData(0); for (let i=0;i<n;i++) x[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.5);
   const s = A.createBufferSource(), fl = A.createBiquadFilter(), g = A.createGain(); s.buffer = b; fl.type = 'bandpass'; fl.frequency.value = f; fl.Q.value = .9; g.gain.value = v; s.connect(fl).connect(g).connect(MG); s.start(t0); }
-const sPrend = () => { ton(880, .04, .06); };
-const sPose = () => { ton(380, .26, .1, 0, 'sine', 820); ton(1500, .04, .05, .02); souffle(.08, .035, 4200); };
-const GAM = [523.25,587.33,659.25,783.99,880,1046.5,1174.66,1318.5,1567.98,1760,2093];
-function cloche(f, v, d, t){ ton(f, v, d, t); ton(f*2.01, v*.35, d*.6, t); ton(f*3.02, v*.12, d*.35, t); }
-function sExplose(n, combo){ const k = Math.min(9, Math.max(0, combo-1)), f0 = 392 * Math.pow(2, k/12*2);
-  cloche(f0, .16, .8, 0); cloche(f0*1.26, .11, .75, .05); cloche(f0*1.5, .09, .7, .1); if (n > 1) cloche(f0*2, .08, .9, .16);
-  souffle(.22, .55, 5200); souffle(.12, .3, 2400, .05); }
-function sVide(){ [523.25,659.25,783.99,1046.5,1318.5,1567.98,2093].forEach((f,i) => { ton(f,.08,.6,i*.08); ton(f*1.5,.025,.4,i*.08+.04); }); [261.63,329.63,392].forEach(f => ton(f,.06,1.6,.6)); }
-const sFin = () => { [392,349.23,311.13,261.63].forEach((f,i) => ton(f,.08,.5,i*.16,'triangle')); };
+/* sons faits sur le modele de la video (memes hauteurs, memes durees, meme caractere) */
+const NOTE = n => 261.63 * Math.pow(2, n/12);       // 0 = do4
+const sPrend = () => { ton(1060, .03, .04, 0, 'triangle'); };
+const sPose = () => { ton(530, .24, .085); ton(1060, .07, .06, 0, 'triangle'); souffle(.14, .035, 2600); };
+function chemin(points, v, type, t){ if (!son || !ac()) return; const t0 = A.currentTime + (t||0), o = A.createOscillator(), g = A.createGain(); o.type = type||'triangle';
+  o.frequency.setValueAtTime(points[0][1], t0); points.forEach(([tt,f]) => o.frequency.linearRampToValueAtTime(f, t0+tt));
+  const fin = points[points.length-1][0]; g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(v,t0+.02); g.gain.setValueAtTime(v,t0+fin*.6); g.gain.exponentialRampToValueAtTime(.0001,t0+fin+.15);
+  o.connect(g).connect(MG); o.start(t0); o.stop(t0+fin+.2); }
+function petillant(notes, v, pas, t){ notes.forEach((f,i) => { ton(f, v, .35, (t||0) + i*pas); ton(f*2, v*.25, .2, (t||0) + i*pas); }); souffle(.05, .3 + notes.length*pas, 7000, t); }
+function sExplose(n, combo){
+  const up = Math.min(12, Math.max(0, combo-1)*2);
+  if (combo <= 1 && n < 3) {                      // une ligne : accord sol + do qui sonne et s'eteint
+    souffle(.2, .08, 3200); ton(NOTE(7+up), .2, .65); ton(NOTE(12+up), .12, .6, .01); ton(NOTE(19+up), .03, .3);
+  } else if (combo < 4 && n < 3) {                // combo : accord grave do-mi puis petites etincelles aigues
+    ton(NOTE(0+up), .18, .55); ton(NOTE(4+up), .14, .55); ton(NOTE(-12+up), .06, .4);
+    petillant([NOTE(19+up), NOTE(24+up), NOTE(28+up), NOTE(24+up)], .045, .08, .45);
+  } else {                                         // gros combo : arpege rapide et brillant
+    const b = up/2; petillant([NOTE(24+b),NOTE(19+b),NOTE(12+b),NOTE(0+b),NOTE(28+b),NOTE(31+b),NOTE(28+b),NOTE(24+b),NOTE(31+b),NOTE(36+b)], .06, .07, 0);
+    ton(NOTE(0+b), .12, .5); ton(NOTE(12+b), .08, .5);
+  }
+}
+function sVide(){                                  // plateau vide : gros boum grave puis cloches et arpege
+  if (son && ac()) { const t0 = A.currentTime, o = A.createOscillator(), g = A.createGain(); o.frequency.setValueAtTime(110, t0); o.frequency.exponentialRampToValueAtTime(32, t0 + .35);
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(.5, t0 + .02); g.gain.exponentialRampToValueAtTime(.0001, t0 + .5); o.connect(g).connect(MG); o.start(t0); o.stop(t0 + .55); }
+  ton(NOTE(7), .14, .7, .2); ton(624, .12, .7, .26); ton(462, .08, .6, .5); ton(236, .06, .5, .55);
+  petillant([NOTE(24),NOTE(28),NOTE(31),NOTE(36),NOTE(31),NOTE(36),NOTE(40),NOTE(43)], .055, .085, .55);
+}
+const sPlusDePlace = () => { chemin([[0,387],[.08,226],[.12,441],[.2,742],[.28,495],[.4,258],[.5,161],[.65,193],[.8,322],[.9,90]], .18, 'triangle');
+  if (son && ac()) { const t0 = A.currentTime + .85, o = A.createOscillator(), g = A.createGain(); o.frequency.value = 58; g.gain.setValueAtTime(.0001,t0); g.gain.exponentialRampToValueAtTime(.3,t0+.03); g.gain.exponentialRampToValueAtTime(.0001,t0+.45); o.connect(g).connect(MG); o.start(t0); o.stop(t0+.5); } };
+const sFin = () => { for (let i = 0; i < 9; i++) { ton(1701, .018, .06, i*.05); ton(4468, .008, .05, i*.05+.02); } ton(269, .2, .3, .56); ton(538, .18, .3, .58); ton(1065, .12, .35, .62); ton(538, .05, .2, .74); };
 const sRefus = () => ton(180,.08,.12,0,'sine',140);
 
 /* ---------- mise en page ---------- */
@@ -10360,7 +10381,7 @@ function appliquer(r, apresCoup){
 }
 async function charger(nouvelle){ let r = null; try { r = await envoyer('block-etat', nouvelle ? { nouvelle: 1 } : {}); } catch (e) {} if (r && r.ok) { appliquer(r); fini = false; finAnim = 0; if (r.fini) finPartie(); } }
 function finPartie(){
-  if (fini) return; fini = true; finAnim = performance.now(); sFin();
+  if (fini) return; fini = true; finAnim = performance.now(); sPlusDePlace(); setTimeout(sFin, 1300);
   const ns = document.createElement('div'); ns.className = 'bk-msg anim'; ns.style.top = (trayY + trayH/2) + 'px'; ns.innerHTML = '<i style="font-size:24px;padding:8px 22px;border-radius:14px;background:rgba(0,0,0,.45)">Plus de place !</i>'; $('bkR').appendChild(ns); setTimeout(() => ns.remove(), 1500);
   setTimeout(() => {
     if (!BK.ouvert) return;
