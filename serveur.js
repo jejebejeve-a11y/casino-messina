@@ -109,40 +109,20 @@ function towerPeriodFor(n) { return Math.max(0.55, 1.5 - n * 0.045); }
 function towerRand(a, b) { return a + Math.random() * (b - a); }
 function towerClamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-/* ---------- Tower Rush : les cotes (refonte v2, casino beaucoup plus dur) ----------
-   La seule facon de perdre la tour reste un lacher mal vise. Mais la cote
-   tiree a chaque etage bien pose est maintenant tres majoritairement
-   defavorable : bien plus souvent en dessous de x1 qu'au-dessus de x2/x3.
-   Repartition (independante a chaque etage) :
-     62 % : x0,25 a x0,95  (perte partielle, le cas de loin le plus frequent)
-     25 % : x0,95 a x1,30  (quasi neutre)
-     10 % : x1,30 a x2,00  (bon coup)
-      3 % : x2,00 a x3,60  (gros coup, rare)
-   Esperance ~0,90 par etage : monter beaucoup exige d'enchainer plusieurs
-   bons coups d'affilee, ce qui devient vite tres improbable (simulation :
-   multiplier une mise par plus de x32, comme un x0,10€->16 000 €, arrive
-   environ 1 tour sur 4 000 a 5 000, quel que soit le niveau de jeu).
-   Plus on monte, plus le balancement est rapide (towerPeriodFor) et
-   l\'amplitude reduite (towerAmpFor) : viser juste devient plus dur en
-   hauteur, ce qui ajoute un risque d\'echec qui grimpe avec l\'audace du
-   joueur, en plus de l\'esperance deja negative du multiplicateur.
-   Plafond de securite : niveau 30 ou x5000, encaisse d\'office (au-dela
-   c\'est purement theorique - avec cette esperance, personne n\'en approche
-   sans une serie de coups exceptionnelle).                              */
 const TOWER_NIVEAUX  = 30;
 const TOWER_MULT_MAX = 30;      // gain maximum : 30 fois la mise (100 EUR -> 3 000 EUR)
 const TOWER_GAIN_MAX = 30000;
 
-/* ---------- Tower Rush : les cotes (refonte v4, comme le vrai jeu) ----------
+/* ---------- Tower Rush : les cotes (v6, plus proche du vrai jeu) ----------
    Le resultat ne depend PAS de la visee : a chaque etage, le hasard decide.
-     17 % : la tour s'effondre (mise perdue)
-     83 % : l'etage tient et donne un multiplicateur au hasard, bon ou mauvais :
-        13 % x0,3 | 13 % x0,5 | 18 % x0,8 | 17 % x1,1 | 15 % x1,4 | 10 % x1,8
-         8 % x2,2 |  4 % x2,7 |  2 % x3
-   Chaque etage rend ~97 % en moyenne (0,83 x 1,169).
+     12 % : la tour s'effondre (mise perdue)
+     88 % : l'etage tient et donne un multiplicateur au hasard :
+        10 % x0,4 | 12 % x0,6 | 18 % x0,8 | 14 % x1 | 17 % x1,15 | 13 % x1,3
+         9 % x1,8 |  5 % x2,5 |  2 % x3
+   Chaque etage rend ~97,5 % en moyenne (0,88 x 1,1075).
    Plafond : x30 de la mise, encaisse d'office.                          */
-const TOWER_P_CHUTE = 0.17;
-const TOWER_TABLE = [[0.3, .13], [0.5, .13], [0.8, .18], [1.1, .17], [1.4, .15], [1.8, .10], [2.2, .08], [2.7, .04], [3, .02]];
+const TOWER_P_CHUTE = 0.12;
+const TOWER_TABLE = [[0.4, .10], [0.6, .12], [0.8, .18], [1, .14], [1.15, .17], [1.3, .13], [1.8, .09], [2.5, .05], [3, .02]];
 function towerAlea() { return crypto.randomInt(0, 1000000000) / 1000000000; }
 function towerRollFactor() {
   let r = towerAlea(), a = 0;
