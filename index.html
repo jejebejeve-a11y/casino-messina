@@ -17293,16 +17293,26 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
       var targetDY=(retRect.top-payRect.top)+(payRect.height*0.1);
 
       if (r.rate){
-        var missDur=0.52;
-        payload.style.transition='transform '+missDur+'s cubic-bezier(.4,0,1,1)';
-        payload.style.transform='translate(calc(-50% + '+(angle+dir*130).toFixed(1)+'px), '+(targetDY+320).toFixed(0)+'px) rotate('+(dir*74)+'deg)';
+        var dropT=clamp(0.34+Math.abs(targetDY)/1050,0.34,0.6), slideT=0.55, fallT=0.4;
+        var slideX=dir*Math.min(150,payRect.width*0.55);
+        payload.style.transition='transform '+dropT.toFixed(2)+'s cubic-bezier(.45,0,.8,1)';
+        payload.style.transform='translate(calc(-50% + '+angle.toFixed(1)+'px), '+targetDY.toFixed(0)+'px)';
         setTimeout(function(){
-          Sound.crash(); payload.style.opacity='0';
-          flashRed(); shakeStage();
-          toast('La tour s’effondre ! Tour perdue.','lose');
-          pushResult(0,true);
-          setTimeout(function(){ S.animBusy=false; endRound(); }, 460);
-        }, missDur*1000*0.68);
+          Sound.thud(0.9,n);
+          payload.style.transition='transform '+slideT+'s ease-in';
+          payload.style.transform='translate(calc(-50% + '+(angle+slideX).toFixed(1)+'px), '+(targetDY+6)+'px) rotate('+(dir*14)+'deg)';
+          setTimeout(function(){
+            payload.style.transition='transform '+fallT+'s cubic-bezier(.5,0,1,1), opacity '+fallT+'s ease-in';
+            payload.style.transform='translate(calc(-50% + '+(angle+slideX+dir*70).toFixed(1)+'px), '+(targetDY+420)+'px) rotate('+(dir*80)+'deg)';
+            payload.style.opacity='0';
+            setTimeout(function(){
+              Sound.crash(); flashRed(); shakeStage();
+              toast('La tour s’effondre ! Tour perdue.','lose');
+              pushResult(0,true);
+              setTimeout(function(){ S.animBusy=false; endRound(); }, 460);
+            }, fallT*1000*0.7);
+          }, slideT*1000);
+        }, dropT*1000);
         return;
       }
 
@@ -17440,7 +17450,7 @@ window.TOUR={ouvert:false,ouvrir:null,fermer:null};
   layoutHeights=function(){
     var st=$('trStage'), W=st.clientWidth||390, H=st.clientHeight||844, k=trK(), act=trAct();
     var bw=Math.round(TRV2_BGW*k), bgH=Math.round(TRV2_BGW*TRV2_BGH*k), bg=$('trBg');
-    var dn=act?Math.round(183*k):0;
+    var dn=act?-Math.round(146*k):0;
     bg.style.width=bw+'px'; bg.style.left=Math.round((W-bw)/2)+'px'; bg.style.bottom=(-dn)+'px';
     $('trSky').style.bottom=(bgH-1-dn)+'px';
     var bal=document.querySelector('#tourPlein .tr-ballon');
