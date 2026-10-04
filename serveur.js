@@ -2286,6 +2286,88 @@ function tirerPont(m) {
   return rangs;
 }
 
+
+/* ===================================================================
+   ROULETTE LIVE - une seule roue pour tout le site, tours en continu.
+   Le numero est tire ICI au debut du lancement. Les mises sont prises
+   pendant la phase 'mise' et payees a la fin du lancement.
+   =================================================================== */
+const RL_MISE = 12000, RL_TIRAGE = 14667, RL_RESULTAT = 4000;
+const RL_ROUGES = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+const rlive = { tour: 1, phase: 'mise', debut: Date.now(), echeance: Date.now() + RL_MISE, numero: null, historique: [], gagnants: [], nbGagnants: 0, totalGagne: 0 };
+function rlCouleur(n) { return n === 0 ? 'vert' : (RL_ROUGES.indexOf(n) >= 0 ? 'rouge' : 'noir'); }
+/* valide une case de mise et renvoie { nums, mult } (mult = gain total pour 1 mise, mise comprise) */
+function rlCase(cle) {
+  const simples = { rouge: RL_ROUGES, noir: [], pair: [], impair: [], manque: [], passe: [] };
+  for (let n = 1; n <= 36; n++) {
+    if (RL_ROUGES.indexOf(n) < 0) simples.noir.push(n);
+    (n % 2 ? simples.impair : simples.pair).push(n);
+    (n <= 18 ? simples.manque : simples.passe).push(n);
+  }
+  if (simples[cle]) return { nums: simples[cle], mult: 2 };
+  let m = /^d([123])$/.exec(cle); if (m) { const d = +m[1]; const nums = []; for (let n = d * 12 - 11; n <= d * 12; n++) nums.push(n); return { nums, mult: 3 }; }
+  m = /^k([123])$/.exec(cle); if (m) { const c = +m[1]; const nums = []; for (let n = c; n <= 36; n += 3) nums.push(n); return { nums, mult: 3 }; }
+  m = /^n:([0-9-]+)$/.exec(cle); if (!m) return null;
+  const nums = m[1].split('-').map(Number).sort((a, b) => a - b);
+  if (nums.some(n => !(Number.isInteger(n) && n >= 0 && n <= 36)) || new Set(nums).size !== nums.length) return null;
+  const k = nums.length, key = nums.join('-');
+  const row = n => Math.ceil(n / 3), col = n => (n - 1) % 3;
+  if (k === 1) return { nums, mult: 36 };
+  if (k === 2) {
+    const [a, b] = nums;
+    if (a === 0 && b >= 1 && b <= 3) return { nums, mult: 18 };
+    if (a > 0 && ((b - a === 1 && row(a) === row(b)) || b - a === 3)) return { nums, mult: 18 };
+    return null;
+  }
+  if (k === 3) {
+    if (key === '0-1-2' || key === '0-2-3') return { nums, mult: 12 };
+    if (nums[0] > 0 && col(nums[0]) === 0 && nums[1] === nums[0] + 1 && nums[2] === nums[0] + 2) return { nums, mult: 12 };
+    return null;
+  }
+  if (k === 4) {
+    if (key === '0-1-2-3') return { nums, mult: 9 };
+    const a = nums[0];
+    if (a > 0 && col(a) < 2 && key === [a, a + 1, a + 3, a + 4].join('-')) return { nums, mult: 9 };
+    return null;
+  }
+  if (k === 6) {
+    const a = nums[0];
+    if (a > 0 && col(a) === 0 && a <= 31 && key === [a, a + 1, a + 2, a + 3, a + 4, a + 5].join('-')) return { nums, mult: 6 };
+    return null;
+  }
+  return null;
+}
+function rlLancer() {
+  rlive.numero = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26][crypto.randomInt(37)];
+  rlive.phase = 'tirage'; rlive.debut = Date.now(); rlive.echeance = rlive.debut + RL_TIRAGE;
+}
+function rlPayer() {
+  const n = rlive.numero, liste = []; let total = 0;
+  for (const c of comptes.values()) {
+    const r = c.rlive;
+    if (!r || r.tour !== rlive.tour) continue;
+    let gain = 0, mise = 0;
+    Object.keys(r.mises).forEach(k => { const z = rlCase(k); if (!z) return; mise += r.mises[k]; if (z.nums.indexOf(n) >= 0) gain += r.mises[k] * z.mult; });
+    gain = sous(gain);
+    r.gain = gain; r.miseTotale = sous(mise); r.derniere = Object.assign({}, r.mises); r.paye = true;
+    if (gain > 0) { c.solde = sous(c.solde + gain); soldeAuSiege(c); liste.push({ p: c.pseudo, g: gain }); total += gain; }
+    Carnet.enregistrer(c);
+  }
+  liste.sort((a, b) => b.g - a.g);
+  rlive.gagnants = liste.slice(0, 8); rlive.nbGagnants = liste.length; rlive.totalGagne = sous(total);
+  rlive.historique.unshift(n); rlive.historique = rlive.historique.slice(0, 14);
+  rlive.phase = 'resultat'; rlive.debut = Date.now(); rlive.echeance = rlive.debut + RL_RESULTAT;
+}
+function battementRlive() {
+  const now = Date.now();
+  if (now < rlive.echeance) return;
+  if (rlive.phase === 'mise') rlLancer();
+  else if (rlive.phase === 'tirage') rlPayer();
+  else { rlive.tour++; rlive.phase = 'mise'; rlive.debut = now; rlive.echeance = now + RL_MISE; rlive.numero = null; }
+}
+setInterval(battementRlive, 100);
+for (let i = 0; i < 10; i++) rlive.historique.push([0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26][crypto.randomInt(37)]);
+
 function soldeAuSiege(compte) {
   const info = siegeDe(compte);
   if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
@@ -2890,7 +2972,7 @@ const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -5015,6 +5097,40 @@ const serveur = http.createServer(async (req, res) => {
       if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
       return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, taupes: p.nb, k: p.k,
         mult: p.k ? molesMult(p.nb, p.k) : 0, suivant: molesMult(p.nb, p.k + 1), solde: compte.solde });
+    }
+
+    /* ===== ROULETTE LIVE ===== */
+    if (route === '/api/rlive-etat' && req.method === 'POST') {
+      const r = compte.rlive && compte.rlive.tour === rlive.tour ? compte.rlive : null;
+      const prec = compte.rlive && compte.rlive.paye && compte.rlive.tour === rlive.tour ? compte.rlive : null;
+      return repondre(res, 200, { ok: true, tour: rlive.tour, phase: rlive.phase, maintenant: Date.now(), debut: rlive.debut, echeance: rlive.echeance,
+        numero: rlive.phase === 'mise' ? null : rlive.numero, historique: rlive.historique,
+        gagnants: rlive.phase === 'resultat' ? rlive.gagnants : [], nbGagnants: rlive.phase === 'resultat' ? rlive.nbGagnants : 0, totalGagne: rlive.phase === 'resultat' ? rlive.totalGagne : 0,
+        mises: r ? r.mises : {}, gain: prec ? prec.gain : 0, derniere: compte.rliveDerniere || {}, solde: compte.solde });
+    }
+    if (route === '/api/rlive-miser' && req.method === 'POST') {
+      if (rlive.phase !== 'mise' || Date.now() > rlive.echeance - 150) return repondre(res, 409, { erreur: 'Les jeux sont faits, attendez le prochain tour.' });
+      const voulu = body && typeof body.mises === 'object' && body.mises ? body.mises : {};
+      const propre = {}; let total = 0;
+      for (const k of Object.keys(voulu)) {
+        const v = sous(Number(voulu[k]) || 0); if (v <= 0) continue;
+        if (!rlCase(k)) return repondre(res, 400, { erreur: 'Mise invalide.' });
+        if (v < 0.10) return repondre(res, 400, { erreur: 'Jeton minimum : 0,10 €.' });
+        if (v > 500) return repondre(res, 400, { erreur: 'Maximum 500 € par case.' });
+        propre[k] = v; total += v;
+      }
+      total = sous(total);
+      if (total > 2000) return repondre(res, 400, { erreur: 'Maximum 2 000 € par tour.' });
+      const avant = compte.rlive && compte.rlive.tour === rlive.tour ? compte.rlive : { tour: rlive.tour, mises: {} };
+      let deja = 0; Object.keys(avant.mises).forEach(k => { deja += avant.mises[k]; });
+      const diff = sous(total - deja);
+      if (diff > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - diff);
+      compte.rlive = { tour: rlive.tour, mises: propre };
+      if (total > 0) compte.rliveDerniere = propre;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mises: propre, solde: compte.solde });
     }
 
     if (route === '/api/mines-demarrer' && req.method === 'POST') {
