@@ -3081,12 +3081,22 @@ const TYPES = {
   '.ico':  'image/x-icon'
 };
 
-function servirFichier(res, chemin) {
+/* la page est lue et compressee une seule fois (elle charge bien plus vite) */
+let PAGE = null;
+function servirFichier(res, chemin, req) {
+  const envoyerPage = () => {
+    const gz = /\bgzip\b/.test((req && req.headers['accept-encoding']) || '');
+    const h = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', 'ETag': PAGE.etag, 'Vary': 'Accept-Encoding' };
+    if (req && req.headers['if-none-match'] === PAGE.etag) { res.writeHead(304, h); res.end(); return; }
+    if (gz) h['Content-Encoding'] = 'gzip';
+    res.writeHead(200, h); res.end(gz ? PAGE.gz : PAGE.brut);
+  };
+  if (PAGE) return envoyerPage();
   fs.readFile(chemin, (err, contenu) => {
     if (err) { res.writeHead(404); res.end('Introuvable'); return; }
-    const type = TYPES[path.extname(chemin).toLowerCase()] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
-    res.end(contenu);
+    PAGE = { brut: contenu, gz: require('zlib').gzipSync(contenu, { level: 9 }),
+             etag: '"' + crypto.createHash('sha1').update(contenu).digest('hex').slice(0, 16) + '"' };
+    envoyerPage();
   });
 }
 
@@ -6306,7 +6316,9 @@ const serveur = http.createServer(async (req, res) => {
   }
 
   /* ---------------- fichiers du site ---------------- */
-  let fichier = route === '/' ? '/index.html' : route;
+  /* seule la page du jeu est visible : tous les autres fichiers sont prives */
+  if (route !== '/' && route !== '/index.html') { res.writeHead(404); res.end('Introuvable'); return; }
+  let fichier = '/index.html';
   fichier = path.normalize(fichier).replace(/^(\.\.[\/\\])+/, '');
 
   // les fichiers de travail ne sont pas visibles depuis le site
@@ -6318,7 +6330,7 @@ const serveur = http.createServer(async (req, res) => {
 
   const chemin = path.join(DOSSIER, fichier);
   if (!chemin.startsWith(DOSSIER)) { res.writeHead(403); res.end('Interdit'); return; }
-  servirFichier(res, chemin);
+  servirFichier(res, chemin, req);
 });
 
 /* Ouvre une session pour un joueur reconnu. Un joueur ne peut etre
