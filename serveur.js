@@ -2292,7 +2292,7 @@ function tirerPont(m) {
    Le numero est tire ICI au debut du lancement. Les mises sont prises
    pendant la phase 'mise' et payees a la fin du lancement.
    =================================================================== */
-const RL_MISE = 12000, RL_TIRAGE = 14667, RL_RESULTAT = 4000;
+const RL_MISE = 12000, RL_TIRAGE = 9200, RL_RESULTAT = 4000;
 const RL_ROUGES = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
 const rlive = { tour: 1, phase: 'mise', debut: Date.now(), echeance: Date.now() + RL_MISE, numero: null, historique: [], gagnants: [], nbGagnants: 0, totalGagne: 0 };
 function rlCouleur(n) { return n === 0 ? 'vert' : (RL_ROUGES.indexOf(n) >= 0 ? 'rouge' : 'noir'); }
