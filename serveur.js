@@ -3077,6 +3077,16 @@ function lbjRoutes(route, compte, body, res, req) {
    double sur 2 cartes, un seul split (As splittes : une carte chacun).
    ===================================================================== */
 let CROUPIER_ERREUR = null, CROUPIER_ERREUR_TEL = null, CROUPIER_OK = null;
+/* la requete exacte envoyee a POST /v1/sessions/token (schema documente : mode, avatar_id, is_sandbox, max_session_duration, voice_agent{id}) */
+function croupierDemande() {
+  const n = v => String(v || '').trim().replace(/^["']|["']$/g, '');
+  const d = { mode: 'FULL', avatar_id: n(process.env.LIVEAVATAR_AVATAR_ID), is_sandbox: n(process.env.LIVEAVATAR_SANDBOX) === '1',
+              max_session_duration: Number(process.env.LIVEAVATAR_MAX_SECONDES) || 1200, voice_agent: { id: n(process.env.LIVEAVATAR_VOICE_AGENT_ID) } };
+  return d;
+}
+function croupierMasquer(o) {
+  return JSON.parse(JSON.stringify(o || null, (k, v) => /token|key|secret/i.test(k) && typeof v === 'string' ? '***masque*** (' + v.length + ' car.)' : v));
+}
 const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 5000;
 const LBT_MISE_MS = 15000, LBT_ASSUR_MS = 8000, LBT_TOUR_MS = 15000, LBT_FIN_MS = 6000, LBT_ABSENT_MS = 30000;
 const LBT = { phase: 'mise', places: new Array(LBT_PLACES).fill(null), croupier: [], seq: [], n: 0, debutN: 0,
@@ -4201,14 +4211,23 @@ const serveur = http.createServer(async (req, res) => {
   /* ---------------- diagnostic du croupier LiveAvatar (admin) ---------------- */
   if (route === '/diag-croupier') {
     if (url.searchParams.get('code') !== 'exclusionfdp') { res.writeHead(404); res.end('Introuvable'); return; }
-    const CLE = process.env.LIVEAVATAR_API_KEY, rapport = {
+    const CLE = (process.env.LIVEAVATAR_API_KEY || '').trim(), rapport = {
       variables: { LIVEAVATAR_API_KEY: CLE ? 'presente (' + CLE.length + ' caracteres)' : 'MANQUANTE',
         LIVEAVATAR_AVATAR_ID: process.env.LIVEAVATAR_AVATAR_ID || 'MANQUANTE',
         LIVEAVATAR_VOICE_AGENT_ID: (process.env.LIVEAVATAR_VOICE_AGENT_ID || '').trim() || 'MANQUANTE OU VIDE (obligatoire)',
         autres_variables_liveavatar_trouvees: Object.keys(process.env).filter(k => /LIVE.?AVATAR|VOICE/i.test(k)),
         requete_envoyee: { mode: 'FULL', avatar_id: (process.env.LIVEAVATAR_AVATAR_ID || '').trim() || null, voice_agent: { id: (process.env.LIVEAVATAR_VOICE_AGENT_ID || '').trim() || null } },
         LIVEAVATAR_SANDBOX: process.env.LIVEAVATAR_SANDBOX || 'absente' },
+      requete_token_exacte: { methode: 'POST', url: 'https://api.liveavatar.com/v1/sessions/token', entetes: { 'X-API-KEY': '***masque***', 'Content-Type': 'application/json', 'Accept': 'application/json' }, json: croupierDemande() },
+      note_doc_sandbox: 'Doc officielle : en sandbox (is_sandbox=true) seul l\'avatar Wayne dd73ea75-1218-4ef3-92ce-606d5f7fbc0a est autorise.',
       derniere_session_reussie: CROUPIER_OK, derniere_erreur_serveur: CROUPIER_ERREUR, derniere_erreur_telephone: CROUPIER_ERREUR_TEL };
+    if (url.searchParams.get('tester') === '1' && CLE) {
+      try {
+        const r = await fetch('https://api.liveavatar.com/v1/sessions/token', { method: 'POST', headers: { 'X-API-KEY': CLE.trim(), 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(croupierDemande()) });
+        const txt = await r.text(); let corps; try { corps = croupierMasquer(JSON.parse(txt)); } catch (e) { corps = txt.slice(0, 3000); }
+        rapport.test_token_maintenant = { status_http: r.status, reponse_liveavatar_complete: corps };
+      } catch (e) { rapport.test_token_maintenant = { erreur_reseau: String(e && e.message) }; }
+    }
     try {
       if (CLE) {
         const r = await fetch('https://api.liveavatar.com/v1/avatars?page_size=100', { headers: { 'X-API-KEY': CLE, 'Accept': 'application/json' } });
@@ -5605,18 +5624,16 @@ const serveur = http.createServer(async (req, res) => {
       if (compte.ethanDernier && maintenant - compte.ethanDernier < 8000) return repondre(res, 429, { erreur: 'Patientez quelques secondes.' });
       compte.ethanDernier = maintenant;
       const BASE = 'https://api.liveavatar.com';
-      const demande = { mode: 'FULL', avatar_id: AVATAR, is_sandbox: process.env.LIVEAVATAR_SANDBOX === '1',
-                        max_session_duration: Number(process.env.LIVEAVATAR_MAX_SECONDES) || 1200 };
-      demande.voice_agent = { id: AGENT };
+      const demande = croupierDemande();
       try {
         const r1 = await fetch(BASE + '/v1/sessions/token', { method: 'POST', headers: { 'X-API-KEY': CLE, 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(demande) });
         const j1 = await r1.json().catch(() => ({}));
         const jeton = j1 && j1.data && j1.data.session_token;
-        if (!r1.ok || !jeton) { console.log('[ETHAN] token refuse', r1.status, JSON.stringify(j1).slice(0, 400)); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'POST /v1/sessions/token', status: r1.status, detail: JSON.stringify(j1).slice(0, 600) }; return repondre(res, 502, { erreur: 'LiveAvatar a refuse la session.', detail: (j1 && (j1.message || j1.detail)) || r1.status }); }
+        if (!r1.ok || !jeton) { console.log('[ETHAN] token refuse', r1.status, JSON.stringify(j1).slice(0, 400)); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'POST https://api.liveavatar.com/v1/sessions/token', requete_envoyee: demande, status_http: r1.status, reponse_liveavatar: croupierMasquer(j1) }; return repondre(res, 502, { erreur: 'LiveAvatar a refuse le token (HTTP ' + r1.status + ')', detail: croupierMasquer(j1) }); }
         const r2 = await fetch(BASE + '/v1/sessions/start', { method: 'POST', headers: { 'Authorization': 'Bearer ' + jeton, 'Accept': 'application/json' } });
         const j2 = await r2.json().catch(() => ({}));
         const d = (j2 && j2.data) || {};
-        if (!r2.ok || !d.livekit_url || !d.livekit_client_token) { console.log('[ETHAN] start refuse', r2.status, JSON.stringify(j2).slice(0, 400)); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'POST /v1/sessions/start', status: r2.status, detail: JSON.stringify(j2).slice(0, 600) }; return repondre(res, 502, { erreur: 'LiveAvatar n\'a pas demarre la session.', detail: (j2 && j2.message) || r2.status }); }
+        if (!r2.ok || !d.livekit_url || !d.livekit_client_token) { console.log('[ETHAN] start refuse', r2.status, JSON.stringify(j2).slice(0, 400)); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'POST https://api.liveavatar.com/v1/sessions/start', status_http: r2.status, reponse_liveavatar: croupierMasquer(j2) }; return repondre(res, 502, { erreur: 'LiveAvatar a refuse le demarrage (HTTP ' + r2.status + ')', detail: croupierMasquer(j2) }); }
         CROUPIER_OK = { quand: new Date().toISOString(), session_id: d.session_id };
         return repondre(res, 200, { ok: true, session_id: d.session_id, livekit_url: d.livekit_url, livekit_client_token: d.livekit_client_token, max_session_duration: d.max_session_duration || null });
       } catch (e) {
