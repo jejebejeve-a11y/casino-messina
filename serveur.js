@@ -223,6 +223,7 @@ const PLINKO_TABLES = {
     14:[420,56,18,5,1.9,.3,.2,.2,.2,.3,1.9,5,18,56,420], 15:[620,83,27,8,3,.5,.2,.2,.2,.2,.5,3,8,27,83,620],
     16:[1000,130,26,9,4,2,.2,.2,.2,.2,.2,2,4,9,26,130,1000] }
 };
+function crocoMult(nb, k) { let m = 0.99; for (let i = 0; i < k; i++) m *= (20 - i) / (20 - i - nb); return m; }
 function molesMult(nb, k) { return 0.98 * Math.pow(7 / nb, k); }
 function pouletMult(nbOs, k) {
   let m = 0.99;
@@ -2889,7 +2890,7 @@ const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -4894,6 +4895,70 @@ const serveur = http.createServer(async (req, res) => {
        taupes sont replacees au hasard ICI ; toucher une taupe = gagne.
        Cote apres k coups reussis : 0,98 x (7 / taupes)^k. 10 coups max.
        =============================================================== */
+    /* ===============================================================
+       CROCODINO : 20 dents, de 1 a 19 dents rouges tirees ICI.
+       Cote apres k dents blanches : 0,99 x C(20,k) / C(20-rouges,k).
+       Gain maxi 10 000 EUR (encaisse d'office).
+       =============================================================== */
+    if (route === '/api/croco-demarrer' && req.method === 'POST') {
+      if (compte.croco) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
+      const mise = sous(Number(body.mise) || 0);
+      const nb = Number(body.rouges) | 0;
+      if (!(nb >= 1 && nb <= 19)) return repondre(res, 400, { erreur: 'Choisissez entre 1 et 19 dents rouges.' });
+      if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const d = []; for (let i = 0; i < 20; i++) d.push(i);
+      for (let i = 19; i > 0; i--) { const j = crypto.randomInt(i + 1); const t = d[i]; d[i] = d[j]; d[j] = t; }
+      compte.solde = sous(compte.solde - mise);
+      compte.croco = { mise: mise, nb: nb, rouges: d.slice(0, nb), ouverts: [] };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise: mise, rouges: nb, suivant: crocoMult(nb, 1), solde: compte.solde });
+    }
+    if (route === '/api/croco-ouvrir' && req.method === 'POST') {
+      const p = compte.croco;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      const c = Number(body.dent);
+      if (!(Number.isInteger(c) && c >= 0 && c < 20)) return repondre(res, 400, { erreur: 'Dent inconnue.' });
+      if (p.ouverts.includes(c)) return repondre(res, 400, { erreur: 'Dent deja choisie.' });
+      if (p.rouges.includes(c)) {
+        compte.croco = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, rouge: true, dent: c, toutes: p.rouges, perdu: p.mise, solde: compte.solde });
+      }
+      p.ouverts.push(c);
+      const k = p.ouverts.length;
+      const mult = crocoMult(p.nb, k);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      if (k >= 20 - p.nb || gain >= 10000) {
+        compte.solde = sous(compte.solde + gain);
+        compte.croco = null;
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, rouge: false, dent: c, mult: mult, gain: gain, fini: true, toutes: p.rouges, solde: compte.solde });
+      }
+      return repondre(res, 200, { ok: true, rouge: false, dent: c, mult: mult, gain: gain, suivant: crocoMult(p.nb, k + 1), solde: compte.solde });
+    }
+    if (route === '/api/croco-encaisser' && req.method === 'POST') {
+      const p = compte.croco;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      if (!p.ouverts.length) return repondre(res, 400, { erreur: 'Choisissez au moins une dent avant d\'encaisser.' });
+      const mult = crocoMult(p.nb, p.ouverts.length);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      compte.solde = sous(compte.solde + gain);
+      compte.croco = null;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gain: gain, mult: mult, toutes: p.rouges, solde: compte.solde });
+    }
+    if (route === '/api/croco-etat' && req.method === 'POST') {
+      const p = compte.croco;
+      if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
+      return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, rouges: p.nb, ouverts: p.ouverts,
+        mult: p.ouverts.length ? crocoMult(p.nb, p.ouverts.length) : 0, suivant: crocoMult(p.nb, p.ouverts.length + 1), solde: compte.solde });
+    }
+
     if (route === '/api/moles-demarrer' && req.method === 'POST') {
       if (compte.moles) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
       const mise = sous(Number(body.mise) || 0);
