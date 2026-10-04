@@ -2888,7 +2888,7 @@ const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -4882,6 +4882,69 @@ const serveur = http.createServer(async (req, res) => {
       soldeAuSiege(compte);
       Carnet.enregistrer(compte);
       return repondre(res, 200, { ok: true, gain: gain, mult: mult, tousLesOs: p.os, solde: compte.solde });
+    }
+
+    /* ===============================================================
+       MINES : 25 cases, de 1 a 24 mines. Meme calcul que le Poulet
+       (0,99 x C(25,k) / C(25-mines,k)). Mines tirees et gardees ICI.
+       =============================================================== */
+    if (route === '/api/mines-demarrer' && req.method === 'POST') {
+      if (compte.mines) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
+      const mise = sous(Number(body.mise) || 0);
+      const nb = Number(body.mines) | 0;
+      if (!(nb >= 1 && nb <= 24)) return repondre(res, 400, { erreur: 'Choisissez entre 1 et 24 mines.' });
+      if (!(mise >= 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const cases = []; for (let i = 0; i < 25; i++) cases.push(i);
+      for (let i = 24; i > 0; i--) { const j = crypto.randomInt(i + 1); const t = cases[i]; cases[i] = cases[j]; cases[j] = t; }
+      compte.solde = sous(compte.solde - mise);
+      compte.mines = { mise: mise, nb: nb, mines: cases.slice(0, nb), ouverts: [] };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise: mise, mines: nb, suivant: pouletMult(nb, 1), solde: compte.solde });
+    }
+    if (route === '/api/mines-ouvrir' && req.method === 'POST') {
+      const p = compte.mines;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      const c = Number(body.case);
+      if (!(Number.isInteger(c) && c >= 0 && c < 25)) return repondre(res, 400, { erreur: 'Case inconnue.' });
+      if (p.ouverts.includes(c)) return repondre(res, 400, { erreur: 'Case deja ouverte.' });
+      if (p.mines.includes(c)) {
+        compte.mines = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, mine: true, case: c, toutes: p.mines, perdu: p.mise, solde: compte.solde });
+      }
+      p.ouverts.push(c);
+      const k = p.ouverts.length;
+      const mult = pouletMult(p.nb, k);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      if (k >= 25 - p.nb || gain >= 10000) {
+        compte.solde = sous(compte.solde + gain);
+        compte.mines = null;
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, mine: false, case: c, mult: mult, gain: gain, fini: true, toutes: p.mines, solde: compte.solde });
+      }
+      return repondre(res, 200, { ok: true, mine: false, case: c, mult: mult, gain: gain, suivant: pouletMult(p.nb, k + 1), solde: compte.solde });
+    }
+    if (route === '/api/mines-encaisser' && req.method === 'POST') {
+      const p = compte.mines;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      if (!p.ouverts.length) return repondre(res, 400, { erreur: 'Ouvrez au moins une case avant d\'encaisser.' });
+      const mult = pouletMult(p.nb, p.ouverts.length);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      compte.solde = sous(compte.solde + gain);
+      compte.mines = null;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gain: gain, mult: mult, toutes: p.mines, solde: compte.solde });
+    }
+    if (route === '/api/mines-etat' && req.method === 'POST') {
+      const p = compte.mines;
+      if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
+      return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, mines: p.nb, ouverts: p.ouverts,
+        mult: p.ouverts.length ? pouletMult(p.nb, p.ouverts.length) : 0, suivant: pouletMult(p.nb, p.ouverts.length + 1), solde: compte.solde });
     }
 
     // une partie restee ouverte (page fermee) : on la reprend telle quelle
