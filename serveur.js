@@ -4204,7 +4204,9 @@ const serveur = http.createServer(async (req, res) => {
     const CLE = process.env.LIVEAVATAR_API_KEY, rapport = {
       variables: { LIVEAVATAR_API_KEY: CLE ? 'presente (' + CLE.length + ' caracteres)' : 'MANQUANTE',
         LIVEAVATAR_AVATAR_ID: process.env.LIVEAVATAR_AVATAR_ID || 'MANQUANTE',
-        LIVEAVATAR_VOICE_AGENT_ID: process.env.LIVEAVATAR_VOICE_AGENT_ID || 'absente (facultative)',
+        LIVEAVATAR_VOICE_AGENT_ID: (process.env.LIVEAVATAR_VOICE_AGENT_ID || '').trim() || 'MANQUANTE OU VIDE (obligatoire)',
+        autres_variables_liveavatar_trouvees: Object.keys(process.env).filter(k => /LIVE.?AVATAR|VOICE/i.test(k)),
+        requete_envoyee: { mode: 'FULL', avatar_id: (process.env.LIVEAVATAR_AVATAR_ID || '').trim() || null, voice_agent: { id: (process.env.LIVEAVATAR_VOICE_AGENT_ID || '').trim() || null } },
         LIVEAVATAR_SANDBOX: process.env.LIVEAVATAR_SANDBOX || 'absente' },
       derniere_session_reussie: CROUPIER_OK, derniere_erreur_serveur: CROUPIER_ERREUR, derniere_erreur_telephone: CROUPIER_ERREUR_TEL };
     try {
@@ -5594,7 +5596,10 @@ const serveur = http.createServer(async (req, res) => {
        2) POST /v1/sessions/start  (Bearer session_token) -> salle LiveKit
        La page ne recoit que l'adresse de la salle et son jeton d'entree. */
     if (route === '/api/ethan-session' && req.method === 'POST') {
-      const CLE = process.env.LIVEAVATAR_API_KEY, AVATAR = process.env.LIVEAVATAR_AVATAR_ID, AGENT = process.env.LIVEAVATAR_VOICE_AGENT_ID;
+      const nettoie = v => String(v || '').trim().replace(/^["']|["']$/g, '');
+      const CLE = nettoie(process.env.LIVEAVATAR_API_KEY), AVATAR = nettoie(process.env.LIVEAVATAR_AVATAR_ID), AGENT = nettoie(process.env.LIVEAVATAR_VOICE_AGENT_ID);
+      /* schema documente (Voice Agents) : { mode:'FULL', avatar_id, voice_agent:{ id } } — avatar_persona n'est jamais envoye */
+      if (CLE && AVATAR && !AGENT) { CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'variables Render', detail: 'LIVEAVATAR_VOICE_AGENT_ID vide ou absente : le serveur ne la recoit pas.' }; return repondre(res, 503, { erreur: 'LIVEAVATAR_VOICE_AGENT_ID vide ou absente sur le serveur' }); }
       if (!CLE || !AVATAR) { CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'variables Render', detail: (!CLE ? 'LIVEAVATAR_API_KEY manquante. ' : '') + (!AVATAR ? 'LIVEAVATAR_AVATAR_ID manquante.' : '') }; return repondre(res, 503, { erreur: 'configuration serveur incomplete (' + CROUPIER_ERREUR.detail.trim() + ')' }); }
       const maintenant = Date.now();
       if (compte.ethanDernier && maintenant - compte.ethanDernier < 8000) return repondre(res, 429, { erreur: 'Patientez quelques secondes.' });
@@ -5602,7 +5607,7 @@ const serveur = http.createServer(async (req, res) => {
       const BASE = 'https://api.liveavatar.com';
       const demande = { mode: 'FULL', avatar_id: AVATAR, is_sandbox: process.env.LIVEAVATAR_SANDBOX === '1',
                         max_session_duration: Number(process.env.LIVEAVATAR_MAX_SECONDES) || 1200 };
-      if (AGENT) demande.voice_agent = { id: AGENT };
+      demande.voice_agent = { id: AGENT };
       try {
         const r1 = await fetch(BASE + '/v1/sessions/token', { method: 'POST', headers: { 'X-API-KEY': CLE, 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(demande) });
         const j1 = await r1.json().catch(() => ({}));
