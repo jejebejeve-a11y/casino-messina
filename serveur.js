@@ -223,6 +223,7 @@ const PLINKO_TABLES = {
     14:[420,56,18,5,1.9,.3,.2,.2,.2,.3,1.9,5,18,56,420], 15:[620,83,27,8,3,.5,.2,.2,.2,.2,.5,3,8,27,83,620],
     16:[1000,130,26,9,4,2,.2,.2,.2,.2,.2,2,4,9,26,130,1000] }
 };
+function molesMult(nb, k) { return 0.98 * Math.pow(7 / nb, k); }
 function pouletMult(nbOs, k) {
   let m = 0.99;
   for (let i = 0; i < k; i++) m *= (25 - i) / (25 - i - nbOs);
@@ -2888,7 +2889,7 @@ const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -4888,6 +4889,69 @@ const serveur = http.createServer(async (req, res) => {
        MINES : 25 cases, de 1 a 24 mines. Meme calcul que le Poulet
        (0,99 x C(25,k) / C(25-mines,k)). Mines tirees et gardees ICI.
        =============================================================== */
+    /* ===============================================================
+       MOLES : 7 trous, de 1 a 6 taupes. A chaque coup de marteau les
+       taupes sont replacees au hasard ICI ; toucher une taupe = gagne.
+       Cote apres k coups reussis : 0,98 x (7 / taupes)^k. 10 coups max.
+       =============================================================== */
+    if (route === '/api/moles-demarrer' && req.method === 'POST') {
+      if (compte.moles) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
+      const mise = sous(Number(body.mise) || 0);
+      const nb = Number(body.taupes) | 0;
+      if (!(nb >= 1 && nb <= 6)) return repondre(res, 400, { erreur: 'Choisissez entre 1 et 6 taupes.' });
+      if (!(mise >= 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - mise);
+      compte.moles = { mise: mise, nb: nb, k: 0 };
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, mise: mise, taupes: nb, suivant: molesMult(nb, 1), solde: compte.solde });
+    }
+    if (route === '/api/moles-taper' && req.method === 'POST') {
+      const p = compte.moles;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      const c = Number(body.trou);
+      if (!(Number.isInteger(c) && c >= 0 && c < 7)) return repondre(res, 400, { erreur: 'Trou inconnu.' });
+      const trous = [0, 1, 2, 3, 4, 5, 6];
+      for (let i = 6; i > 0; i--) { const j = crypto.randomInt(i + 1); const t = trous[i]; trous[i] = trous[j]; trous[j] = t; }
+      const taupes = trous.slice(0, p.nb).sort();
+      if (!taupes.includes(c)) {
+        compte.moles = null;
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, touche: false, trou: c, taupes: taupes, perdu: p.mise, solde: compte.solde });
+      }
+      p.k++;
+      const mult = molesMult(p.nb, p.k);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      if (p.k >= 10 || gain >= 10000) {
+        compte.solde = sous(compte.solde + gain);
+        compte.moles = null;
+        soldeAuSiege(compte);
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, touche: true, trou: c, taupes: taupes, mult: mult, gain: gain, fini: true, solde: compte.solde });
+      }
+      return repondre(res, 200, { ok: true, touche: true, trou: c, taupes: taupes, mult: mult, gain: gain, suivant: molesMult(p.nb, p.k + 1), solde: compte.solde });
+    }
+    if (route === '/api/moles-encaisser' && req.method === 'POST') {
+      const p = compte.moles;
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      if (!p.k) return repondre(res, 400, { erreur: 'Touchez au moins une taupe avant d\'encaisser.' });
+      const mult = molesMult(p.nb, p.k);
+      const gain = Math.min(10000, sous(p.mise * mult));
+      compte.solde = sous(compte.solde + gain);
+      compte.moles = null;
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, gain: gain, mult: mult, solde: compte.solde });
+    }
+    if (route === '/api/moles-etat' && req.method === 'POST') {
+      const p = compte.moles;
+      if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
+      return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, taupes: p.nb, k: p.k,
+        mult: p.k ? molesMult(p.nb, p.k) : 0, suivant: molesMult(p.nb, p.k + 1), solde: compte.solde });
+    }
+
     if (route === '/api/mines-demarrer' && req.method === 'POST') {
       if (compte.mines) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
       const mise = sous(Number(body.mise) || 0);
