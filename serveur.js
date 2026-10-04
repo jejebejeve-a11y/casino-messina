@@ -2368,6 +2368,49 @@ function battementRlive() {
 setInterval(battementRlive, 100);
 for (let i = 0; i < 10; i++) rlive.historique.push([0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26][crypto.randomInt(37)]);
 
+
+/* ===================================================================
+   RICH JOKER - slot 3x3, 5 lignes. Tout est tire ICI (RTP ~95 %).
+   =================================================================== */
+const RJ_PAY = { W: 120, L: 80, G: 40, O: 10, P: 10, C: 3 };   // x mise par ligne (3 identiques)
+const RJ_LIGNES = [[0,0,0],[1,1,1],[2,2,2],[0,1,2],[2,1,0]];
+const RJ_BV = [[5,30],[10,25],[15,16],[25,10],[35,6],[50,4],[75,3],['mini',1.6],['minor',.8],['major',.25],['grand',.03]];
+const RJ_JP = { mini: 125, minor: 250, major: 750, grand: 5000 };
+const RJ_BASE = { C: 30, P: 22, O: 20, G: 12, L: 7, W: 3 };
+const RJ_REELS = [Object.assign({}, RJ_BASE, { B: 6 }), Object.assign({}, RJ_BASE, { K: 5 }), Object.assign({}, RJ_BASE, { B: 6 })];
+const RJ_MISES = [0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100];
+function rjAlea() { return crypto.randomInt(0, 1000000000) / 1000000000; }
+function rjPick(w) { let t = 0; for (const k in w) t += w[k]; let r = rjAlea() * t; for (const k in w) { r -= w[k]; if (r < 0) return k; } return Object.keys(w)[0]; }
+function rjBonus() { let t = 0; for (const b of RJ_BV) t += b[1]; let r = rjAlea() * t; for (const b of RJ_BV) { r -= b[1]; if (r < 0) return b[0]; } return 5; }
+function rjVal(v) { return typeof v === 'number' ? v : RJ_JP[v]; }
+function rjTourner(mise) {
+  const lb = mise / 5;
+  const g = [[], [], []];
+  for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) { const s = rjPick(RJ_REELS[c]); g[c][r] = s === 'B' ? { s: 'B', v: rjBonus() } : { s }; }
+  let gl = 0; const lignes = [];
+  RJ_LIGNES.forEach((L, i) => {
+    const t = [g[0][L[0]].s, g[1][L[1]].s, g[2][L[2]].s];
+    if (t.some(x => x === 'B' || x === 'K')) return;
+    const s = t.find(x => x !== 'W') || 'W';
+    if (t.every(x => x === s || x === 'W') && RJ_PAY[s]) { gl += RJ_PAY[s] * lb; lignes.push({ i, g: sous(RJ_PAY[s] * lb) }); }
+  });
+  const nb = c => g[c].filter(x => x.s === 'B').length, aK = g[1].some(x => x.s === 'K');
+  let collect = 0, respins = null, gf = 0;
+  if (aK && (nb(0) || nb(2))) {
+    if (nb(0) && nb(2)) {
+      const L = g.map(col => col.map(x => (x.s === 'B' || x.s === 'K') ? x : null)); let left = 3; respins = [];
+      while (left > 0) {
+        left--; const nouveaux = [];
+        for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) if (!L[c][r] && rjAlea() < 0.10) { L[c][r] = c === 1 ? { s: 'K' } : { s: 'B', v: rjBonus() }; nouveaux.push([c, r]); left = 3; }
+        respins.push({ grille: L.map(col => col.map(x => x ? Object.assign({}, x) : null)), nouveaux, reste: left });
+      }
+      let sum = 0, k = 0; L.forEach(col => col.forEach(x => { if (!x) return; if (x.s === 'B') sum += rjVal(x.v); else k++; }));
+      gf = sum * k * lb;
+    } else { let sum = 0; [0, 2].forEach(c => g[c].forEach(x => { if (x.s === 'B') sum += rjVal(x.v); })); collect = sum * lb; }
+  }
+  return { grille: g, lignes, gainLignes: sous(gl), collect: sous(collect), respins, gainFeature: sous(gf), gain: Math.min(10000, sous(gl + collect + gf)) };
+}
+
 function soldeAuSiege(compte) {
   const info = siegeDe(compte);
   if (info && info.p) { info.p.solde = compte.solde; info.p.soldeRef = compte.solde; touche(info.table); }
@@ -2972,7 +3015,7 @@ const NOMS_SLOTS = { zeus:'Mythology Zeus', volcan:'3 Coin Volcanoes' };
 const GROS_GAINS = [];
 let grosGainsId = 0;
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['joker', 'Rich Joker', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -5097,6 +5140,20 @@ const serveur = http.createServer(async (req, res) => {
       if (!p) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
       return repondre(res, 200, { ok: true, enCours: true, mise: p.mise, taupes: p.nb, k: p.k,
         mult: p.k ? molesMult(p.nb, p.k) : 0, suivant: molesMult(p.nb, p.k + 1), solde: compte.solde });
+    }
+
+    /* ===== RICH JOKER ===== */
+    if (route === '/api/joker-tourner' && req.method === 'POST') {
+      const mise = sous(Number(body.mise) || 0);
+      if (RJ_MISES.indexOf(mise) < 0) return repondre(res, 400, { erreur: 'Mise invalide.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - mise);
+      const t = rjTourner(mise);
+      if (t.gain > 0) compte.solde = sous(compte.solde + t.gain);
+      soldeAuSiege(compte);
+      Carnet.enregistrer(compte);
+      t.solde = compte.solde;
+      return repondre(res, 200, Object.assign({ ok: true }, t));
     }
 
     /* ===== ROULETTE LIVE ===== */
