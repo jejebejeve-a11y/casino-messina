@@ -5337,6 +5337,35 @@ const serveur = http.createServer(async (req, res) => {
     // ---------- LIVE BLACKJACK ----------
     if (route.startsWith('/api/lbj-')) { lbjRoutes(route, compte, body, res, req); if (res.headersSent) return; }
     /* LIVE BLACKJACK ETHAN : meme moteur, mais sa propre main et son propre sabot */
+    /* ETHAN (LiveAvatar, mode FULL) : la cle secrete reste ICI, jamais dans la page.
+       1) POST /v1/sessions/token  (en-tete X-API-KEY)   -> session_token
+       2) POST /v1/sessions/start  (Bearer session_token) -> salle LiveKit
+       La page ne recoit que l'adresse de la salle et son jeton d'entree. */
+    if (route === '/api/ethan-session' && req.method === 'POST') {
+      const CLE = process.env.LIVEAVATAR_API_KEY, AVATAR = process.env.LIVEAVATAR_AVATAR_ID, AGENT = process.env.LIVEAVATAR_VOICE_AGENT_ID;
+      if (!CLE || !AVATAR) return repondre(res, 503, { erreur: 'Ethan n\'est pas encore configure sur le serveur.' });
+      const maintenant = Date.now();
+      if (compte.ethanDernier && maintenant - compte.ethanDernier < 8000) return repondre(res, 429, { erreur: 'Patientez quelques secondes.' });
+      compte.ethanDernier = maintenant;
+      const BASE = 'https://api.liveavatar.com';
+      const demande = { mode: 'FULL', avatar_id: AVATAR, is_sandbox: process.env.LIVEAVATAR_SANDBOX === '1',
+                        max_session_duration: Number(process.env.LIVEAVATAR_MAX_SECONDES) || 1200 };
+      if (AGENT) demande.voice_agent = { id: AGENT };
+      try {
+        const r1 = await fetch(BASE + '/v1/sessions/token', { method: 'POST', headers: { 'X-API-KEY': CLE, 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(demande) });
+        const j1 = await r1.json().catch(() => ({}));
+        const jeton = j1 && j1.data && j1.data.session_token;
+        if (!r1.ok || !jeton) { console.log('[ETHAN] token refuse', r1.status, JSON.stringify(j1).slice(0, 400)); return repondre(res, 502, { erreur: 'LiveAvatar a refuse la session.', detail: (j1 && (j1.message || j1.detail)) || r1.status }); }
+        const r2 = await fetch(BASE + '/v1/sessions/start', { method: 'POST', headers: { 'Authorization': 'Bearer ' + jeton, 'Accept': 'application/json' } });
+        const j2 = await r2.json().catch(() => ({}));
+        const d = (j2 && j2.data) || {};
+        if (!r2.ok || !d.livekit_url || !d.livekit_client_token) { console.log('[ETHAN] start refuse', r2.status, JSON.stringify(j2).slice(0, 400)); return repondre(res, 502, { erreur: 'LiveAvatar n\'a pas demarre la session.', detail: (j2 && j2.message) || r2.status }); }
+        return repondre(res, 200, { ok: true, session_id: d.session_id, livekit_url: d.livekit_url, livekit_client_token: d.livekit_client_token, max_session_duration: d.max_session_duration || null });
+      } catch (e) {
+        console.log('[ETHAN] erreur', e && e.message);
+        return repondre(res, 502, { erreur: 'LiveAvatar injoignable.' });
+      }
+    }
     if (route.startsWith('/api/lbe-')) {
       const m = compte.lbj, s = compte.lbjSabot;
       compte.lbj = compte.lbe || null; compte.lbjSabot = compte.lbeSabot; compte.__lbe = true;
