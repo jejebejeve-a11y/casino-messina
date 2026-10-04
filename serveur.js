@@ -3076,6 +3076,7 @@ function lbjRoutes(route, compte, body, res, req) {
    blackjack paye 3 pour 2, assurance 2 pour 1 si la banque montre un As,
    double sur 2 cartes, un seul split (As splittes : une carte chacun).
    ===================================================================== */
+let CROUPIER_ERREUR = null, CROUPIER_ERREUR_TEL = null, CROUPIER_OK = null;
 const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 5000;
 const LBT_MISE_MS = 15000, LBT_ASSUR_MS = 8000, LBT_TOUR_MS = 15000, LBT_FIN_MS = 6000, LBT_ABSENT_MS = 30000;
 const LBT = { phase: 'mise', places: new Array(LBT_PLACES).fill(null), croupier: [], seq: [], n: 0, debutN: 0,
@@ -4195,6 +4196,32 @@ const serveur = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     res.end(Buffer.from(route === '/icone-512.png' ? ICONE_512 : ICONE_180, 'base64'));
     return;
+  }
+
+  /* ---------------- diagnostic du croupier LiveAvatar (admin) ---------------- */
+  if (route === '/diag-croupier') {
+    if (url.searchParams.get('code') !== 'exclusionfdp') { res.writeHead(404); res.end('Introuvable'); return; }
+    const CLE = process.env.LIVEAVATAR_API_KEY, rapport = {
+      variables: { LIVEAVATAR_API_KEY: CLE ? 'presente (' + CLE.length + ' caracteres)' : 'MANQUANTE',
+        LIVEAVATAR_AVATAR_ID: process.env.LIVEAVATAR_AVATAR_ID || 'MANQUANTE',
+        LIVEAVATAR_VOICE_AGENT_ID: process.env.LIVEAVATAR_VOICE_AGENT_ID || 'absente (facultative)',
+        LIVEAVATAR_SANDBOX: process.env.LIVEAVATAR_SANDBOX || 'absente' },
+      derniere_session_reussie: CROUPIER_OK, derniere_erreur_serveur: CROUPIER_ERREUR, derniere_erreur_telephone: CROUPIER_ERREUR_TEL };
+    try {
+      if (CLE) {
+        const r = await fetch('https://api.liveavatar.com/v1/avatars?page_size=100', { headers: { 'X-API-KEY': CLE, 'Accept': 'application/json' } });
+        const x = await r.json().catch(() => ({}));
+        rapport.cle_api = r.ok ? 'ACCEPTEE par LiveAvatar' : 'REFUSEE par LiveAvatar (statut ' + r.status + ')';
+        rapport.mes_avatars = ((x.data && x.data.results) || []).map(a => ({ id: a.id, nom: a.name, statut: a.status }));
+      }
+      const r2 = await fetch('https://api.liveavatar.com/v1/avatars/public?page_size=100');
+      const y = await r2.json().catch(() => ({}));
+      rapport.avatars_publics_graham = ((y.data && y.data.results) || []).filter(a => /graham/i.test(a.name || '')).map(a => ({ id: a.id, nom: a.name, statut: a.status }));
+      const av = process.env.LIVEAVATAR_AVATAR_ID;
+      if (av) rapport.avatar_id_reconnu = [...(rapport.mes_avatars || []), ...((y.data && y.data.results) || [])].some(a => a.id === av) ? 'OUI' : 'NON (cet identifiant ne correspond a aucun avatar trouve)';
+    } catch (e) { rapport.erreur_reseau = String(e && e.message); }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(rapport, null, 2)); return;
   }
 
   /* ---------------- API ---------------- */
@@ -5557,13 +5584,18 @@ const serveur = http.createServer(async (req, res) => {
     if (route.startsWith('/api/lbj-')) { lbjRoutes(route, compte, body, res, req); if (res.headersSent) return; }
     /* LIVE BLACKJACK ETHAN : meme moteur, mais sa propre main et son propre sabot */
     if (route.startsWith('/api/lbt-')) { lbtRoutes(route, compte, body, res); return; }
+    if (route === '/api/croupier-erreur' && req.method === 'POST') {
+      CROUPIER_ERREUR_TEL = { quand: new Date().toISOString(), joueur: compte.pseudo, etape: String(body.etape || '').slice(0, 80), detail: String(body.detail || '').slice(0, 400), appareil: String(req.headers['user-agent'] || '').slice(0, 160) };
+      console.log('[ETHAN] erreur telephone', JSON.stringify(CROUPIER_ERREUR_TEL));
+      return repondre(res, 200, { ok: true });
+    }
     /* ETHAN (LiveAvatar, mode FULL) : la cle secrete reste ICI, jamais dans la page.
        1) POST /v1/sessions/token  (en-tete X-API-KEY)   -> session_token
        2) POST /v1/sessions/start  (Bearer session_token) -> salle LiveKit
        La page ne recoit que l'adresse de la salle et son jeton d'entree. */
     if (route === '/api/ethan-session' && req.method === 'POST') {
       const CLE = process.env.LIVEAVATAR_API_KEY, AVATAR = process.env.LIVEAVATAR_AVATAR_ID, AGENT = process.env.LIVEAVATAR_VOICE_AGENT_ID;
-      if (!CLE || !AVATAR) return repondre(res, 503, { erreur: 'Ethan n\'est pas encore configure sur le serveur.' });
+      if (!CLE || !AVATAR) { CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'variables Render', detail: (!CLE ? 'LIVEAVATAR_API_KEY manquante. ' : '') + (!AVATAR ? 'LIVEAVATAR_AVATAR_ID manquante.' : '') }; return repondre(res, 503, { erreur: 'configuration serveur incomplete (' + CROUPIER_ERREUR.detail.trim() + ')' }); }
       const maintenant = Date.now();
       if (compte.ethanDernier && maintenant - compte.ethanDernier < 8000) return repondre(res, 429, { erreur: 'Patientez quelques secondes.' });
       compte.ethanDernier = maintenant;
@@ -5575,14 +5607,15 @@ const serveur = http.createServer(async (req, res) => {
         const r1 = await fetch(BASE + '/v1/sessions/token', { method: 'POST', headers: { 'X-API-KEY': CLE, 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(demande) });
         const j1 = await r1.json().catch(() => ({}));
         const jeton = j1 && j1.data && j1.data.session_token;
-        if (!r1.ok || !jeton) { console.log('[ETHAN] token refuse', r1.status, JSON.stringify(j1).slice(0, 400)); return repondre(res, 502, { erreur: 'LiveAvatar a refuse la session.', detail: (j1 && (j1.message || j1.detail)) || r1.status }); }
+        if (!r1.ok || !jeton) { console.log('[ETHAN] token refuse', r1.status, JSON.stringify(j1).slice(0, 400)); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'POST /v1/sessions/token', status: r1.status, detail: JSON.stringify(j1).slice(0, 600) }; return repondre(res, 502, { erreur: 'LiveAvatar a refuse la session.', detail: (j1 && (j1.message || j1.detail)) || r1.status }); }
         const r2 = await fetch(BASE + '/v1/sessions/start', { method: 'POST', headers: { 'Authorization': 'Bearer ' + jeton, 'Accept': 'application/json' } });
         const j2 = await r2.json().catch(() => ({}));
         const d = (j2 && j2.data) || {};
-        if (!r2.ok || !d.livekit_url || !d.livekit_client_token) { console.log('[ETHAN] start refuse', r2.status, JSON.stringify(j2).slice(0, 400)); return repondre(res, 502, { erreur: 'LiveAvatar n\'a pas demarre la session.', detail: (j2 && j2.message) || r2.status }); }
+        if (!r2.ok || !d.livekit_url || !d.livekit_client_token) { console.log('[ETHAN] start refuse', r2.status, JSON.stringify(j2).slice(0, 400)); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'POST /v1/sessions/start', status: r2.status, detail: JSON.stringify(j2).slice(0, 600) }; return repondre(res, 502, { erreur: 'LiveAvatar n\'a pas demarre la session.', detail: (j2 && j2.message) || r2.status }); }
+        CROUPIER_OK = { quand: new Date().toISOString(), session_id: d.session_id };
         return repondre(res, 200, { ok: true, session_id: d.session_id, livekit_url: d.livekit_url, livekit_client_token: d.livekit_client_token, max_session_duration: d.max_session_duration || null });
       } catch (e) {
-        console.log('[ETHAN] erreur', e && e.message);
+        console.log('[ETHAN] erreur', e && e.message); CROUPIER_ERREUR = { quand: new Date().toISOString(), etape: 'appel api.liveavatar.com', detail: String(e && e.message) };
         return repondre(res, 502, { erreur: 'LiveAvatar injoignable.' });
       }
     }
