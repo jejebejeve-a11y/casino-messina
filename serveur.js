@@ -3081,7 +3081,7 @@ let CROUPIER_ERREUR = null, CROUPIER_ERREUR_TEL = null, CROUPIER_OK = null;
 function croupierDemande() {
   const n = v => String(v || '').trim().replace(/^["']|["']$/g, '');
   const d = { mode: 'FULL', avatar_id: n(process.env.LIVEAVATAR_AVATAR_ID), is_sandbox: n(process.env.LIVEAVATAR_SANDBOX) === '1',
-              max_session_duration: Number(process.env.LIVEAVATAR_MAX_SECONDES) || 1200, voice_agent: { id: n(process.env.LIVEAVATAR_VOICE_AGENT_ID) } };
+              max_session_duration: Math.min(120, Number(process.env.LIVEAVATAR_MAX_SECONDES) || 120), voice_agent: { id: n(process.env.LIVEAVATAR_VOICE_AGENT_ID) } };
   return d;
 }
 function croupierMasquer(o) {
