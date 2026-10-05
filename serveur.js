@@ -5551,8 +5551,8 @@ const serveur = http.createServer(async (req, res) => {
       p.ouverts.push(c);
       const k = p.ouverts.length;
       const mult = pouletMult(p.nb, k);
-      const gain = Math.min(10000, sous(p.mise * mult));
-      if (k >= 25 - p.nb || gain >= 10000) {
+      const gain = Math.min(30000, sous(p.mise * mult));
+      if (k >= 25 - p.nb || gain >= 30000) {
         compte.solde = sous(compte.solde + gain);
         compte.mines = null;
         soldeAuSiege(compte);
@@ -5566,7 +5566,7 @@ const serveur = http.createServer(async (req, res) => {
       if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
       if (!p.ouverts.length) return repondre(res, 400, { erreur: 'Ouvrez au moins une case avant d\'encaisser.' });
       const mult = pouletMult(p.nb, p.ouverts.length);
-      const gain = Math.min(10000, sous(p.mise * mult));
+      const gain = Math.min(30000, sous(p.mise * mult));
       compte.solde = sous(compte.solde + gain);
       compte.mines = null;
       soldeAuSiege(compte);
