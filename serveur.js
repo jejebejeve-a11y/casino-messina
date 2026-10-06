@@ -3087,10 +3087,10 @@ function croupierDemande() {
 function croupierMasquer(o) {
   return JSON.parse(JSON.stringify(o || null, (k, v) => /token|key|secret/i.test(k) && typeof v === 'string' ? '***masque*** (' + v.length + ' car.)' : v));
 }
-const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 5000;
+const LBT_PLACES = 5, LBT_MIN = 1, LBT_MAX = 5000;
 const LBT_MISE_MS = 15000, LBT_ASSUR_MS = 8000, LBT_TOUR_MS = 15000, LBT_FIN_MS = 6000, LBT_ABSENT_MS = 30000;
 const LBT = { phase: 'mise', places: new Array(LBT_PLACES).fill(null), croupier: [], seq: [], n: 0, debutN: 0,
-              echeance: 0, active: null, sabot: [], manche: 0, ordre: [6, 5, 4, 3, 2, 1, 0] };
+              echeance: 0, active: null, sabot: [], manche: 0, ordre: [4, 3, 2, 1, 0] };
 function lbtCompteVivant(p) {
   for (const c of comptes.values()) if (c.pseudoBas === p.pseudoBas) { p.compte = c; return c; }
   return p.compte;
@@ -3233,7 +3233,7 @@ function lbtRoutes(route, compte, body, res) {
       if (voulu >= 0 && libre(voulu) && !p.mains.length && !p.mise) { LBT.places[voulu] = p; LBT.places[moi] = null; }
       return repondre(res, 200, lbtEtat(compte, 0));
     }
-    let i = libre(voulu) ? voulu : [3, 2, 4, 1, 5, 0, 6].find(libre);
+    let i = libre(voulu) ? voulu : [2, 1, 3, 0, 4].find(libre);
     if (i === undefined) return repondre(res, 200, Object.assign(lbtEtat(compte, 0), { complet: true }));
     LBT.places[i] = { pseudo: compte.pseudo, pseudoBas: compte.pseudoBas, compte, vu: Date.now(), mise: 0, mains: [], assurance: 0, gain: 0 };
     lbtPousser({ qui: 'assis', place: i, pseudo: compte.pseudo });
@@ -6634,6 +6634,23 @@ const serveur = http.createServer(async (req, res) => {
 
   /* ---------------- fichiers du site ---------------- */
   /* seule la page du jeu est visible : tous les autres fichiers sont prives */
+  /* la video du croupier (Blackjack Live) : petit fichier, gardé en cache par le navigateur */
+  const FICHIERS_LIVE = { '/croupier.mp4': 'video/mp4', '/lbe-table.jpg': 'image/jpeg' };
+  if (FICHIERS_LIVE[route]) {
+    let buf;
+    try { buf = fs.readFileSync(path.join(__dirname, route.slice(1))); } catch (e) { res.writeHead(404); res.end('Introuvable'); return; }
+    const total = buf.length, rg = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+    const h = { 'Content-Type': FICHIERS_LIVE[route], 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=604800' };
+    if (rg) {
+      let a = rg[1] === '' ? Math.max(0, total - Number(rg[2] || 0)) : Number(rg[1]);
+      let b = rg[1] !== '' && rg[2] !== '' ? Math.min(Number(rg[2]), total - 1) : total - 1;
+      if (!(a <= b) || a >= total) { res.writeHead(416, { 'Content-Range': 'bytes */' + total }); res.end(); return; }
+      res.writeHead(206, Object.assign(h, { 'Content-Range': `bytes ${a}-${b}/${total}`, 'Content-Length': b - a + 1 }));
+      res.end(req.method === 'HEAD' ? undefined : buf.subarray(a, b + 1)); return;
+    }
+    res.writeHead(200, Object.assign(h, { 'Content-Length': total }));
+    res.end(req.method === 'HEAD' ? undefined : buf); return;
+  }
   if (route !== '/' && route !== '/index.html') { res.writeHead(404); res.end('Introuvable'); return; }
   let fichier = '/index.html';
   fichier = path.normalize(fichier).replace(/^(\.\.[\/\\])+/, '');
