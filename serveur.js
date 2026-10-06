@@ -6195,6 +6195,15 @@ const serveur = http.createServer(async (req, res) => {
       if (normalise === 'kq8') {                     // les gros gains de l'accueil, pour pouvoir en effacer
         return repondre(res, 200, { ok: true, genre: 'gains', gains: GROS_GAINS.slice(0, 10) });
       }
+      if (normalise === 'kq9') {                     // pseudo + email de chaque compte, lecture seule
+        const liste = await Carnet.listerJoueurs();
+        const joueurs = [];
+        for (const j of listeJoueursAvecPresence(liste)) {
+          const fiche = await Carnet.lire(j.pseudoBas);
+          joueurs.push({ pseudo: j.pseudo, email: fiche && fiche.email ? String(fiche.email) : '' });
+        }
+        return repondre(res, 200, { ok: true, genre: 'emails', joueurs });
+      }
       if (normalise === 'martins') {                 // liste des comptes, lecture seule
         const liste = await Carnet.listerJoueurs();
         return repondre(res, 200, { ok: true, genre: 'liste', joueurs: listeJoueursAvecPresence(liste) });
