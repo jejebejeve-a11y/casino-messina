@@ -5524,8 +5524,8 @@ const serveur = http.createServer(async (req, res) => {
     /* ---------- GOLD JUMP : chaque anneau multiplie le gain par un facteur tire ICI ---------- */
     if (route.startsWith('/api/gjump-') && req.method === 'POST') {
       const GJ_MAX = 50000, GJ_ANNEAUX = 1000;
-      const GJ_TABLE = [[0.3, 23], [0.5, 19], [0.8, 15], [1.1, 17], [1.5, 12], [2, 9], [3, 4], [4, 1]];   // moyenne 0,991 par anneau
-      const tirer = () => { let r = crypto.randomInt(100); for (const [f, w] of GJ_TABLE) { if (r < w) return f; r -= w; } return 1.1; };
+      const GJ_TABLE = [[0.5, 170], [0.7, 160], [1.1, 270], [1.2, 160], [1.3, 90], [1.5, 75], [2, 50], [3, 20], [4, 5]];   // sur 1000 : 2 anneaux sur 3 font gagner
+      const tirer = () => { let r = crypto.randomInt(1000); for (const [f, w] of GJ_TABLE) { if (r < w) return f; r -= w; } return 1.1; };
       const payer = p => { const gain = p.n ? Math.min(GJ_MAX, sous(p.mise * p.mult)) : p.mise; compte.solde = sous(compte.solde + gain); compte.gjump = null; soldeAuSiege(compte); Carnet.enregistrer(compte); return gain; };
       const p = compte.gjump;
       if (route === '/api/gjump-demarrer') {
