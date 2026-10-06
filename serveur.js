@@ -3299,7 +3299,7 @@ function lbtRoutes(route, compte, body, res) {
 }
 
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['joker', 'Rich Joker', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['gjump', 'Gold Jump', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['joker', 'Rich Joker', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -5521,6 +5521,51 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, mises: propre, solde: compte.solde });
     }
 
+    /* ---------- GOLD JUMP : chaque anneau multiplie le gain par un facteur tire ICI ---------- */
+    if (route.startsWith('/api/gjump-') && req.method === 'POST') {
+      const GJ_MAX = 50000, GJ_ANNEAUX = 1000;
+      const GJ_TABLE = [[0.3, 23], [0.5, 19], [0.8, 15], [1.1, 17], [1.5, 12], [2, 9], [3, 4], [4, 1]];   // moyenne 0,991 par anneau
+      const tirer = () => { let r = crypto.randomInt(100); for (const [f, w] of GJ_TABLE) { if (r < w) return f; r -= w; } return 1.1; };
+      const payer = p => { const gain = p.n ? Math.min(GJ_MAX, sous(p.mise * p.mult)) : p.mise; compte.solde = sous(compte.solde + gain); compte.gjump = null; soldeAuSiege(compte); Carnet.enregistrer(compte); return gain; };
+      const p = compte.gjump;
+      if (route === '/api/gjump-demarrer') {
+        if (p) payer(p);
+        const mise = sous(Number(body.mise) || 0);
+        if (!(mise >= 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+        if (mise > 1000)     return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+        if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+        compte.solde = sous(compte.solde - mise);
+        compte.gjump = { mise, mult: 1, n: 0, dernier: Date.now() };
+        soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, mise, solde: compte.solde });
+      }
+      if (route === '/api/gjump-etat') {   // partie laissee ouverte : encaissee (ou mise rendue si aucun anneau)
+        if (!p) return repondre(res, 200, { ok: true, solde: compte.solde });
+        const gain = payer(p);
+        return repondre(res, 200, { ok: true, repris: true, gain: p.n ? gain : 0, solde: compte.solde });
+      }
+      if (!p) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      if (route === '/api/gjump-anneau') {
+        const n = Number(body.n) | 0, t = Date.now();
+        if (n !== p.n + 1) return repondre(res, 400, { erreur: 'Anneau inconnu.' });
+        if (t - p.dernier < 450) return repondre(res, 429, { erreur: 'Trop rapide.' });
+        p.dernier = t; p.n = n;
+        const f = tirer(); p.mult = Math.round(p.mult * f * 10000) / 10000;
+        const gain = Math.min(GJ_MAX, sous(p.mise * p.mult));
+        if (gain >= GJ_MAX || p.n >= GJ_ANNEAUX) { const g = payer(p); return repondre(res, 200, { ok: true, f, mult: p.mult, gain: g, fini: true, solde: compte.solde }); }
+        return repondre(res, 200, { ok: true, f, mult: p.mult, gain });
+      }
+      if (route === '/api/gjump-rate') {
+        compte.gjump = null; Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, perdu: p.mise, solde: compte.solde });
+      }
+      if (route === '/api/gjump-encaisser') {
+        if (!p.n) return repondre(res, 400, { erreur: 'Passe au moins un anneau avant d\'encaisser.' });
+        const mult = p.mult, gain = payer(p);
+        return repondre(res, 200, { ok: true, gain, mult, solde: compte.solde });
+      }
+      return repondre(res, 404, { erreur: 'route inconnue' });
+    }
     if (route === '/api/mines-demarrer' && req.method === 'POST') {
       if (compte.mines) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
       const mise = sous(Number(body.mise) || 0);
