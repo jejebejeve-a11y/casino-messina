@@ -3115,7 +3115,7 @@ function lbjRoutes(route, compte, body, res, req) {
 }
 
 /* =====================================================================
-   LIVE BLACKJACK — TABLE PARTAGEE A 7 PLACES (le croupier LiveAvatar)
+   LIVE BLACKJACK — TABLE PARTAGEE A 5 PLACES (un joueur peut jouer plusieurs mains)
    Une seule table pour tout le casino. Le serveur decide tout : le sabot,
    chaque carte, l'ordre de jeu, les gains. Les pages ne font que montrer.
    Regles : 6 jeux, la banque tire jusqu'a 16 et reste sur tous les 17,
@@ -3133,10 +3133,10 @@ function croupierDemande() {
 function croupierMasquer(o) {
   return JSON.parse(JSON.stringify(o || null, (k, v) => /token|key|secret/i.test(k) && typeof v === 'string' ? '***masque*** (' + v.length + ' car.)' : v));
 }
-const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 5000;
+const LBT_PLACES = 5, LBT_MIN = 1, LBT_MAX = 5000;   // 5 places ; un joueur peut prendre plusieurs places (plusieurs mains)
 const LBT_MISE_MS = 15000, LBT_ASSUR_MS = 8000, LBT_TOUR_MS = 15000, LBT_FIN_MS = 6000, LBT_ABSENT_MS = 30000;
 const LBT = { phase: 'mise', places: new Array(LBT_PLACES).fill(null), croupier: [], seq: [], n: 0, debutN: 0,
-              echeance: 0, active: null, sabot: [], manche: 0, ordre: [6, 5, 4, 3, 2, 1, 0] };
+              echeance: 0, active: null, sabot: [], manche: 0, ordre: [4, 3, 2, 1, 0] };
 function lbtCompteVivant(p) {
   for (const c of comptes.values()) if (c.pseudoBas === p.pseudoBas) { p.compte = c; return c; }
   return p.compte;
@@ -3144,6 +3144,7 @@ function lbtCompteVivant(p) {
 function lbtTirer() { if (LBT.sabot.length < 80) LBT.sabot = neufSabot(); const c = LBT.sabot.pop(); return { h: c.h, s: c.s, r: c.r }; }
 function lbtPousser(e) { e.n = ++LBT.n; LBT.seq.push(e); if (LBT.seq.length > 400) LBT.seq.shift(); }
 function lbtPlaceDe(compte) { return LBT.places.findIndex(p => p && p.pseudoBas === compte.pseudoBas); }
+function lbtMesPlaces(compte) { const l = []; LBT.places.forEach((p, i) => { if (p && p.pseudoBas === compte.pseudoBas) l.push(i); }); return l; }
 function lbtJoueurs() { return LBT.ordre.filter(i => LBT.places[i] && LBT.places[i].mains.length); }
 function lbtCrediter(p, montant) {
   if (!montant) return;
@@ -3222,8 +3223,9 @@ function lbtRegler() {
 function lbtNettoyer() {
   for (let i = 0; i < LBT_PLACES; i++) {
     const p = LBT.places[i]; if (!p) continue;
+    const libererExtra = p.extra && !p.jouait && p.manche < LBT.manche;
     p.mains = []; p.mise = 0; p.assurance = 0; p.gain = 0; p.jouait = false;
-    if (p.part || Date.now() - p.vu > LBT_ABSENT_MS) LBT.places[i] = null;
+    if (p.part || libererExtra || Date.now() - p.vu > LBT_ABSENT_MS) { LBT.places[i] = null; lbtPousser({ qui: 'parti', place: i }); }
   }
   LBT.croupier = []; LBT.active = null; LBT.phase = 'mise'; LBT.echeance = 0;
   lbtPousser({ qui: 'nouvelle' });
@@ -3255,47 +3257,61 @@ function lbtPeut(compte) {
 }
 function lbtEtat(compte, depuis) {
   const cachee = LBT.phase === 'joueurs' || LBT.phase === 'assurance';
-  const moi = lbtPlaceDe(compte);
+  const mes = lbtMesPlaces(compte), moi = mes.length ? mes[0] : -1;
   depuis = Number(depuis) || 0;
   const resync = depuis < LBT.debutN - 1 || depuis > LBT.n;
   return {
     ok: true, phase: LBT.phase, reste: LBT.echeance ? Math.max(0, LBT.echeance - Date.now()) : 0, manche: LBT.manche,
     n: LBT.n, resync, seq: resync ? [] : LBT.seq.filter(e => e.n > depuis).map(e => e.qui === 'cachee' ? { n: e.n, qui: 'cachee' } : e),
-    moi, solde: compte.solde, active: LBT.active, peut: lbtPeut(compte),
+    moi, mes, solde: compte.solde, active: LBT.active, peut: lbtPeut(compte),
     croupier: cachee ? (LBT.croupier.length ? [LBT.croupier[0], null] : []) : LBT.croupier,
-    places: LBT.places.map((p, i) => p ? { pseudo: p.pseudo, moi: i === moi, mise: p.mise, assurance: p.assurance || 0, gain: p.gain || 0,
+    places: LBT.places.map((p, i) => p ? { pseudo: p.pseudo, moi: mes.includes(i), mise: p.mise, assurance: p.assurance || 0, gain: p.gain || 0,
       mains: p.mains.map(m => ({ cartes: m.cartes, mise: m.mise, total: compter(m.cartes), fini: !!m.fini, double: !!m.double, res: m.res || null, gain: m.gain || 0 })) } : null)
   };
 }
 function lbtRoutes(route, compte, body, res) {
-  const moi = lbtPlaceDe(compte);
-  if (moi >= 0) { const p = LBT.places[moi]; p.vu = Date.now(); p.compte = compte; p.part = false; }
+  const mes = lbtMesPlaces(compte), moi = mes.length ? mes[0] : -1;
+  for (const i of mes) { const p = LBT.places[i]; p.vu = Date.now(); p.compte = compte; if (!p.mains.length) p.part = false; }
   if (route === '/api/lbt-etat') return repondre(res, 200, lbtEtat(compte, body.depuis));
   if (route === '/api/lbt-asseoir') {
     const voulu = Number.isInteger(body.place) ? body.place : -1;
     const libre = i => i >= 0 && i < LBT_PLACES && !LBT.places[i];
     if (moi >= 0) {
+      if (body.ajouter) {   // une main de plus : le joueur prend une autre place libre
+        if (!libre(voulu)) return repondre(res, 200, Object.assign(lbtEtat(compte, 0), { erreur: 'Cette place est prise.' }));
+        LBT.places[voulu] = { pseudo: compte.pseudo, pseudoBas: compte.pseudoBas, compte, vu: Date.now(), mise: 0, mains: [], assurance: 0, gain: 0, extra: true, manche: LBT.manche };
+        lbtPousser({ qui: 'assis', place: voulu, pseudo: compte.pseudo });
+        return repondre(res, 200, lbtEtat(compte, 0));
+      }
       const p = LBT.places[moi];
-      if (voulu >= 0 && libre(voulu) && !p.mains.length && !p.mise) { LBT.places[voulu] = p; LBT.places[moi] = null; }
+      if (mes.length === 1 && voulu >= 0 && libre(voulu) && !p.mains.length && !p.mise) { LBT.places[voulu] = p; LBT.places[moi] = null; }
       return repondre(res, 200, lbtEtat(compte, 0));
     }
-    let i = libre(voulu) ? voulu : [3, 2, 4, 1, 5, 0, 6].find(libre);
+    let i = libre(voulu) ? voulu : [2, 1, 3, 0, 4].find(libre);
     if (i === undefined) return repondre(res, 200, Object.assign(lbtEtat(compte, 0), { complet: true }));
     LBT.places[i] = { pseudo: compte.pseudo, pseudoBas: compte.pseudoBas, compte, vu: Date.now(), mise: 0, mains: [], assurance: 0, gain: 0 };
     lbtPousser({ qui: 'assis', place: i, pseudo: compte.pseudo });
     return repondre(res, 200, lbtEtat(compte, 0));
   }
   if (route === '/api/lbt-quitter') {
-    if (moi >= 0) {
-      const p = LBT.places[moi];
+    const une = Number.isInteger(body.place) && mes.includes(body.place);
+    if (une) {   // le joueur rend une de ses places (sans main en cours)
+      const p = LBT.places[body.place];
+      if (p.mains.length) return repondre(res, 409, { erreur: 'Attendez la fin de la main.' });
+      if (p.mise) lbtCrediter(p, p.mise);
+      LBT.places[body.place] = null; lbtPousser({ qui: 'parti', place: body.place });
+      return repondre(res, 200, { ok: true });
+    }
+    for (const i of mes) {
+      const p = LBT.places[i];
       if (p.mains.length) p.part = true;               // sa main en cours se termine toute seule
-      else { if (p.mise) lbtCrediter(p, p.mise); LBT.places[moi] = null; lbtPousser({ qui: 'parti', place: moi }); }
+      else { if (p.mise) lbtCrediter(p, p.mise); LBT.places[i] = null; lbtPousser({ qui: 'parti', place: i }); }
     }
     return repondre(res, 200, { ok: true });
   }
   if (moi < 0) return repondre(res, 409, { erreur: 'Asseyez-vous d\'abord a la table.' });
-  const p = LBT.places[moi];
   if (route === '/api/lbt-miser') {
+    const ici = Number.isInteger(body.place) && mes.includes(body.place) ? body.place : moi, p = LBT.places[ici];
     if (LBT.phase !== 'mise') return repondre(res, 409, { erreur: 'Les mises sont fermees.' });
     const mise = sous(Number(body.mise) || 0);
     if (mise && !(mise >= LBT_MIN && mise <= LBT_MAX)) return repondre(res, 400, { erreur: 'Mise entre 1 € et 5 000 €.' });
@@ -3304,37 +3320,43 @@ function lbtRoutes(route, compte, body, res) {
     compte.solde = sous(compte.solde - delta); p.mise = mise; soldeAuSiege(compte); Carnet.enregistrer(compte);
     if (mise && !LBT.echeance) LBT.echeance = Date.now() + LBT_MISE_MS;
     if (!LBT.places.some(q => q && q.mise > 0)) LBT.echeance = 0;
-    lbtPousser({ qui: 'mise', place: moi, mise });
+    lbtPousser({ qui: 'mise', place: ici, mise });
     if (res.__suivi) res.__suivi.nomJeu = 'Live Blackjack';
     return repondre(res, 200, lbtEtat(compte, body.depuis));
   }
   if (route === '/api/lbt-assurance') {
-    if (LBT.phase !== 'assurance' || !p.mains.length || p.assurance) return repondre(res, 409, { erreur: 'Pas d\'assurance possible.' });
-    if (body.oui) { const a = sous(p.mains[0].mise / 2); if (a <= compte.solde) { compte.solde = sous(compte.solde - a); p.assurance = a; soldeAuSiege(compte); Carnet.enregistrer(compte); } }
-    p.assuranceVue = true;
+    const avec = mes.map(i => LBT.places[i]).filter(p => p.mains.length && !p.assurance);
+    if (LBT.phase !== 'assurance' || !avec.length) return repondre(res, 409, { erreur: 'Pas d\'assurance possible.' });
+    for (const p of avec) {   // la reponse vaut pour toutes les mains du joueur
+      if (body.oui) { const a = sous(p.mains[0].mise / 2); if (a <= compte.solde) { compte.solde = sous(compte.solde - a); p.assurance = a; } }
+      p.assuranceVue = true;
+    }
+    for (const i of mes) LBT.places[i].assuranceVue = true;
+    soldeAuSiege(compte); Carnet.enregistrer(compte);
     if (lbtJoueurs().every(i => LBT.places[i].assuranceVue)) { lbtJoueurs().forEach(i => LBT.places[i].assuranceVue = false); lbtApresDonne(); }
     return repondre(res, 200, lbtEtat(compte, body.depuis));
   }
   if (route === '/api/lbt-action') {
     const a = LBT.active;
-    if (LBT.phase !== 'joueurs' || !a || a.place !== moi) return repondre(res, 409, { erreur: 'Ce n\'est pas votre tour.' });
+    if (LBT.phase !== 'joueurs' || !a || !mes.includes(a.place)) return repondre(res, 409, { erreur: 'Ce n\'est pas votre tour.' });
+    const ici = a.place, p = LBT.places[ici];
     const m = p.mains[a.main], action = String(body.action || ''), peut = lbtPeut(compte);
     if (action === 'tirer') {
-      const c = lbtTirer(); m.cartes.push(c); lbtPousser({ qui: 'j', place: moi, main: a.main, c });
+      const c = lbtTirer(); m.cartes.push(c); lbtPousser({ qui: 'j', place: ici, main: a.main, c });
       if (compter(m.cartes) >= 21) { m.fini = true; lbtSuivant(); } else LBT.echeance = Date.now() + LBT_TOUR_MS;
     } else if (action === 'rester') { m.fini = true; lbtSuivant(); }
     else if (action === 'doubler') {
       if (!peut.doubler) return repondre(res, 400, { erreur: 'Impossible de doubler.' });
       compte.solde = sous(compte.solde - m.mise); m.mise = sous(m.mise * 2); m.double = true; p.mise = sous(p.mains.reduce((s, x) => s + x.mise, 0));
-      const c = lbtTirer(); m.cartes.push(c); lbtPousser({ qui: 'j', place: moi, main: a.main, c, double: true });
+      const c = lbtTirer(); m.cartes.push(c); lbtPousser({ qui: 'j', place: ici, main: a.main, c, double: true });
       m.fini = true; lbtSuivant();
     } else if (action === 'split') {
       if (!peut.split) return repondre(res, 400, { erreur: 'Impossible de spliter.' });
       compte.solde = sous(compte.solde - m.mise);
       const as = m.cartes[0].h === 'A';
       const m2 = { cartes: [m.cartes.pop()], mise: m.mise, splitAs: as }; m.splitAs = as;
-      p.mains.push(m2); p.mise = sous(m.mise * 2); lbtPousser({ qui: 'split', place: moi });
-      const c = lbtTirer(); m.cartes.push(c); lbtPousser({ qui: 'j', place: moi, main: 0, c });
+      p.mains.push(m2); p.mise = sous(m.mise * 2); lbtPousser({ qui: 'split', place: ici });
+      const c = lbtTirer(); m.cartes.push(c); lbtPousser({ qui: 'j', place: ici, main: 0, c });
       if (as || compter(m.cartes) >= 21) { m.fini = true; lbtSuivant(); } else LBT.echeance = Date.now() + LBT_TOUR_MS;
     } else return repondre(res, 400, { erreur: 'Action inconnue.' });
     soldeAuSiege(compte); Carnet.enregistrer(compte);
