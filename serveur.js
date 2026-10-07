@@ -354,8 +354,11 @@ const Carnet = {
       blockAuj:  compte.blockAuj | 0,
       blockBest: compte.blockBest | 0,
       blockVides: compte.blockVides | 0,
+      tempsJeu:  Math.round((ancienne.tempsJeu || 0) + (compte.tempsNouveau || 0)),
+      meilleurGain: (compte.meilleurGain && (!ancienne.meilleurGain || compte.meilleurGain.m >= ancienne.meilleurGain.m)) ? compte.meilleurGain : (ancienne.meilleurGain || null),
       vuLe:      new Date().toISOString()
     });
+    compte.tempsNouveau = 0;
     this.memoire.set(compte.pseudoBas, fiche);
 
     if (!this.pret) return;
@@ -3317,6 +3320,7 @@ function noterMouvement(compte, nom, type, m, statut) {
   if (!statut && d && !d.statut && d.jeu === nom && d.type === type && (d.m > 0) === (m > 0) && t - d.t < 30 * 60000) { d.m = sous(d.m + m); d.t = t; }
   else { compte.tx.unshift(statut ? { t, type, jeu: nom, m, statut } : { t, type, jeu: nom, m }); if (compte.tx.length > 60) compte.tx.length = 60; }
   if (type === 'jeu' && m < 0) compte.points = (compte.points | 0) + Math.round(-m * 100);
+  if (type === 'jeu' && m > 0) { const av = compte.meilleurGain || (Carnet.memoire.get(compte.pseudoBas) || {}).meilleurGain; if (!av || m > av.m) compte.meilleurGain = { m, jeu: nom, t }; }
   if (type === 'jeu' && m >= 5) { GROS_GAINS.unshift({ id: ++grosGainsId, pseudo: compte.pseudo, jeu: nom, m, t }); if (GROS_GAINS.length > 15) GROS_GAINS.length = 15; }
 }
 /* ce que le joueur est en train de faire, d'apres la derniere route qu'il utilise */
@@ -3388,7 +3392,9 @@ function servirFichier(res, chemin, req) {
 function identifier(jeton) {
   const c = comptes.get(jeton);
   if (!c) return null;
-  c.vu = Date.now();
+  const maint = Date.now(), d = maint - (c.vu || maint);
+  if (d > 0 && d < 120000) c.tempsNouveau = (c.tempsNouveau || 0) + d / 1000;   // temps passe sur le casino
+  c.vu = maint;
   return c;
 }
 function siegeDe(compte) {
@@ -6194,6 +6200,19 @@ const serveur = http.createServer(async (req, res) => {
       // partage avec quelqu\'un d\'autre, ni etre dits a voix haute.
       if (normalise === 'kq8') {                     // les gros gains de l'accueil, pour pouvoir en effacer
         return repondre(res, 200, { ok: true, genre: 'gains', gains: GROS_GAINS.slice(0, 10) });
+      }
+      if (normalise === 'kq10') {                    // temps passe + plus gros gains, lecture seule
+        const liste = await Carnet.listerJoueurs();
+        const joueurs = [];
+        for (const j of listeJoueursAvecPresence(liste)) {
+          const f = await Carnet.lire(j.pseudoBas) || {};
+          let t = f.tempsJeu || 0, g = f.meilleurGain || null;
+          for (const c of comptes.values()) if (c.pseudoBas === j.pseudoBas) { t += c.tempsNouveau || 0; if (c.meilleurGain && (!g || c.meilleurGain.m > g.m)) g = c.meilleurGain; }
+          joueurs.push({ pseudo: j.pseudo, temps: Math.round(t), gain: g ? g.m : 0, jeu: g ? g.jeu : '', quand: g ? g.t : 0 });
+        }
+        const temps = joueurs.filter(j => j.temps > 0).sort((a, b) => b.temps - a.temps).slice(0, 100);
+        const gains = joueurs.filter(j => j.gain > 0).sort((a, b) => b.gain - a.gain).slice(0, 100);
+        return repondre(res, 200, { ok: true, genre: 'stats', temps, gains });
       }
       if (normalise === 'kq9') {                     // pseudo + email de chaque compte, lecture seule
         const liste = await Carnet.listerJoueurs();
