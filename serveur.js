@@ -2373,6 +2373,49 @@ for (let i = 0; i < 10; i++) rlive.historique.push([0,32,15,19,4,21,2,25,17,34,6
 
 
 /* ===================================================================
+   LIGHTING ROULETTE : un tour toutes les 15 secondes pour tout le monde.
+   0 a 8 s : mises | 8 s : la foudre + le numero sont tires ICI | 14,5 s : paiement
+   =================================================================== */
+const RLT_MISE = 8000, RLT_TIRAGE = 6500, RLT_FIN = 500;
+const rlt = { tour: 1, phase: 'mise', t0: Date.now(), debut: Date.now(), echeance: Date.now() + RLT_MISE, numero: null, eclairs: [], historique: [] };
+function rltTire(table, n) { let r = crypto.randomInt(n); for (const [v, w] of table) { if (r < w) return v; r -= w; } return table[0][0]; }
+function rltTirer() {
+  const nb = rltTire([[1, 400], [2, 300], [3, 180], [4, 80], [5, 40]], 1000);
+  const eclairs = [], deja = new Set();
+  while (eclairs.length < nb) { const n = crypto.randomInt(37); if (deja.has(n)) continue; deja.add(n);
+    eclairs.push({ n, x: rltTire([[50, 400], [100, 250], [150, 150], [200, 100], [300, 60], [400, 30], [500, 10]], 1000) }); }
+  rlt.eclairs = eclairs; rlt.numero = crypto.randomInt(37);
+  rlt.phase = 'tirage'; rlt.debut = rlt.echeance; rlt.echeance = rlt.debut + RLT_TIRAGE;
+}
+function rltPayer() {
+  const n = rlt.numero, e = rlt.eclairs.find(x => x.n === n);
+  for (const c of comptes.values()) {
+    const r = c.rlt;
+    if (!r || r.tour !== rlt.tour || r.paye) continue;
+    let gain = 0, mise = 0;
+    Object.keys(r.mises).forEach(k => { const z = rlCase(k); if (!z) return; mise += r.mises[k];
+      if (z.nums.indexOf(n) < 0) return;
+      gain += k.indexOf('n:') === 0 ? r.mises[k] * (e ? e.x + 1 : 30) : r.mises[k] * z.mult; });
+    gain = sous(gain); r.gain = gain; r.miseTotale = sous(mise); r.paye = true;
+    if (gain > 0) { c.solde = sous(c.solde + gain); soldeAuSiege(c); }
+    Carnet.enregistrer(c);
+  }
+  rlt.historique.unshift({ n, e: e ? e.x : 0 }); rlt.historique = rlt.historique.slice(0, 14);
+  rlt.phase = 'resultat'; rlt.debut = rlt.echeance; rlt.echeance = rlt.debut + RLT_FIN;
+}
+function battementRlt() {
+  const now = Date.now();
+  if (now < rlt.echeance) return;
+  if (rlt.phase === 'mise') rltTirer();
+  else if (rlt.phase === 'tirage') rltPayer();
+  else { rlt.tour++; rlt.phase = 'mise'; rlt.t0 = rlt.echeance; rlt.debut = rlt.t0; rlt.echeance = rlt.t0 + RLT_MISE; rlt.numero = null; rlt.eclairs = [];
+    if (now - rlt.t0 > 3000) { rlt.t0 = now; rlt.debut = now; rlt.echeance = now + RLT_MISE; } }
+}
+setInterval(battementRlt, 100);
+for (let i = 0; i < 10; i++) rlt.historique.push({ n: crypto.randomInt(37), e: 0 });
+
+
+/* ===================================================================
    RICH JOKER - slot 3x3, 5 lignes. Tout est tire ICI (RTP ~95 %).
    =================================================================== */
 const RJ_PAY = { W: 120, L: 80, G: 40, O: 10, P: 10, C: 3 };   // x mise par ligne (3 identiques)
@@ -5527,40 +5570,34 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, mises: propre, solde: compte.solde });
     }
 
-    /* ---------- ROULETTE ECLAIR : tout est tire ICI (numero, numeros frappes par la foudre, multiplicateurs) ---------- */
-    if (route === '/api/rlt-tourner' && req.method === 'POST') {
-      const mises = body && typeof body.mises === 'object' && body.mises ? body.mises : {};
-      const lignes = []; let total = 0;
-      for (const cle of Object.keys(mises).slice(0, 60)) {
-        const m = sous(Number(mises[cle]) || 0); if (!(m > 0)) continue;
-        const c = rlCase(cle);
-        if (!c || !(cle.startsWith('n:') ? c.nums.length === 1 : true)) return repondre(res, 400, { erreur: 'Mise invalide.' });
-        if (m > 500) return repondre(res, 400, { erreur: 'Maximum 500 € par case.' });
-        lignes.push({ cle, m, c }); total = sous(total + m);
+    /* ---------- LIGHTING ROULETTE (tours automatiques, voir battementRlt) ---------- */
+    if (route === '/api/rlt-etat' && req.method === 'POST') {
+      const r = compte.rlt && compte.rlt.tour === rlt.tour ? compte.rlt : null;
+      const prec = compte.rlt && compte.rlt.paye && compte.rlt.tour === rlt.tour - 1 ? { tour: compte.rlt.tour, gain: compte.rlt.gain, mise: compte.rlt.miseTotale } : null;
+      return repondre(res, 200, { ok: true, tour: rlt.tour, phase: rlt.phase, maintenant: Date.now(), t0: rlt.t0, debut: rlt.debut, echeance: rlt.echeance,
+        numero: rlt.phase === 'mise' ? null : rlt.numero, eclairs: rlt.phase === 'mise' ? [] : rlt.eclairs, historique: rlt.historique,
+        mises: r ? r.mises : {}, paye: !!(r && r.paye), gain: r && r.paye ? r.gain : 0, miseTotale: r ? (r.miseTotale || 0) : 0, prec, solde: compte.solde });
+    }
+    if (route === '/api/rlt-miser' && req.method === 'POST') {
+      if (rlt.phase !== 'mise' || Date.now() > rlt.echeance - 120) return repondre(res, 409, { erreur: 'Les jeux sont faits, attendez le prochain tour.' });
+      const voulu = body && typeof body.mises === 'object' && body.mises ? body.mises : {};
+      const propre = {}; let total = 0;
+      for (const k of Object.keys(voulu).slice(0, 60)) {
+        const v = sous(Number(voulu[k]) || 0); if (v <= 0) continue;
+        const c = rlCase(k);
+        if (!c || !(k.indexOf('n:') === 0 ? c.nums.length === 1 : true)) return repondre(res, 400, { erreur: 'Mise invalide.' });
+        if (v > 500) return repondre(res, 400, { erreur: 'Maximum 500 € par case.' });
+        propre[k] = v; total = sous(total + v);
       }
-      if (!lignes.length) return repondre(res, 400, { erreur: 'Placez une mise.' });
-      if (total < 0.1) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
-      if (total > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 € par tour.' });
-      if (total > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
-      if (compte.rltDernier && Date.now() - compte.rltDernier < 4000) return repondre(res, 429, { erreur: 'Patientez la fin du tour.' });
-      compte.rltDernier = Date.now();
-      compte.solde = sous(compte.solde - total);
-      const tire = (table, n) => { let r = crypto.randomInt(n); for (const [v, w] of table) { if (r < w) return v; r -= w; } return table[0][0]; };
-      const nbEclairs = tire([[1, 400], [2, 300], [3, 180], [4, 80], [5, 40]], 1000);
-      const eclairs = [], deja = new Set();
-      while (eclairs.length < nbEclairs) { const n = crypto.randomInt(37); if (deja.has(n)) continue; deja.add(n);
-        eclairs.push({ n, x: tire([[50, 400], [100, 250], [150, 150], [200, 100], [300, 60], [400, 30], [500, 10]], 1000) }); }
-      const numero = crypto.randomInt(37);
-      let gain = 0;
-      for (const l of lignes) {
-        if (!l.c.nums.includes(numero)) continue;
-        if (l.cle.startsWith('n:')) { const e = eclairs.find(e => e.n === numero); gain += l.m * (e ? e.x + 1 : 30); }
-        else gain += l.m * l.c.mult;
-      }
-      gain = sous(gain);
-      compte.solde = sous(compte.solde + gain);
+      if (total > 1000) return repondre(res, 400, { erreur: 'Maximum 1 000 € par tour.' });
+      const avant = compte.rlt && compte.rlt.tour === rlt.tour ? compte.rlt : { tour: rlt.tour, mises: {} };
+      let deja = 0; Object.keys(avant.mises).forEach(k => { deja += avant.mises[k]; });
+      const diff = sous(total - deja);
+      if (diff > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      compte.solde = sous(compte.solde - diff);
+      compte.rlt = { tour: rlt.tour, mises: propre };
       soldeAuSiege(compte); Carnet.enregistrer(compte);
-      return repondre(res, 200, { ok: true, numero, eclairs, mise: total, gain, solde: compte.solde });
+      return repondre(res, 200, { ok: true, mises: propre, solde: compte.solde });
     }
     /* ---------- GOLD JUMP : chaque anneau multiplie le gain par un facteur tire ICI ---------- */
     if (route.startsWith('/api/gjump-') && req.method === 'POST') {
