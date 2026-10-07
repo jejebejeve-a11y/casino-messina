@@ -5586,10 +5586,9 @@ const serveur = http.createServer(async (req, res) => {
         const v = sous(Number(voulu[k]) || 0); if (v <= 0) continue;
         const c = rlCase(k);
         if (!c || !(k.indexOf('n:') === 0 ? c.nums.length === 1 : true)) return repondre(res, 400, { erreur: 'Mise invalide.' });
-        if (v > 500) return repondre(res, 400, { erreur: 'Maximum 500 € par case.' });
         propre[k] = v; total = sous(total + v);
       }
-      if (total > 1000) return repondre(res, 400, { erreur: 'Maximum 1 000 € par tour.' });
+      if (total > 250000) return repondre(res, 400, { erreur: 'Maximum 250 000 € par tour.' });
       const avant = compte.rlt && compte.rlt.tour === rlt.tour ? compte.rlt : { tour: rlt.tour, mises: {} };
       let deja = 0; Object.keys(avant.mises).forEach(k => { deja += avant.mises[k]; });
       const diff = sous(total - deja);
