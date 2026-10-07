@@ -2374,9 +2374,9 @@ for (let i = 0; i < 10; i++) rlive.historique.push([0,32,15,19,4,21,2,25,17,34,6
 
 /* ===================================================================
    LIGHTING ROULETTE : un tour toutes les 15 secondes pour tout le monde.
-   0 a 8 s : mises | 8 s : la foudre + le numero sont tires ICI | 14,5 s : paiement
+   0 a 15 s : mises | ensuite : la foudre + le numero sont tires ICI, puis paiement a la fin de la bille
    =================================================================== */
-const RLT_MISE = 8000, RLT_TIRAGE = 6500, RLT_FIN = 500;
+const RLT_MISE = 15000, RLT_FIN = 500;   // 15 s pour miser ; le tirage dure plus longtemps s'il y a plus d'eclairs (voir rltTirer)
 const rlt = { tour: 1, phase: 'mise', t0: Date.now(), debut: Date.now(), echeance: Date.now() + RLT_MISE, numero: null, eclairs: [], historique: [] };
 function rltTire(table, n) { let r = crypto.randomInt(n); for (const [v, w] of table) { if (r < w) return v; r -= w; } return table[0][0]; }
 function rltTirer() {
@@ -2385,7 +2385,7 @@ function rltTirer() {
   while (eclairs.length < nb) { const n = crypto.randomInt(37); if (deja.has(n)) continue; deja.add(n);
     eclairs.push({ n, x: rltTire([[50, 400], [100, 250], [150, 150], [200, 100], [300, 60], [400, 30], [500, 10]], 1000) }); }
   rlt.eclairs = eclairs; rlt.numero = crypto.randomInt(37);
-  rlt.phase = 'tirage'; rlt.debut = rlt.echeance; rlt.echeance = rlt.debut + RLT_TIRAGE;
+  rlt.phase = 'tirage'; rlt.debut = rlt.echeance; rlt.echeance = rlt.debut + 250 + nb * 900 + 2200 + 5300;   // foudre (0,9 s chacune) + 2,2 s pour lire + bille
 }
 function rltPayer() {
   const n = rlt.numero, e = rlt.eclairs.find(x => x.n === n);
