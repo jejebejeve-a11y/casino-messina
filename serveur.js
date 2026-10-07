@@ -3302,7 +3302,7 @@ function lbtRoutes(route, compte, body, res) {
 }
 
 const NOMS_ROUTES = [
-  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['gjump', 'Gold Jump', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['joker', 'Rich Joker', 'jeu'], ['plinko', 'Plinko', 'jeu'],
+  ['peche', 'Pêche avec Jeffrey', 'peche'], ['block', 'Block', 'jeu'], ['poulet', 'Le Poulet', 'jeu'], ['mines', 'Mines', 'jeu'], ['moles', 'Moles', 'jeu'], ['croco', 'Crocodino', 'jeu'], ['gjump', 'Gold Jump', 'jeu'], ['rlt', 'Lighting Roulette', 'jeu'], ['rlive', 'Roulette Live', 'jeu'], ['joker', 'Rich Joker', 'jeu'], ['plinko', 'Plinko', 'jeu'],
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
@@ -5527,6 +5527,41 @@ const serveur = http.createServer(async (req, res) => {
       return repondre(res, 200, { ok: true, mises: propre, solde: compte.solde });
     }
 
+    /* ---------- ROULETTE ECLAIR : tout est tire ICI (numero, numeros frappes par la foudre, multiplicateurs) ---------- */
+    if (route === '/api/rlt-tourner' && req.method === 'POST') {
+      const mises = body && typeof body.mises === 'object' && body.mises ? body.mises : {};
+      const lignes = []; let total = 0;
+      for (const cle of Object.keys(mises).slice(0, 60)) {
+        const m = sous(Number(mises[cle]) || 0); if (!(m > 0)) continue;
+        const c = rlCase(cle);
+        if (!c || !(cle.startsWith('n:') ? c.nums.length === 1 : true)) return repondre(res, 400, { erreur: 'Mise invalide.' });
+        if (m > 500) return repondre(res, 400, { erreur: 'Maximum 500 € par case.' });
+        lignes.push({ cle, m, c }); total = sous(total + m);
+      }
+      if (!lignes.length) return repondre(res, 400, { erreur: 'Placez une mise.' });
+      if (total < 0.1) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (total > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 € par tour.' });
+      if (total > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      if (compte.rltDernier && Date.now() - compte.rltDernier < 4000) return repondre(res, 429, { erreur: 'Patientez la fin du tour.' });
+      compte.rltDernier = Date.now();
+      compte.solde = sous(compte.solde - total);
+      const tire = (table, n) => { let r = crypto.randomInt(n); for (const [v, w] of table) { if (r < w) return v; r -= w; } return table[0][0]; };
+      const nbEclairs = tire([[1, 400], [2, 300], [3, 180], [4, 80], [5, 40]], 1000);
+      const eclairs = [], deja = new Set();
+      while (eclairs.length < nbEclairs) { const n = crypto.randomInt(37); if (deja.has(n)) continue; deja.add(n);
+        eclairs.push({ n, x: tire([[50, 400], [100, 250], [150, 150], [200, 100], [300, 60], [400, 30], [500, 10]], 1000) }); }
+      const numero = crypto.randomInt(37);
+      let gain = 0;
+      for (const l of lignes) {
+        if (!l.c.nums.includes(numero)) continue;
+        if (l.cle.startsWith('n:')) { const e = eclairs.find(e => e.n === numero); gain += l.m * (e ? e.x + 1 : 30); }
+        else gain += l.m * l.c.mult;
+      }
+      gain = sous(gain);
+      compte.solde = sous(compte.solde + gain);
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, numero, eclairs, mise: total, gain, solde: compte.solde });
+    }
     /* ---------- GOLD JUMP : chaque anneau multiplie le gain par un facteur tire ICI ---------- */
     if (route.startsWith('/api/gjump-') && req.method === 'POST') {
       const GJ_MAX = 50000, GJ_ANNEAUX = 1000;
