@@ -3198,7 +3198,7 @@ function croupierDemande() {
 function croupierMasquer(o) {
   return JSON.parse(JSON.stringify(o || null, (k, v) => /token|key|secret/i.test(k) && typeof v === 'string' ? '***masque*** (' + v.length + ' car.)' : v));
 }
-const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 5000;   // 7 places (0..4 telephone + PC, 5 et 6 seulement sur PC) ; un joueur peut prendre plusieurs places (plusieurs mains)
+const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 10000;   // 7 places (0..4 telephone + PC, 5 et 6 seulement sur PC) ; un joueur peut prendre plusieurs places (plusieurs mains)
 const LBT_MISE_MS = 15000, LBT_ASSUR_MS = 8000, LBT_TOUR_MS = 15000, LBT_FIN_MS = 6000, LBT_ABSENT_MS = 30000;
 const LBT = { phase: 'mise', places: new Array(LBT_PLACES).fill(null), croupier: [], seq: [], n: 0, debutN: 0,
               echeance: 0, active: null, sabot: [], manche: 0, ordre: [6, 4, 3, 2, 1, 0, 5] };
@@ -3379,7 +3379,7 @@ function lbtRoutes(route, compte, body, res) {
     const ici = Number.isInteger(body.place) && mes.includes(body.place) ? body.place : moi, p = LBT.places[ici];
     if (LBT.phase !== 'mise') return repondre(res, 409, { erreur: 'Les mises sont fermees.' });
     const mise = sous(Number(body.mise) || 0);
-    if (mise && !(mise >= LBT_MIN && mise <= LBT_MAX)) return repondre(res, 400, { erreur: 'Mise entre 1 € et 5 000 €.' });
+    if (mise && !(mise >= LBT_MIN && mise <= LBT_MAX)) return repondre(res, 400, { erreur: 'Mise entre 1 € et 10 000 €.' });
     const delta = sous(mise - p.mise);
     if (delta > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
     compte.solde = sous(compte.solde - delta); p.mise = mise; soldeAuSiege(compte); Carnet.enregistrer(compte);
