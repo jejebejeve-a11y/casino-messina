@@ -402,6 +402,17 @@ const Carnet = {
     }
   },
 
+  // Nouveau mot de passe pour un joueur qui a oublie le sien (code admin kq11).
+  async definirMdp(pseudoBas, motDePasse) {
+    const ancienne = this.memoire.get(pseudoBas) || (await this.lire(pseudoBas)) || null;
+    if (!ancienne) return false;
+    const fiche = Object.assign({}, ancienne, { motDePasse });
+    this.memoire.set(pseudoBas, fiche);
+    if (!this.pret) return true;
+    try { await this.commande(['SET', 'joueur:' + pseudoBas, JSON.stringify(fiche)]); } catch (e) { console.log('Carnet : mot de passe non enregistre (' + e.message + ')'); }
+    return true;
+  },
+
   // Supprime completement un compte (fiche + entree d\'index). Utilise par
   // le code admin pour effacer les faux comptes crees par un bot.
   async supprimer(pseudoBas) {
@@ -6460,6 +6471,13 @@ const serveur = http.createServer(async (req, res) => {
         const temps = joueurs.filter(j => j.temps > 0).sort((a, b) => b.temps - a.temps).slice(0, 100);
         const gains = joueurs.filter(j => j.gain > 0).sort((a, b) => b.gain - a.gain).slice(0, 100);
         return repondre(res, 200, { ok: true, genre: 'stats', temps, gains });
+      }
+      { const m = String(body.code || '').trim().match(/^kq11\s*(\S+)$/i);
+        if (m) {                                       // kq11 pseudo : donne un nouveau mot de passe au joueur
+          const pb = m[1].toLowerCase(), neuf = String(crypto.randomInt(100000, 999999));
+          if (!await Carnet.definirMdp(pb, await chiffrer(neuf))) return repondre(res, 404, { erreur: 'Joueur introuvable : ' + m[1] });
+          return repondre(res, 200, { ok: true, genre: 'mdp', pseudo: m[1], mdp: neuf });
+        }
       }
       if (normalise === 'kq9') {                     // pseudo + email de chaque compte, lecture seule
         const liste = await Carnet.listerJoueurs();
