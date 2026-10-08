@@ -2953,6 +2953,71 @@ function avEtat(compte) {
 }
 
 /* =====================================================================
+   PANDASTIC (le panda grimpe) : une seule partie partagee par tous les joueurs.
+   Tout se decide ici : le point de crash, les mises, les encaissements.
+   ===================================================================== */
+const PD_K = 0.07, PD_PRE = 6000, PD_PAUSE = 4000, PD_MIN = 0.20, PD_MAX = 1000, PD_XMAX = 10000, PD_PROFIT = 10000;
+const PANDA = { phase: 'attente', debut: Date.now(), crash: 2, round: 1, paris: [], file: [], hist: [], top: [] };
+function pdTirage() { const u = crypto.randomInt(0, 1000000000) / 1000000000; return Math.min(PD_XMAX, Math.max(1, Math.floor(0.955 / (1 - u) * 100) / 100)); }
+function pdBrut(ms) { return Math.exp(PD_K * ms / 1000); }
+function pdMult(ms) { return Math.floor(pdBrut(ms) * 100) / 100; }
+for (let i = 0; i < 20; i++) PANDA.hist.push(pdTirage());
+PANDA.crash = pdTirage();
+function pdCrediter(b, x, horsRequete) {
+  const c = b.compte, w = sous(b.mise * x);
+  b.x = x; b.gain = w; b.encaisse = true;
+  c.solde = sous(c.solde + w);
+  if (horsRequete && typeof c.soldeSuivi === 'number') c.soldeSuivi = sous(c.soldeSuivi + w);
+  noterMouvement(c, 'Pandastic', 'jeu', w);
+  soldeAuSiege(c); Carnet.enregistrer(c);
+  PANDA.top.push({ p: c.pseudo, m: b.mise, x, g: w });
+  PANDA.top.sort((a, z) => z.g - a.g); if (PANDA.top.length > 20) PANDA.top.length = 20;
+  return w;
+}
+function pdNouveau() {
+  for (const b of PANDA.paris) {
+    const c = b.compte; if (!Array.isArray(c.pdMes)) c.pdMes = [];
+    c.pdMes.unshift({ m: b.mise, x: b.encaisse ? b.x : 0, g: b.encaisse ? b.gain : 0, c: PANDA.crash });
+    if (c.pdMes.length > 30) c.pdMes.length = 30;
+  }
+  PANDA.phase = 'attente'; PANDA.debut = Date.now(); PANDA.crash = pdTirage(); PANDA.round++;
+  PANDA.paris = PANDA.file; PANDA.file = [];
+}
+function battementPanda() {
+  const now = Date.now(), el = now - PANDA.debut;
+  if (PANDA.phase === 'attente') {
+    if (el >= PD_PRE) { PANDA.phase = 'vol'; PANDA.debut = now; for (const b of PANDA.paris) b.actif = true; }
+  } else if (PANDA.phase === 'vol') {
+    const m = pdMult(el), fini = pdBrut(el) >= PANDA.crash;
+    for (const b of PANDA.paris) if (b.actif && !b.encaisse && b.auto && b.auto < PANDA.crash && (b.auto <= m || fini)) pdCrediter(b, b.auto, true);
+    for (const b of PANDA.paris) if (b.actif && !b.encaisse && !fini && b.mise * (m - 1) >= PD_PROFIT) pdCrediter(b, m, true);   // gain max atteint : encaisse tout seul
+    if (fini) { PANDA.phase = 'crash'; PANDA.debut = now; PANDA.hist.unshift(PANDA.crash); if (PANDA.hist.length > 60) PANDA.hist.length = 60; }
+  } else if (el >= PD_PAUSE) pdNouveau();
+}
+setInterval(battementPanda, 50);
+function pdTrouver(compte, slot) {
+  return PANDA.paris.find(b => b.compte === compte && b.slot === slot) || PANDA.file.find(b => b.compte === compte && b.slot === slot) || null;
+}
+function pdEtat(compte) {
+  const mes = [0, 1].map(s => {
+    const f = PANDA.file.find(b => b.compte === compte && b.slot === s);
+    if (f) return { st: 'queued', m: f.mise, auto: f.auto };
+    const b = PANDA.paris.find(b => b.compte === compte && b.slot === s);
+    if (!b) return { st: 'idle' };
+    if (b.encaisse) return { st: 'idle', m: b.mise, x: b.x, g: b.gain };
+    if (PANDA.phase === 'attente') return { st: 'placed', m: b.mise, auto: b.auto };
+    if (PANDA.phase === 'vol') return { st: 'active', m: b.mise, auto: b.auto };
+    return { st: 'idle', perdu: true, m: b.mise };
+  });
+  return {
+    ok: true, phase: PANDA.phase, ecoule: Date.now() - PANDA.debut, round: PANDA.round,
+    crash: PANDA.phase === 'crash' ? PANDA.crash : null,
+    paris: PANDA.paris.map(b => ({ p: b.compte.pseudo, s: b.slot, m: b.mise, x: b.encaisse ? b.x : 0, g: b.encaisse ? b.gain : 0, moi: b.compte === compte })),
+    hist: PANDA.hist.slice(0, 30), top: PANDA.top, mes, mesParis: (compte.pdMes || []).slice(0, 30), solde: compte.solde
+  };
+}
+
+/* =====================================================================
    LIVE BLACKJACK (la croupiere en video) : un joueur contre la banque.
    Tout est decide ici : le sabot, chaque carte, les gains.
    Regles : 6 jeux, la banque tire jusqu'a 16 et reste sur tous les 17,
@@ -3371,7 +3436,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -5839,6 +5904,55 @@ const serveur = http.createServer(async (req, res) => {
         }
       }
       return repondre(res, 409, Object.assign(avEtat(compte), { ok: false, erreur: 'Trop tard !' }));
+    }
+
+    // ---------- PANDASTIC ----------
+    if (route === '/api/panda-etat') return repondre(res, 200, pdEtat(compte));
+    if (route === '/api/panda-miser' && req.method === 'POST') {
+      const slot = Number(body.slot) === 1 ? 1 : 0;
+      const mise = sous(Number(body.mise) || 0);
+      let auto = Number(body.auto) || 0; auto = auto >= 1.01 ? Math.min(PD_XMAX, Math.floor(auto * 100) / 100) : 0;
+      if (!(mise >= PD_MIN && mise <= PD_MAX)) return repondre(res, 400, { erreur: 'Mise entre 0,20 € et 1 000 €.' });
+      if (PANDA.phase === 'attente' && PANDA.paris.find(b => b.compte === compte && b.slot === slot)) return repondre(res, 409, { erreur: 'Pari deja place.' });
+      if (mise > compte.solde + 1e-9) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      if (PANDA.file.find(b => b.compte === compte && b.slot === slot)) return repondre(res, 409, { erreur: 'Pari deja place.' });
+      compte.solde = sous(compte.solde - mise);
+      const b = { compte, slot, mise, auto, actif: false, encaisse: false, x: 0, gain: 0 };
+      if (PANDA.phase === 'attente') PANDA.paris.push(b); else PANDA.file.push(b);
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, pdEtat(compte));
+    }
+    if (route === '/api/panda-annuler' && req.method === 'POST') {
+      const slot = Number(body.slot) === 1 ? 1 : 0;
+      let i = PANDA.file.findIndex(b => b.compte === compte && b.slot === slot), liste = PANDA.file;
+      if (i < 0 && PANDA.phase === 'attente') { liste = PANDA.paris; i = liste.findIndex(b => b.compte === compte && b.slot === slot); }
+      if (i < 0) return repondre(res, 409, { erreur: 'Trop tard pour annuler.' });
+      const b = liste.splice(i, 1)[0];
+      compte.solde = sous(compte.solde + b.mise);
+      compte.points = Math.max(0, (compte.points | 0) - Math.round(b.mise * 100));
+      if (res.__suivi) res.__suivi.deja = true;
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, pdEtat(compte));
+    }
+    if (route === '/api/panda-auto' && req.method === 'POST') {
+      const b = pdTrouver(compte, Number(body.slot) === 1 ? 1 : 0);
+      let auto = Number(body.auto) || 0; auto = auto >= 1.01 ? Math.min(PD_XMAX, Math.floor(auto * 100) / 100) : 0;
+      if (b && !b.encaisse) b.auto = auto;
+      return repondre(res, 200, pdEtat(compte));
+    }
+    if (route === '/api/panda-encaisser' && req.method === 'POST') {
+      const slot = Number(body.slot) === 1 ? 1 : 0;
+      const b = PANDA.paris.find(x => x.compte === compte && x.slot === slot);
+      if (PANDA.phase === 'vol' && b && b.actif && !b.encaisse) {
+        const el = Date.now() - PANDA.debut;
+        if (pdBrut(el) < PANDA.crash) {
+          const gain = pdCrediter(b, pdMult(el), false);
+          if (res.__suivi) res.__suivi.deja = true;
+          const e = pdEtat(compte); e.gain = gain; e.x = b.x;
+          return repondre(res, 200, e);
+        }
+      }
+      return repondre(res, 409, Object.assign(pdEtat(compte), { ok: false, erreur: 'Trop tard !' }));
     }
 
     if (route === '/api/slot-jouer' && req.method === 'POST') {
