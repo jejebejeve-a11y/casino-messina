@@ -3436,7 +3436,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -6040,6 +6040,46 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- PANDASTIC (escalade, comme Koala Road) : chaque palier, une chance fixe de tomber, tiree ICI ---------- */
+    if (route.startsWith('/api/pclimb-') && req.method === 'POST') {
+      const k = compte.pclimb;
+      if (route === '/api/pclimb-demarrer') {
+        if (k) return repondre(res, 409, { erreur: 'Une escalade est deja en cours.' });
+        const mise = sous(Number(body.mise) || 0), risque = body.risque;
+        if (!KROAD_RISQUES[risque]) return repondre(res, 400, { erreur: 'Niveau de risque inconnu.' });
+        if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+        if (mise > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+        if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+        compte.solde = sous(compte.solde - mise); compte.pclimb = { mise, risque, n: 0 };
+        soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, mise, risque, solde: compte.solde });
+      }
+      if (route === '/api/pclimb-etat') {
+        if (!k) return repondre(res, 200, { ok: true, enCours: false, solde: compte.solde });
+        return repondre(res, 200, { ok: true, enCours: true, mise: k.mise, risque: k.risque, n: k.n, mult: k.n ? kroadMult(k.risque, k.n) : 0, solde: compte.solde });
+      }
+      if (!k) return repondre(res, 409, { erreur: 'Aucune escalade en cours.' });
+      if (route === '/api/pclimb-monter') {
+        if (crypto.randomInt(1000000) < Math.round(KROAD_RISQUES[k.risque] * 1000000)) {
+          compte.pclimb = null; Carnet.enregistrer(compte);
+          return repondre(res, 200, { ok: true, tombe: true, n: k.n + 1, solde: compte.solde });
+        }
+        k.n++;
+        const mult = kroadMult(k.risque, k.n), gain = Math.min(10000, sous(k.mise * mult));
+        if (k.n >= 25 || gain >= 10000) {
+          compte.solde = sous(compte.solde + gain); compte.pclimb = null; soldeAuSiege(compte); Carnet.enregistrer(compte);
+          return repondre(res, 200, { ok: true, tombe: false, n: k.n, mult, gain, fini: true, solde: compte.solde });
+        }
+        return repondre(res, 200, { ok: true, tombe: false, n: k.n, mult, gain, solde: compte.solde });
+      }
+      if (route === '/api/pclimb-encaisser') {
+        if (k.n < 1) return repondre(res, 400, { erreur: 'Monte au moins un palier avant d\'encaisser.' });
+        const mult = kroadMult(k.risque, k.n), gain = Math.min(10000, sous(k.mise * mult));
+        compte.solde = sous(compte.solde + gain); compte.pclimb = null; soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, gain, mult, n: k.n, solde: compte.solde });
+      }
+    }
+
     if (route === '/api/kroad-demarrer' && req.method === 'POST') {
       if (compte.kroad) return repondre(res, 409, { erreur: 'Une traversee est deja en cours.' });
       const mise = sous(Number(body.mise) || 0);
