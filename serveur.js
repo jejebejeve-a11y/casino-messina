@@ -3198,10 +3198,10 @@ function croupierDemande() {
 function croupierMasquer(o) {
   return JSON.parse(JSON.stringify(o || null, (k, v) => /token|key|secret/i.test(k) && typeof v === 'string' ? '***masque*** (' + v.length + ' car.)' : v));
 }
-const LBT_PLACES = 5, LBT_MIN = 1, LBT_MAX = 5000;   // 5 places ; un joueur peut prendre plusieurs places (plusieurs mains)
+const LBT_PLACES = 7, LBT_MIN = 1, LBT_MAX = 5000;   // 7 places (0..4 telephone + PC, 5 et 6 seulement sur PC) ; un joueur peut prendre plusieurs places (plusieurs mains)
 const LBT_MISE_MS = 15000, LBT_ASSUR_MS = 8000, LBT_TOUR_MS = 15000, LBT_FIN_MS = 6000, LBT_ABSENT_MS = 30000;
 const LBT = { phase: 'mise', places: new Array(LBT_PLACES).fill(null), croupier: [], seq: [], n: 0, debutN: 0,
-              echeance: 0, active: null, sabot: [], manche: 0, ordre: [4, 3, 2, 1, 0] };
+              echeance: 0, active: null, sabot: [], manche: 0, ordre: [6, 4, 3, 2, 1, 0, 5] };
 function lbtCompteVivant(p) {
   for (const c of comptes.values()) if (c.pseudoBas === p.pseudoBas) { p.compte = c; return c; }
   return p.compte;
@@ -3352,7 +3352,7 @@ function lbtRoutes(route, compte, body, res) {
       if (mes.length === 1 && voulu >= 0 && libre(voulu) && !p.mains.length && !p.mise) { LBT.places[voulu] = p; LBT.places[moi] = null; }
       return repondre(res, 200, lbtEtat(compte, 0));
     }
-    let i = libre(voulu) ? voulu : [2, 1, 3, 0, 4].find(libre);
+    let i = libre(voulu) ? voulu : [2, 1, 3, 0, 4].concat(body.pc ? [5, 6] : []).find(libre);
     if (i === undefined) return repondre(res, 200, Object.assign(lbtEtat(compte, 0), { complet: true }));
     LBT.places[i] = { pseudo: compte.pseudo, pseudoBas: compte.pseudoBas, compte, vu: Date.now(), mise: 0, mains: [], assurance: 0, gain: 0 };
     lbtPousser({ qui: 'assis', place: i, pseudo: compte.pseudo });
