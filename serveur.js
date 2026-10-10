@@ -3479,7 +3479,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -4384,6 +4384,28 @@ const serveur = http.createServer(async (req, res) => {
   if (route === '/icone-180.png' || route === '/icone-512.png' || route === '/apple-touch-icon.png' || route === '/apple-touch-icon-precomposed.png') {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     res.end(Buffer.from(route === '/icone-512.png' ? ICONE_512 : ICONE_180, 'base64'));
+    return;
+  }
+
+  /* ---------------- images et videos des jeux (dossier images/) ---------------- */
+  if (route.startsWith('/images/')) {
+    const nomImg = route.slice(8);
+    const TYP = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp4: 'video/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
+    const m = /^[a-z0-9_-]+\.(jpg|png|webp|mp4|mp3|wav)$/.exec(nomImg);
+    if (!m) { res.writeHead(404); res.end('Introuvable'); return; }
+    fs.readFile(path.join(__dirname, 'images', nomImg), (err, data) => {
+      if (err) { res.writeHead(404); res.end('Introuvable'); return; }
+      const h = { 'Content-Type': TYP[m[1]], 'Cache-Control': 'public, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' };
+      const rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (rg && (rg[1] || rg[2])) {
+        let a = rg[1] ? Number(rg[1]) : data.length - Number(rg[2]), b = rg[1] && rg[2] ? Number(rg[2]) : data.length - 1;
+        b = Math.min(b, data.length - 1);
+        if (a > b || a < 0) { res.writeHead(416, { 'Content-Range': 'bytes */' + data.length }); res.end(); return; }
+        h['Content-Range'] = 'bytes ' + a + '-' + b + '/' + data.length; h['Content-Length'] = b - a + 1;
+        res.writeHead(206, h); res.end(data.subarray(a, b + 1)); return;
+      }
+      h['Content-Length'] = data.length; res.writeHead(200, h); res.end(data);
+    });
     return;
   }
 
@@ -6083,6 +6105,20 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- FLOOR 13 : le multiplicateur de l'etage est tire ICI (retour joueur ~94 %) ---------- */
+    if (route === '/api/floor13-jouer' && req.method === 'POST') {
+      const mise = sous(Number(body.mise) || 0), etage = Number(body.etage);
+      if (!(etage >= 1 && etage <= 6 && Number.isInteger(etage))) return repondre(res, 400, { erreur: 'Choisis un étage.' });
+      if (!(mise >= 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+      if (mise > 10000) return repondre(res, 400, { erreur: 'Mise maximum : 10 000 €.' });
+      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const T = [[0.3, 3000], [0.5, 2200], [0.7, 1600], [1.5, 1900], [2, 900], [4, 400]];
+      let x = crypto.randomInt(10000), mult = 0.3;
+      for (const [m, p] of T) { if (x < p) { mult = m; break; } x -= p; }
+      const gain = sous(mise * mult);
+      compte.solde = sous(compte.solde - mise + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, etage, mult, gain, mise, solde: compte.solde });
+    }
     /* ---------- BACCARAT (pas live) : les cartes sont tirees ICI ---------- */
     if (route === '/api/bac-jouer' && req.method === 'POST') {
       const CLES = ['p', 'b', 't', 'pp', 'bp', 'pf', 'ep'], m = {}; let tot = 0;
