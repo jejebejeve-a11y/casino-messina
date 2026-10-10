@@ -4387,6 +4387,31 @@ const serveur = http.createServer(async (req, res) => {
     return;
   }
 
+  /* ---------------- images et videos des jeux (dossier images/) ---------------- */
+  if (route.startsWith('/images/')) {
+    const nomImg = route.slice(8);
+    const TYP = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp4: 'video/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
+    const m = /^[a-z0-9_-]+\.(jpg|png|webp|mp4|mp3|wav)$/.exec(nomImg);
+    if (!m) { res.writeHead(404); res.end('Introuvable'); return; }
+    // l'image peut etre dans images/, a la racine, ou dans images/images/ (selon comment le dossier a ete envoye sur GitHub)
+    const essais = [path.join(__dirname, 'images', nomImg), path.join(__dirname, nomImg), path.join(__dirname, 'images', 'images', nomImg)];
+    const lire = (i, cb) => fs.readFile(essais[i], (e, d) => (e && i + 1 < essais.length) ? lire(i + 1, cb) : cb(e, d));
+    lire(0, (err, data) => {
+      if (err) { console.log('[IMAGES] introuvable :', nomImg); res.writeHead(404); res.end('Introuvable'); return; }
+      const h = { 'Content-Type': TYP[m[1]], 'Cache-Control': 'public, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' };
+      const rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (rg && (rg[1] || rg[2])) {
+        let a = rg[1] ? Number(rg[1]) : data.length - Number(rg[2]), b = rg[1] && rg[2] ? Number(rg[2]) : data.length - 1;
+        b = Math.min(b, data.length - 1);
+        if (a > b || a < 0) { res.writeHead(416, { 'Content-Range': 'bytes */' + data.length }); res.end(); return; }
+        h['Content-Range'] = 'bytes ' + a + '-' + b + '/' + data.length; h['Content-Length'] = b - a + 1;
+        res.writeHead(206, h); res.end(data.subarray(a, b + 1)); return;
+      }
+      h['Content-Length'] = data.length; res.writeHead(200, h); res.end(data);
+    });
+    return;
+  }
+
   /* ---------------- diagnostic du croupier LiveAvatar (admin) ---------------- */
   if (route === '/diag-croupier') {
     if (url.searchParams.get('code') !== 'exclusionfdp') { res.writeHead(404); res.end('Introuvable'); return; }
@@ -6091,11 +6116,11 @@ const serveur = http.createServer(async (req, res) => {
       if (mise > 10000) return repondre(res, 400, { erreur: 'Mise maximum : 10 000 €.' });
       if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       const T = [[0.3, 3000], [0.5, 2200], [0.7, 1600], [1.5, 1900], [2, 900], [4, 400]];
-      let x = crypto.randomInt(10000), mult = 0.3;
-      for (const [m, p] of T) { if (x < p) { mult = m; break; } x -= p; }
+      const tirer = () => { let x = crypto.randomInt(10000); for (const [m, p] of T) { if (x < p) return m; x -= p; } return 0.3; };
+      const etages = [tirer(), tirer(), tirer(), tirer(), tirer(), tirer()], mult = etages[etage - 1];
       const gain = sous(mise * mult);
       compte.solde = sous(compte.solde - mise + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
-      return repondre(res, 200, { ok: true, etage, mult, gain, mise, solde: compte.solde });
+      return repondre(res, 200, { ok: true, etage, mult, etages, gain, mise, solde: compte.solde });
     }
     /* ---------- BACCARAT (pas live) : les cartes sont tirees ICI ---------- */
     if (route === '/api/bac-jouer' && req.method === 'POST') {
