@@ -3479,7 +3479,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -6083,6 +6083,44 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- BACCARAT (pas live) : les cartes sont tirees ICI ---------- */
+    if (route === '/api/bac-jouer' && req.method === 'POST') {
+      const CLES = ['p', 'b', 't', 'pp', 'bp', 'pf', 'ep'], m = {}; let tot = 0;
+      for (const c of CLES) {
+        const v = sous(Number((body.mises || {})[c]) || 0);
+        if (v < 0 || (v > 0 && v < 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+        if (v > 10000) return repondre(res, 400, { erreur: 'Mise maximum : 10 000 € par case.' });
+        m[c] = v; tot = sous(tot + v);
+      }
+      if (!(tot > 0)) return repondre(res, 400, { erreur: 'Place une mise.' });
+      if (tot > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const tirer = () => ({ r: crypto.randomInt(13) + 1, s: crypto.randomInt(4) });
+      const val = c => c.r >= 10 ? 0 : c.r, total = h => h.reduce((a, c) => a + val(c), 0) % 10;
+      const P = [tirer(), tirer()], B = [tirer(), tirer()];
+      const ordre = [['p', 0], ['b', 0], ['p', 1], ['b', 1]];
+      if (total(P) < 8 && total(B) < 8) {
+        let t3 = null;
+        if (total(P) <= 5) { t3 = tirer(); P.push(t3); ordre.push(['p', 2]); }
+        const bt = total(B);
+        let tire;
+        if (!t3) tire = bt <= 5;
+        else { const t = val(t3); tire = bt <= 2 || (bt === 3 && t !== 8) || (bt === 4 && t >= 2 && t <= 7) || (bt === 5 && t >= 4 && t <= 7) || (bt === 6 && t >= 6 && t <= 7); }
+        if (tire) { B.push(tirer()); ordre.push(['b', 2]); }
+      }
+      const tp = total(P), tb = total(B), gagnant = tp > tb ? 'p' : tb > tp ? 'b' : 't';
+      const paire = h => h[0].r === h[1].r, parfaite = h => paire(h) && h[0].s === h[1].s;
+      const g = {
+        p: gagnant === 'p' ? m.p * 2 : gagnant === 't' ? m.p : 0,
+        b: gagnant === 'b' ? m.b * 1.95 : gagnant === 't' ? m.b : 0,
+        t: gagnant === 't' ? m.t * 9 : 0,
+        pp: paire(P) ? m.pp * 12 : 0,
+        bp: paire(B) ? m.bp * 12 : 0,
+        pf: (parfaite(P) || parfaite(B)) ? m.pf * 26 : 0,
+        ep: (paire(P) || paire(B)) ? m.ep * 6 : 0 };
+      let gain = 0; for (const c of CLES) { g[c] = sous(g[c]); gain = sous(gain + g[c]); }
+      compte.solde = sous(compte.solde - tot + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, P, B, ordre, tp, tb, gagnant, gains: g, gain, mise: tot, solde: compte.solde });
+    }
     /* ---------- PANDASTIC (escalade, comme Koala Road) : chaque palier, une chance fixe de tomber, tiree ICI ---------- */
     if (route.startsWith('/api/pclimb-') && req.method === 'POST') {
       const k = compte.pclimb;
