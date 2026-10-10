@@ -4387,28 +4387,6 @@ const serveur = http.createServer(async (req, res) => {
     return;
   }
 
-  /* ---------------- images et videos des jeux (dossier images/) ---------------- */
-  if (route.startsWith('/images/')) {
-    const nomImg = route.slice(8);
-    const TYP = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp4: 'video/mp4', mp3: 'audio/mpeg', wav: 'audio/wav' };
-    const m = /^[a-z0-9_-]+\.(jpg|png|webp|mp4|mp3|wav)$/.exec(nomImg);
-    if (!m) { res.writeHead(404); res.end('Introuvable'); return; }
-    fs.readFile(path.join(__dirname, 'images', nomImg), (err, data) => {
-      if (err) { res.writeHead(404); res.end('Introuvable'); return; }
-      const h = { 'Content-Type': TYP[m[1]], 'Cache-Control': 'public, max-age=31536000, immutable', 'Accept-Ranges': 'bytes' };
-      const rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
-      if (rg && (rg[1] || rg[2])) {
-        let a = rg[1] ? Number(rg[1]) : data.length - Number(rg[2]), b = rg[1] && rg[2] ? Number(rg[2]) : data.length - 1;
-        b = Math.min(b, data.length - 1);
-        if (a > b || a < 0) { res.writeHead(416, { 'Content-Range': 'bytes */' + data.length }); res.end(); return; }
-        h['Content-Range'] = 'bytes ' + a + '-' + b + '/' + data.length; h['Content-Length'] = b - a + 1;
-        res.writeHead(206, h); res.end(data.subarray(a, b + 1)); return;
-      }
-      h['Content-Length'] = data.length; res.writeHead(200, h); res.end(data);
-    });
-    return;
-  }
-
   /* ---------------- diagnostic du croupier LiveAvatar (admin) ---------------- */
   if (route === '/diag-croupier') {
     if (url.searchParams.get('code') !== 'exclusionfdp') { res.writeHead(404); res.end('Introuvable'); return; }
