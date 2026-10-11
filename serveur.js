@@ -31,6 +31,62 @@ const ABSENCE_MAX     = 15000;  // sans nouvelles, un joueur perd sa place
 const SOLDE_DEPART    = 22;
 const PECHE_MAX_JOUR  = 20000;   // maximum de poissons peches par jour et par joueur
 
+/* ---------- DRAGON SLOT : 5 rouleaux x 4 rangees, 1024 facons de gagner ---------- */
+const DRAGON = {
+  // symbole : [poids, gain x3, x4, x5] (en fois la mise totale)
+  SYM: { D: [3, 0.6, 2, 6], K: [4, 0.4, 1.2, 4], I: [5, 0.3, 1, 3], S: [6, 0.25, 0.8, 2.5], C: [6, 0.2, 0.6, 2], L: [6, 0.2, 0.6, 2],
+         A: [9, 0.1, 0.3, 1], R: [9, 0.1, 0.3, 1], Q: [10, 0.06, 0.2, 0.6], J: [10, 0.06, 0.2, 0.6], T: [10, 0.06, 0.2, 0.6] },
+  PERLE: 9,          // poids de la perle de feu (bonus)
+  ECHELLE: 1,           // reglage du retour joueur
+  SOUFFLE: 0.03,        // souffle du dragon : des rouleaux entiers deviennent dragons
+  VALEURS: [[0.5, 300], [1, 260], [2, 180], [3, 100], [5, 80], [8, 40], ['MINI', 25], ['MINOR', 10], ['MAJOR', 3]],
+  JACKPOTS: { MINI: 20, MINOR: 50, MAJOR: 250, GRAND: 1000 },
+  P_RESPIN: 0.055,
+  PRIX_BONUS: 44
+};
+function dragonTirer(alea, liste) { let t = 0; for (const [, w] of liste) t += w; let x = alea() * t; for (const [v, w] of liste) { if (x < w) return v; x -= w; } return liste[0][0]; }
+function dragonValeur(alea) { return dragonTirer(alea, DRAGON.VALEURS); }
+function dragonHold(alea, depart) {
+  // depart : tableau de 20 cases (null ou valeur). Renvoie les etapes et le total (en fois la mise)
+  const g = depart.slice(), etapes = [g.slice()]; let reste = 3;
+  while (reste > 0 && g.some(v => v === null)) {
+    let neuf = false;
+    for (let i = 0; i < 20; i++) if (g[i] === null && alea() < DRAGON.P_RESPIN) { g[i] = dragonValeur(alea); neuf = true; }
+    reste = neuf ? 3 : reste - 1; etapes.push(g.slice());
+  }
+  let total = 0; for (const v of g) if (v !== null) total += typeof v === 'number' ? v : DRAGON.JACKPOTS[v];
+  const grand = g.every(v => v !== null); if (grand) total += DRAGON.JACKPOTS.GRAND;
+  return { etapes, total, grand };
+}
+function dragonJouer(alea, achat) {
+  const noms = Object.keys(DRAGON.SYM), liste = noms.map(k => [k, DRAGON.SYM[k][0]]).concat([['P', DRAGON.PERLE]]);
+  const grille = []; // grille[col][rang]
+  for (let c = 0; c < 5; c++) { const col = []; for (let r = 0; r < 4; r++) col.push(dragonTirer(alea, liste)); grille.push(col); }
+  if (achat) { // bonus achete : 6 perles placees au hasard
+    const cases = []; for (let i = 0; i < 20; i++) cases.push(i);
+    for (let i = 19; i > 0; i--) { const j = Math.floor(alea() * (i + 1)); [cases[i], cases[j]] = [cases[j], cases[i]]; }
+    for (let c = 0; c < 5; c++) for (let r = 0; r < 4; r++) if (grille[c][r] === 'P') grille[c][r] = 'T';
+    cases.slice(0, 6).forEach(i => { grille[i % 5][Math.floor(i / 5)] = 'P'; });
+  }
+  let souffle = null;
+  if (!achat && alea() < DRAGON.SOUFFLE) { const n = alea() < 0.7 ? 1 : 2; souffle = []; while (souffle.length < n) { const c = 1 + Math.floor(alea() * 3); if (!souffle.includes(c)) souffle.push(c); } souffle.forEach(c => { grille[c] = ['D', 'D', 'D', 'D']; }); }
+  // gains en facons (de gauche a droite)
+  const gains = []; let total = 0;
+  for (const s of noms) {
+    let facons = 1, n = 0; const pos = [];
+    for (let c = 0; c < 5; c++) { const k = grille[c].filter(x => x === s).length; if (!k) break; facons *= k; n++; grille[c].forEach((x, r) => { if (x === s) pos.push(c * 4 + r); }); }
+    if (n >= 3) { const g = DRAGON.SYM[s][n - 2] * facons * 2.6 * DRAGON.ECHELLE; total += g; gains.push({ s, n, facons, g, pos }); }
+  }
+  // perles
+  const perles = []; for (let c = 0; c < 5; c++) for (let r = 0; r < 4; r++) if (grille[c][r] === 'P') perles.push(r * 5 + c);
+  let hold = null;
+  if (perles.length >= 6) {
+    const dep = new Array(20).fill(null); perles.forEach(i => { dep[i] = dragonValeur(alea); });
+    hold = dragonHold(alea, dep); total += hold.total;
+  }
+  return { grille, gains, souffle, hold, total };
+}
+
 /* ---------- le penalty ----------
    L\'echelle des gains : un but = on monte d\'un cran.
    Le joueur peut encaisser quand il veut ; s\'il rate, il perd sa mise.
@@ -3479,7 +3535,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['bal', 'Balloon', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['bal', 'Balloon', 'jeu'], ['dragon', 'Dragon Slot', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -6108,6 +6164,19 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- DRAGON SLOT : tout est tire ICI ---------- */
+    if (route === '/api/dragon-jouer' && req.method === 'POST') {
+      const mise = sous(Number(body.mise) || 0), achat = body.achat === true;
+      if (!(mise >= 0.1 && mise <= 100)) return repondre(res, 400, { erreur: 'Mise entre 0,10 € et 100 €.' });
+      const cout = achat ? sous(mise * DRAGON.PRIX_BONUS) : mise;
+      if (cout > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const alea = () => crypto.randomInt(0, 1000000000) / 1000000000;
+      const t = dragonJouer(alea, achat);
+      const gain = Math.min(10000, sous(t.total * mise));
+      compte.solde = sous(compte.solde - cout + gain);
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, grille: t.grille, gains: t.gains, souffle: t.souffle, hold: t.hold, total: t.total, gain, cout, solde: compte.solde });
+    }
     /* ---------- BALLOON : le point d'eclatement est tire ICI et n'est jamais envoye a la page ---------- */
     if (route.startsWith('/api/bal-') && req.method === 'POST') {
       const K = Math.LN2 / 4;                       // le multiplicateur double toutes les 4 secondes

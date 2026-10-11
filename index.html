@@ -4012,6 +4012,7 @@ function fermerJeu() {
   if (window.FLOOR13 && FLOOR13.ouvert) FLOOR13.fermer();
   if (window.PEN2 && PEN2.ouvert) PEN2.fermer();
   if (window.BALLOON && BALLOON.ouvert) BALLOON.fermer();
+  if (window.DRAGONS && DRAGONS.ouvert) DRAGONS.fermer();
   if (window.PONT && PONT.ouvert) PONT.fermer(true);
   if (window.RAZZIA && RAZZIA.ouvert) RAZZIA.fermer();
 }
@@ -9331,12 +9332,12 @@ construire(); majPanneau();
 #blR[hidden],#blR [hidden]{display:none!important}
 #blR *{box-sizing:border-box}
 #blR button{font-family:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
-#blFlou{position:absolute;inset:-40px;background:url(/images/b5f9bf1b531c.webp) center/cover;filter:blur(24px) brightness(.55)}
-#blS{position:absolute;left:0;top:0;width:853px;height:1844px;transform-origin:0 0;background:url(/images/b5f9bf1b531c.webp) 0 0/853px 1844px no-repeat}
+#blFlou{position:absolute;inset:-40px;background:url(/images/e35cbf1b9040.webp) center/cover;filter:blur(24px) brightness(.55)}
+#blS{position:absolute;left:0;top:0;width:853px;height:1844px;transform-origin:0 0;background:url(/images/e35cbf1b9040.webp) 0 0/853px 1844px no-repeat}
 .bl-solde{position:absolute;left:236px;top:40px;width:136px;text-align:right;overflow:hidden;height:48px;line-height:48px;border-radius:10px;background:#0c1a46;font-weight:800;font-size:29px;color:#ffd21f;font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 .bl-solde span{font-size:15px;margin-left:2px}
 .bl-solde b{font-size:var(--fs,29px)}
-#blBal{position:absolute;left:139px;top:526px;width:567px;height:580px;transform-origin:46px 486px;will-change:transform;pointer-events:none}
+#blBal{position:absolute;left:139px;top:526px;width:567px;height:580px;transform-origin:23px 520px;will-change:transform;pointer-events:none}
 #blBal img{width:100%;height:100%;display:block}
 #blTxt{position:absolute;left:283px;top:290px;transform:translate(-50%,-50%);text-align:center;pointer-events:none;white-space:nowrap}
 #blTxt b{display:block;font-size:92px;font-weight:900;line-height:1;color:#fff;-webkit-text-stroke:6px #e07800;paint-order:stroke fill;text-shadow:0 6px 10px rgba(150,60,0,.45);font-variant-numeric:tabular-nums}
@@ -9366,7 +9367,7 @@ construire(); majPanneau();
 .bl-toast.on{opacity:1}
 .bl-mute{position:absolute;left:668px;top:30px;width:44px;height:64px;pointer-events:none}
 .bl-mute:after{content:'';position:absolute;left:0;top:30px;width:46px;height:6px;background:#ff4d5a;border-radius:3px;transform:rotate(-45deg)}
-#blX{position:absolute;z-index:3;left:12px;top:calc(10px + env(safe-area-inset-top,0px));width:40px;height:40px;border-radius:50%;background:rgba(8,14,40,.9);border:2px solid rgba(255,255,255,.6);display:grid;place-items:center}
+#blX{position:absolute;z-index:3;left:10px;top:calc(62px + env(safe-area-inset-top,0px));width:40px;height:40px;border-radius:50%;background:rgba(8,14,40,.9);border:2px solid rgba(255,255,255,.6);display:grid;place-items:center}
 #blHl{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px;z-index:5}
 .bl-hl{width:min(440px,100%);max-height:86vh;overflow:auto;background:linear-gradient(#2d5fcf,#4a8de6);border:2px solid rgba(255,255,255,.35);border-radius:18px;padding:18px;font-size:14px;line-height:1.5;color:#eef3ff}
 .bl-hl h3{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;font:900 22px Rubik,Inter,sans-serif}
@@ -9478,8 +9479,8 @@ function remettre() {
 }
 function ajuster() {
   if (!BALLOON.ouvert) return;
-  const W = innerWidth, H = innerHeight, k = Math.min(W / 853, (H - 50) / 1844);
-  R('blS').style.transform = `translate(${(W - 853 * k) / 2}px,${Math.max(50, (H - 1844 * k) / 2)}px) scale(${k})`;
+  const W = innerWidth, H = innerHeight, k = W / H < .6 ? Math.max(W / 853, H / 1844) : Math.min(W / 853, H / 1844);
+  R('blS').style.transform = `translate(${(W - 853 * k) / 2}px,${(H - 1844 * k) / 2}px) scale(${k})`;
 }
 addEventListener('resize', ajuster);
 
@@ -15152,6 +15153,286 @@ if (window.SLOTG) {
 })();
 </script>
 <!-- ===== FIN RICH JOKER ===== -->
+<!-- ===== DRAGON SLOT ===== -->
+<style>
+#drR{position:fixed;inset:0;z-index:9000;background:#6fa9e6;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;font-family:Rubik,Inter,Arial,sans-serif;color:#fff;touch-action:manipulation}
+#drR[hidden],#drR [hidden]{display:none!important}
+#drR *{box-sizing:border-box}
+#drR button{font-family:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#drS{position:absolute;left:0;top:0;width:1086px;height:2348px;transform-origin:0 0;background:url(/images/729f325dd426.webp) 0 0/1086px 2348px no-repeat}
+.dr-col{position:absolute;top:1024px;width:160px;height:516px;overflow:hidden}
+.dr-band{position:absolute;left:0;top:0;width:160px;will-change:transform}
+.dr-t{position:relative;width:160px;height:129px;display:grid;place-items:center}
+.dr-t img{width:154px;height:122px;display:block;border-radius:10px}
+.dr-p{width:118px;height:118px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#fff6c4 0 8%,#ffd34a 24%,#f0a000 58%,#a85a00 100%);box-shadow:0 0 0 5px #8a1a10,0 0 0 9px #ffcf4a,0 0 22px 8px rgba(255,120,0,.8);display:grid;place-items:center;font-weight:900;color:#7a1500;text-shadow:0 1px 0 #ffe9a0;font-size:30px;line-height:1;text-align:center}
+.dr-p small{display:block;font-size:17px;letter-spacing:.06em}
+.dr-p.vide{background:none;box-shadow:none}
+.dr-p.j{color:#fff;text-shadow:0 2px 3px #6a0000;font-size:24px}
+.dr-t.win::after{content:'';position:absolute;inset:3px;border-radius:12px;box-shadow:0 0 0 4px #ffe066,0 0 26px 8px rgba(255,200,40,.85);animation:drWin .55s ease-in-out infinite alternate}
+.dr-t.win img{animation:drZoom .55s ease-in-out infinite alternate}
+@keyframes drWin{to{box-shadow:0 0 0 4px #fff3b0,0 0 40px 14px rgba(255,220,80,1)}}
+@keyframes drZoom{to{transform:scale(1.08)}}
+.dr-t.dim{filter:brightness(.45) saturate(.6)}
+.dr-t.neuf .dr-p{animation:drPop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes drPop{from{transform:scale(.2);opacity:0}}
+.dr-feu{position:absolute;top:1024px;width:160px;height:516px;pointer-events:none;background:linear-gradient(0deg,rgba(255,60,0,.0),rgba(255,120,0,.85) 40%,rgba(255,230,120,.95) 70%,rgba(255,80,0,0));mix-blend-mode:screen;opacity:0;border-radius:10px}
+.dr-feu.on{animation:drFeu 1.1s ease-out forwards}
+@keyframes drFeu{0%{opacity:0;transform:scaleY(.2);transform-origin:50% 0}30%{opacity:1;transform:scaleY(1.05)}100%{opacity:0;transform:scaleY(1)}}
+.dr-jp{position:absolute;width:118px;text-align:center;font-weight:900;font-size:30px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.5);transform:translate(-50%,-50%);font-variant-numeric:tabular-nums;white-space:nowrap}
+.dr-jp.flash{animation:drJp .4s ease-in-out 6 alternate}
+@keyframes drJp{to{transform:translate(-50%,-50%) scale(1.35);color:#fff36a}}
+.dr-msg{position:absolute;left:390px;top:1548px;width:306px;height:32px;line-height:32px;text-align:center;font-weight:800;font-size:23px;color:#ffe28a;white-space:nowrap;overflow:hidden}
+.dr-msg.g{color:#7dff9a;font-size:26px}
+.dr-txt{position:absolute;text-align:center;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;transform:translateX(-50%)}
+.dr-hit{position:absolute;border-radius:18px}
+#drSpin{position:absolute;left:452px;top:1668px;width:176px;height:176px;border-radius:50%}
+#drSpin.tourne{animation:drRot .6s linear infinite}
+#drSpinImg{position:absolute;left:452px;top:1668px;width:176px;height:176px;border-radius:50%;pointer-events:none}
+#drR.occupe #drSpinImg{box-shadow:0 0 30px 10px rgba(120,255,140,.7)}
+@keyframes drRot{to{transform:rotate(-360deg)}}
+.dr-on{box-shadow:0 0 0 4px #7dff9a,0 0 18px rgba(125,255,154,.8)}
+.dr-big{position:absolute;left:0;top:900px;width:1086px;text-align:center;pointer-events:none;opacity:0}
+.dr-big.on{animation:drBig 3s ease-out forwards}
+.dr-big b{display:block;font-size:110px;font-weight:900;color:#ffd84a;-webkit-text-stroke:7px #8a1a00;paint-order:stroke fill;text-shadow:0 10px 30px rgba(0,0,0,.5)}
+.dr-big span{display:block;font-size:76px;font-weight:900;color:#fff;-webkit-text-stroke:6px #8a1a00;paint-order:stroke fill;font-variant-numeric:tabular-nums}
+@keyframes drBig{0%{opacity:0;transform:scale(.4)}12%{opacity:1;transform:scale(1.1)}20%{transform:scale(1)}85%{opacity:1}100%{opacity:0}}
+.dr-hs{position:absolute;left:137px;top:964px;width:820px;text-align:center;font-weight:900;font-size:40px;color:#ffe066;-webkit-text-stroke:5px #7a1000;paint-order:stroke fill;opacity:0;transition:opacity .3s}
+#drR.hold .dr-hs{opacity:1}
+#drR.hold .dr-col{background:rgba(10,8,40,.6)}
+#drX{position:absolute;z-index:3;left:12px;top:calc(12px + env(safe-area-inset-top,0px));width:40px;height:40px;border-radius:50%;background:rgba(20,16,50,.85);border:2px solid rgba(255,255,255,.7);display:grid;place-items:center}
+#drHl{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px;z-index:5}
+.dr-hl{width:min(440px,100%);max-height:86vh;overflow:auto;background:linear-gradient(#5a0f0a,#2a0a1a);border:2px solid #e9b64a;border-radius:18px;padding:18px;font-size:14px;line-height:1.5;color:#fbeedc}
+.dr-hl h3{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;font:900 21px Rubik,Inter,sans-serif;color:#ffd84a}
+.dr-hl h3 button{font-size:22px;width:34px;height:34px}
+.dr-hl p{margin:6px 0}
+.dr-pt{display:grid;grid-template-columns:44px 1fr 1fr 1fr;gap:4px 8px;align-items:center;font-size:13px;text-align:center;margin:6px 0}
+.dr-pt img{width:44px;height:35px;border-radius:5px}
+.dr-btn{display:block;width:100%;margin-top:10px;height:48px;border-radius:12px;font-weight:900;font-size:17px;letter-spacing:.04em}
+.dr-or{background:linear-gradient(#ffe27a,#e6a218)!important;color:#5a1a00!important}
+.dr-rouge{background:#c8282f!important}
+.dr-mises{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.dr-mises button{height:44px;border-radius:10px;background:rgba(255,255,255,.1)!important;font-weight:800;font-size:15px}
+.dr-mises button.on{background:#e6a218!important;color:#3a1000!important}
+.dr-toast{position:absolute;left:50%;top:1250px;transform:translateX(-50%);background:rgba(20,8,8,.92);border:2px solid #e9b64a;padding:16px 30px;border-radius:16px;font-size:32px;font-weight:800;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none;z-index:4}
+.dr-toast.on{opacity:1}
+</style>
+<div id="drR" hidden>
+  <button id="drX" aria-label="Quitter"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div id="drS">
+    <div class="dr-jp" id="drJ_MINOR" style="left:176px;top:702px"></div>
+    <div class="dr-jp" id="drJ_GRAND" style="left:188px;top:812px"></div>
+    <div class="dr-jp" id="drJ_MINI" style="left:862px;top:704px"></div>
+    <div class="dr-jp" id="drJ_MAJOR" style="left:838px;top:812px"></div>
+    <div class="dr-hs" id="drHs"></div>
+    <div id="drCols"></div>
+    <div class="dr-msg" id="drMsg">Bonne chance !</div>
+    <button class="dr-hit" id="drBonus" style="left:385px;top:1598px;width:316px;height:72px;border-radius:36px" aria-label="Bonus"></button>
+    <button class="dr-hit" id="drMenu" style="left:92px;top:1702px;width:114px;height:98px" aria-label="Menu"></button>
+    <button class="dr-hit" id="drTurbo" style="left:268px;top:1702px;width:122px;height:98px" aria-label="Turbo"></button>
+    <div id="drSpinImg"></div>
+    <button id="drSpin" aria-label="Tourner"></button>
+    <button class="dr-hit" id="drMises" style="left:696px;top:1702px;width:122px;height:98px" aria-label="Mises"></button>
+    <button class="dr-hit" id="drAuto" style="left:878px;top:1702px;width:116px;height:98px" aria-label="Auto"></button>
+    <div class="dr-txt" id="drSolde" style="left:292px;top:1844px;font-size:30px;color:#fff;text-shadow:0 2px 3px rgba(0,40,80,.7)"></div>
+    <div class="dr-txt" id="drMise" style="left:782px;top:1842px;font-size:30px;color:#fff;text-shadow:0 2px 3px rgba(0,40,80,.7)"></div>
+    <button class="dr-hit" id="drMoins" style="left:650px;top:1812px;width:72px;height:72px;border-radius:50%" aria-label="Moins"></button>
+    <button class="dr-hit" id="drPlus" style="left:855px;top:1812px;width:72px;height:72px;border-radius:50%" aria-label="Plus"></button>
+    <div class="dr-big" id="drBig"><b id="drBigT">GROS GAIN</b><span id="drBigV"></span></div>
+    <div class="dr-toast" id="drToast"></div>
+  </div>
+  <div id="drHl" hidden><div class="dr-hl"><h3><span id="drHlT"></span><button id="drHlX" aria-label="Fermer">✕</button></h3><div id="drHlC"></div></div></div>
+</div>
+<script>
+/* ===== DRAGON SLOT ===== tout est tire par serveur.js (/api/dragon-jouer) */
+window.DRAGONS = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const R = id => document.getElementById(id);
+const IM = {"dragon": "/images/dabbfbe04a6c.webp", "koi": "/images/66bb97ed21ad.webp", "ingot": "/images/f03b4b7286c2.webp", "J": "/images/170badcdd252.webp", "Q": "/images/950d1165c53e.webp", "scroll": "/images/7ec45f77770d.webp", "coins": "/images/3d536d35c366.webp", "lotus": "/images/5d95b66a526d.webp", "10": "/images/bb4e87586b19.webp", "A": "/images/0823deff7359.webp", "K": "/images/9f2fe7742eef.webp"};
+const SYM = { D: 'dragon', K: 'koi', I: 'ingot', S: 'scroll', C: 'coins', L: 'lotus', A: 'A', R: 'K', Q: 'Q', J: 'J', T: '10' };
+const PAYS = { D: [0.6, 2, 6], K: [0.4, 1.2, 4], I: [0.3, 1, 3], S: [0.25, 0.8, 2.5], C: [0.2, 0.6, 2], L: [0.2, 0.6, 2], A: [0.1, 0.3, 1], R: [0.1, 0.3, 1], Q: [0.06, 0.2, 0.6], J: [0.06, 0.2, 0.6], T: [0.06, 0.2, 0.6] };
+const JP = { MINI: 20, MINOR: 50, MAJOR: 250, GRAND: 1000 }, PRIX = 44;
+const MISES = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+const CX = c => 139 + c * 164;
+Object.values(IM).forEach(u => { const i = new Image(); i.src = u; });
+let mise = 1, occupe = false, turbo = false, auto = 0, son = true, soldeAff = 0, grille = null;
+try { const m = Number(localStorage.getItem('drMise')); if (MISES.includes(m)) mise = m; turbo = localStorage.getItem('drTurbo') === '1'; son = localStorage.getItem('drSon') !== '0'; } catch (e) {}
+const eu = v => '€ ' + (Math.round(v * 100) / 100).toFixed(2);
+const solde = () => { try { return SLOT_SOLDE.get() || 0; } catch (e) { return 0; } };
+const att = ms => new Promise(r => setTimeout(r, ms));
+const alea = l => l[Math.floor(Math.random() * l.length)];
+
+/* ---------- sons (pas de musique) ---------- */
+let AC = null, MG = null;
+function ac() { if (!son) return null; try { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); MG = AC.createGain(); MG.gain.value = .7; MG.connect(AC.destination); } if (AC.state === 'suspended') AC.resume(); } catch (e) {} return AC; }
+function ton(f, d, v, t0, type, f2) { const a = ac(); if (!a) return; const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + (t0 || 0); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(MG); o.start(t); o.stop(t + d + .02); }
+function bruit(d, v, fq, type, t0, f2) { const a = ac(); if (!a) return; const n = a.createBuffer(1, Math.ceil(a.sampleRate * d), a.sampleRate), x = n.getChannelData(0); for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * (1 - i / x.length); const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(), t = a.currentTime + (t0 || 0); s.buffer = n; f.type = type || 'lowpass'; f.frequency.setValueAtTime(fq, t); if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + d); g.gain.value = v; s.connect(f); f.connect(g); g.connect(MG); s.start(t); }
+const sClic = () => ton(1200, .05, .07, 0, 'triangle');
+const sDepart = () => bruit(.35, .25, 600, 'bandpass', 0, 2400);
+const sStop = i => { ton(110 - i * 4, .12, .35, 0, 'sine', 60); bruit(.05, .2, 1800, 'highpass'); };
+const sGain = n => { const f = [523, 659, 784, 1046, 1318, 1568]; for (let i = 0; i < Math.min(6, 2 + n); i++) ton(f[i], .3, .12, i * .08, 'triangle'); };
+const sPerle = () => { ton(880, 1.2, .2, 0, 'sine'); ton(1318, 1, .1, 0, 'sine'); ton(220, .6, .2, 0, 'triangle', 180); };
+const sRoar = () => { bruit(1.2, .55, 300, 'lowpass', 0, 1800); ton(70, 1, .4, 0, 'sawtooth', 45); };
+const sJack = () => [523, 659, 784, 1046, 784, 1046, 1318, 1568].forEach((f, i) => ton(f, .35, .14, i * .11, 'square'));
+const sTick = () => ton(1800, .04, .05, 0, 'square');
+
+/* ---------- affichage ---------- */
+function toast(t) { const e = R('drToast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => e.classList.remove('on'), 2000); }
+function majTextes() {
+  R('drSolde').textContent = eu(soldeAff); R('drMise').textContent = eu(mise);
+  for (const k in JP) R('drJ_' + k).textContent = (Math.round(JP[k] * mise * 100) / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  R('drTurbo').classList.toggle('dr-on', turbo); R('drAuto').classList.toggle('dr-on', auto > 0);
+}
+function msg(t, g) { const e = R('drMsg'); e.textContent = t; e.classList.toggle('g', !!g); }
+function perleHtml(v) {
+  if (v === null || v === undefined) return '<div class="dr-p vide"></div>';
+  if (v === 'P') return '<div class="dr-p"><small>PERLE</small></div>';
+  if (typeof v === 'string') return `<div class="dr-p j">${v}</div>`;
+  return `<div class="dr-p">${(Math.round(v * mise * 100) / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}<small>€</small></div>`;
+}
+function tuile(s) { return `<div class="dr-t">${s === 'P' ? perleHtml('P') : `<img src="${IM[SYM[s]]}" alt="">`}</div>`; }
+function hasard() { return alea(['D', 'K', 'I', 'S', 'C', 'L', 'A', 'R', 'Q', 'J', 'T', 'T', 'Q', 'J', 'A', 'R', 'P']); }
+function poser(g) { R('drCols').innerHTML = g.map((col, c) => `<div class="dr-col" style="left:${CX(c)}px"><div class="dr-band">${col.map(tuile).join('')}</div></div><div class="dr-feu" id="drFeu${c}" style="left:${CX(c)}px"></div>`).join(''); }
+function tuiles() { return [...R('drCols').querySelectorAll('.dr-col')].map(c => [...c.querySelectorAll('.dr-t')]); }
+
+/* ---------- rouleaux ---------- */
+async function tourner(g, souffle) {
+  const cols = [...R('drCols').querySelectorAll('.dr-col')], v = turbo ? .5 : 1, fins = [];
+  sDepart();
+  cols.forEach((col, c) => {
+    const n = 14 + c * 4, haut = [];
+    for (let i = 0; i < n; i++) haut.push(hasard());
+    const anc = [...col.querySelectorAll('.dr-t')].map(t => t.outerHTML).join('');
+    const band = col.querySelector('.dr-band');
+    band.innerHTML = g[c].map(tuile).join('') + haut.map(tuile).join('') + anc;
+    const dist = (n + 4) * 129, d = (700 + c * 260) * v;
+    band.style.transform = `translateY(${-dist}px)`;
+    const a = band.animate([{ transform: `translateY(${-dist}px)` }, { transform: 'translateY(12px)', offset: .93 }, { transform: 'translateY(0)' }], { duration: d, easing: 'cubic-bezier(.35,.1,.3,1)', fill: 'forwards' });
+    fins.push(a.finished.then(() => { band.innerHTML = g[c].map(tuile).join(''); band.getAnimations().forEach(x => x.cancel()); band.style.transform = ''; sStop(c);
+      if (g[c].includes('P')) sPerle();
+      if (souffle && souffle.includes(c)) { sRoar(); const f = R('drFeu' + c); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); } }));
+  });
+  await Promise.all(fins);
+}
+async function compter(el, de, a, ms) { const t0 = performance.now(); while (true) { const p = Math.min(1, (performance.now() - t0) / ms); el.textContent = eu(de + (a - de) * (1 - Math.pow(1 - p, 3))); if (p >= 1) break; if (Math.random() < .3) sTick(); await att(30); } }
+async function holdSpin(h) {
+  R('drR').classList.add('hold'); msg('HOLD & SPIN', true); sRoar();
+  const ts = tuiles(); let prec = h.etapes[0], respins = 3;
+  const peindre = (e, neufs) => { for (let i = 0; i < 20; i++) { const c = i % 5, r = Math.floor(i / 5), t = ts[c][r]; t.innerHTML = perleHtml(e[i]); t.classList.toggle('neuf', neufs.includes(i)); } };
+  peindre(prec, []); R('drHs').textContent = 'PERLES DE FEU · 3 TOURS'; await att(1300);
+  for (let k = 1; k < h.etapes.length; k++) {
+    const e = h.etapes[k], neufs = []; for (let i = 0; i < 20; i++) if (e[i] !== null && prec[i] === null) neufs.push(i);
+    // les cases vides tournent un instant
+    for (let i = 0; i < 20; i++) if (e[i] === null) ts[i % 5][Math.floor(i / 5)].animate([{ opacity: .3 }, { opacity: 1 }], { duration: 350 });
+    sDepart(); await att(turbo ? 350 : 650);
+    peindre(e, neufs);
+    respins = neufs.length ? 3 : respins - 1;
+    if (neufs.length) { sPerle(); if (neufs.some(i => typeof e[i] === 'string')) sJack(); }
+    R('drHs').textContent = `PERLES DE FEU · ${respins} TOUR${respins > 1 ? 'S' : ''}`;
+    prec = e; await att(turbo ? 450 : 800);
+  }
+  const fin = h.etapes[h.etapes.length - 1];
+  fin.forEach(v => { if (typeof v === 'string') R('drJ_' + v).classList.add('flash'); });
+  if (h.grand) { R('drJ_GRAND').classList.add('flash'); sJack(); }
+  setTimeout(() => document.querySelectorAll('#drS .dr-jp.flash').forEach(e => e.classList.remove('flash')), 2600);
+}
+function grosGain(t, v) { R('drBigT').textContent = t; const e = R('drBig'); e.classList.remove('on'); void e.offsetWidth; e.classList.add('on'); compter(R('drBigV'), 0, v, 1800); sJack(); }
+
+/* ---------- un tour ---------- */
+async function jouer(achat) {
+  if (occupe) return;
+  const cout = achat ? mise * PRIX : mise;
+  if (cout > solde() + 1e-9) { toast('Solde insuffisant'); auto = 0; majTextes(); return; }
+  occupe = true; R('drR').classList.add('occupe'); ac(); msg(achat ? 'BONUS ACHETÉ !' : 'Bonne chance !');
+  tuiles().flat().forEach(t => t.classList.remove('win', 'dim'));
+  const r = await envoyer('dragon-jouer', { mise, achat: !!achat });
+  if (!r || !r.ok) { occupe = false; R('drR').classList.remove('occupe'); auto = 0; majTextes(); toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); return; }
+  soldeAff = Math.round((soldeAff - r.cout) * 100) / 100; majTextes();
+  if (r.souffle) { msg('SOUFFLE DU DRAGON !', true); }
+  grille = r.grille; await tourner(r.grille, r.souffle);
+  let affiche = 0;
+  if (r.gains.length) {
+    const ts = tuiles(), set = new Set(); r.gains.forEach(g => g.pos.forEach(p => set.add(p)));
+    ts.forEach((col, c) => col.forEach((t, rr) => t.classList.add(set.has(c * 4 + rr) ? 'win' : 'dim')));
+    const base = r.gains.reduce((s, g) => s + g.g, 0) * mise; affiche = base;
+    sGain(Math.round(base / mise)); msg('GAIN ' + eu(base), true);
+    await att(turbo ? 700 : 1300);
+  }
+  if (r.hold) {
+    tuiles().flat().forEach(t => t.classList.remove('win', 'dim'));
+    await holdSpin(r.hold);
+    R('drR').classList.remove('hold'); R('drHs').textContent = '';
+  }
+  if (r.gain > 0) {
+    msg('GAIN ' + eu(r.gain), true);
+    if (r.gain >= mise * 15) { grosGain(r.hold ? (r.hold.grand ? 'GRAND JACKPOT !' : 'HOLD & SPIN') : r.gain >= mise * 50 ? 'ÉNORME GAIN !' : 'GROS GAIN !', r.gain); await att(3000); }
+    else if (!r.gains.length) sGain(3);
+  } else msg('Bonne chance !');
+  soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {} majTextes();
+  if (r.hold) poser(r.grille);
+  occupe = false; R('drR').classList.remove('occupe');
+  if (auto > 0 && DRAGONS.ouvert) { if (r.hold) { auto = 0; majTextes(); return; } auto--; majTextes(); await att(turbo ? 250 : 500); if (auto > 0 || auto === 0 && false) jouer(); }
+}
+
+/* ---------- panneaux ---------- */
+function panneau(t, h) { R('drHlT').textContent = t; R('drHlC').innerHTML = h; R('drHl').hidden = false; sClic(); }
+R('drHlX').onclick = () => R('drHl').hidden = true;
+R('drHl').onclick = e => { if (e.target === R('drHl')) R('drHl').hidden = true; };
+R('drBonus').onclick = () => {
+  if (occupe) return;
+  panneau('Acheter le bonus', `<p>Lance directement le <b>Hold & Spin</b> avec <b>6 perles de feu</b> déjà posées sur les rouleaux.</p>
+  <p>Chaque perle porte un gain ou un jackpot (MINI, MINOR, MAJOR). Remplis les 20 cases pour le <b>GRAND</b> !</p>
+  <p style="text-align:center;font-size:18px;margin-top:12px">Prix : <b style="color:#ffd84a">${eu(mise * PRIX)}</b> <span style="opacity:.7">(${PRIX} × la mise)</span></p>
+  <button class="dr-btn dr-or" id="drAch">ACHETER</button><button class="dr-btn" style="background:rgba(255,255,255,.12)" id="drAnn">ANNULER</button>`);
+  R('drAch').onclick = () => { R('drHl').hidden = true; ton(1500, .1, .1); ton(2000, .2, .1, .08); jouer(true); };
+  R('drAnn').onclick = () => R('drHl').hidden = true;
+};
+R('drMenu').onclick = () => panneau('Dragon Slot', `
+  <p><b>5 rouleaux, 4 rangées, 1024 façons de gagner.</b> Aligne au moins 3 symboles pareils sur des rouleaux qui se suivent, en partant de la gauche. Plusieurs symboles sur un rouleau multiplient le gain.</p>
+  <div class="dr-pt"><b></b><b>×3</b><b>×4</b><b>×5</b>${Object.keys(PAYS).map(s => `<img src="${IM[SYM[s]]}" alt=""><span>${(PAYS[s][0] * 2.6 * mise).toFixed(2)}</span><span>${(PAYS[s][1] * 2.6 * mise).toFixed(2)}</span><span>${(PAYS[s][2] * 2.6 * mise).toFixed(2)}</span>`).join('')}</div>
+  <p style="font-size:12px;opacity:.75">Gains en € pour une façon, avec ta mise actuelle.</p>
+  <p><b>🔥 Souffle du Dragon :</b> parfois, le dragon crache du feu et transforme 1 ou 2 rouleaux entiers en dragons !</p>
+  <p><b>⚪ Perles de feu :</b> 6 perles ou plus lancent le <b>Hold & Spin</b> : les perles restent en place, tu as 3 tours, chaque nouvelle perle remet les tours à 3. Jackpots : MINI ×${JP.MINI}, MINOR ×${JP.MINOR}, MAJOR ×${JP.MAJOR}, et <b>GRAND ×${JP.GRAND}</b> si les 20 cases sont remplies.</p>
+  <p><b>BONUS :</b> achète directement le Hold & Spin pour ${PRIX} × la mise.</p>
+  <p>Mise de 0,10 € à 100 €. Gain maximum 10 000 € par tour. Retour joueur ≈ 96 %.</p>
+  <button class="dr-btn" style="background:rgba(255,255,255,.12)" id="drSonB">${son ? 'COUPER LE SON' : 'REMETTRE LE SON'}</button>
+  <button class="dr-btn dr-rouge" id="drQuit">QUITTER LE JEU</button>`);
+document.addEventListener('click', e => {
+  if (e.target.id === 'drQuit') DRAGONS.fermer();
+  if (e.target.id === 'drSonB') { son = !son; try { localStorage.setItem('drSon', son ? '1' : '0'); } catch (x) {} e.target.textContent = son ? 'COUPER LE SON' : 'REMETTRE LE SON'; }
+  const m = e.target.closest && e.target.closest('[data-dm]'); if (m) { mise = Number(m.dataset.dm); garder(); R('drHl').hidden = true; }
+});
+function garder() { try { localStorage.setItem('drMise', mise); } catch (e) {} sClic(); majTextes(); }
+R('drMises').onclick = () => { if (occupe) return; panneau('Choisis ta mise', `<div class="dr-mises">${MISES.map(v => `<button data-dm="${v}" class="${v === mise ? 'on' : ''}">${v.toFixed(2)} €</button>`).join('')}</div>`); };
+R('drMoins').onclick = () => { if (occupe) return; mise = MISES[Math.max(0, MISES.indexOf(mise) - 1)]; garder(); };
+R('drPlus').onclick = () => { if (occupe) return; mise = MISES[Math.min(MISES.length - 1, MISES.indexOf(mise) + 1)]; garder(); };
+R('drTurbo').onclick = () => { turbo = !turbo; try { localStorage.setItem('drTurbo', turbo ? '1' : '0'); } catch (e) {} sClic(); majTextes(); toast(turbo ? 'Turbo activé' : 'Turbo coupé'); };
+R('drAuto').onclick = () => { if (auto > 0) { auto = 0; majTextes(); toast('Auto arrêté'); return; } auto = 10; majTextes(); toast('10 tours automatiques'); if (!occupe) jouer(); };
+R('drSpin').onclick = () => { if (auto > 0) { auto = 0; majTextes(); } jouer(false); };
+document.addEventListener('keydown', e => { if (DRAGONS.ouvert && e.code === 'Space' && R('drHl').hidden) { e.preventDefault(); jouer(false); } });
+R('drX').onclick = () => DRAGONS.fermer();
+function ajuster() {
+  if (!DRAGONS.ouvert) return;
+  const W = innerWidth, H = innerHeight, k = W / H < .62 ? Math.max(W / 966, H / 2348) : Math.min(W / 1086, H / 2348);
+  R('drS').style.transform = `translate(${(W - 1086 * k) / 2}px,${(H - 2348 * k) / 2}px) scale(${k})`;
+}
+addEventListener('resize', ajuster);
+DRAGONS.ouvrir = function () {
+  DRAGONS.ouvert = true; R('drR').hidden = false; R('drHl').hidden = true; document.body.style.overflow = 'hidden';
+  soldeAff = solde(); auto = 0; if (!grille) grille = [['D', 'Q', 'I', 'R'], ['K', 'S', 'T', 'L'], ['I', 'C', 'A', 'K'], ['J', 'D', 'S', 'R'], ['Q', 'L', 'T', 'I']];
+  poser(grille); majTextes(); msg('Bonne chance !'); ajuster();
+};
+DRAGONS.fermer = function () { DRAGONS.ouvert = false; auto = 0; R('drR').hidden = true; document.body.style.overflow = ''; try { if (typeof majSolde === 'function') majSolde(); } catch (e) {} };
+if (window.SLOTG) {
+  SLOTG.ordre.unshift('dragon'); SLOTG.noms.dragon = 'Dragon Slot'; SLOTG.covers.dragon = '/images/540e95b378bb.jpg';
+  const o = SLOTG.ouvrir, f = SLOTG.fermer;
+  SLOTG.ouvrir = function (id) { if (id === 'dragon') return DRAGONS.ouvrir(); return o.apply(this, arguments); };
+  SLOTG.fermer = function () { if (DRAGONS.ouvert) DRAGONS.fermer(); return f.apply(this, arguments); };
+}
+})();
+</script>
+<!-- ===== FIN DRAGON SLOT ===== -->
+
 
 
 
