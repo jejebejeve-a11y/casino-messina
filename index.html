@@ -9341,7 +9341,7 @@ construire(); majPanneau();
 .p2-zone i{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid rgba(255,255,255,.5);box-shadow:0 0 12px rgba(255,255,255,.35);transition:transform .15s,border-color .15s}
 .p2-zone:hover i,.p2-zone:active i{transform:scale(1.2);border-color:#fff}
 .p2-zone.off{pointer-events:none}.p2-zone.off i{opacity:0}
-#p2Gk,#p2Dv,#p2Ball{position:absolute;pointer-events:none;will-change:transform}
+#p2Gk,#p2Dv,#p2Pose,#p2Ball{position:absolute;pointer-events:none;will-change:transform}
 #p2Ball{width:167px;height:167px}
 #p2Ombre{position:absolute;left:350px;top:1040px;width:190px;height:44px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.45),transparent);pointer-events:none}
 .p2-fl{position:absolute;top:214px;width:76px;height:96px;border-radius:12px;pointer-events:none;transition:all .25s}
@@ -9402,6 +9402,7 @@ construire(); majPanneau();
     <div id="p2Fl"></div>
     <div class="p2-barre" id="p2Barre" style="width:0"></div>
     <img id="p2Gk" src="/images/913494a621bd.webp" alt="" style="left:382px;top:586px;width:200px;height:214px">
+    <img id="p2Pose" alt="" style="opacity:0">
     <img id="p2Dv" src="/images/b1ea15bbe70b.webp" alt="" style="left:498px;top:523px;width:292px;height:182px;opacity:0">
     <div id="p2Zones"></div>
     <div id="p2Ombre"></div>
@@ -9493,7 +9494,9 @@ function tic() { if (!PEN2.ouvert) return; const s = Math.floor((Date.now() - t0
 const anim = (el, kf, o) => el.animate(kf, Object.assign({ fill: 'forwards' }, o)).finished.catch(() => {});
 function remettre() {
   R('p2Gk').getAnimations().forEach(a => a.cancel()); R('p2Dv').getAnimations().forEach(a => a.cancel()); R('p2Ball').getAnimations().forEach(a => a.cancel());
-  R('p2Gk').style.opacity = 1; R('p2Dv').style.opacity = 0; R('p2Ombre').style.opacity = 1;
+  R('p2Pose').getAnimations().forEach(a => a.cancel()); R('p2Pose').style.opacity = 0;
+  document.getAnimations().forEach(a => { const t = a.effect && a.effect.target; if (t && ['p2Gk', 'p2Dv', 'p2Pose', 'p2Ball'].includes(t.id)) a.cancel(); });
+  R('p2Gk').style.opacity = 1; R('p2Gk').style.visibility = 'visible'; R('p2Dv').style.opacity = 0; R('p2Dv').style.visibility = 'hidden'; R('p2Pose').style.visibility = 'hidden'; R('p2Ombre').style.opacity = 1;
   R('p2Ball').style.opacity = 1;
 }
 // pose finale du gardien (le sprite de plongeon est cale sur le coin haut droit)
@@ -9504,17 +9507,48 @@ function pose(z) {
   if (c === 0) return `translate(-340px,${dy}px) rotate(${-rot}deg) scaleX(-1)`;
   return `translate(-222px,${dy + 18}px) rotate(${-rot - 8}deg) scaleX(-1)`;
 }
-function plonger(z) {
-  const gk = R('p2Gk'), dv = R('p2Dv'), c = z % 5, r = Math.floor(z / 5);
-  if (c === 2) {   // au centre : il saute, il reste, ou il se baisse
-    const fin = r === 0 ? 'translateY(-70px) scale(1.04)' : r === 1 ? 'translateY(-14px) scale(1.02)' : 'translateY(16px) scaleY(.92)';
-    return anim(gk, [{ transform: 'none' }, { transform: 'translateY(10px) scaleY(.92)', offset: .25 }, { transform: fin }], { duration: 420, easing: 'cubic-bezier(.2,.8,.3,1)' });
+const IM = {"top": "/images/ee133a090086.webp", "top_v": "/images/29e4c84e681a.webp", "hautg": "/images/c70890d03cb9.webp", "hautg_v": "/images/c90519682496.webp", "basd": "/images/718a8dc32451.webp", "basd_v": "/images/d72057604bb7.webp", "pieds": "/images/11a85a75cdc6.webp", "pieds_v": "/images/92066132e2d5.webp"};
+Object.values(IM).forEach(u => { const im = new Image(); im.src = u; });
+// les vraies poses du gardien (ballon dans les gants) : x, y, l, h = place sur l'image ; bx, by = centre du ballon
+const PO = { top: { x: 426, y: 505, w: 83, h: 277, bx: 471, by: 525 }, hautg: { x: 208, y: 503, w: 123, h: 264, bx: 233, by: 524 },
+             basd: { x: 542, y: 688, w: 279, h: 94, bx: 796, by: 762 }, pieds: { x: 364, y: 662, w: 167, h: 147, bx: 474, by: 793 } };
+// quelle pose pour chaque zone : [nom, miroir, decalage x] ; null = plongeon classique
+function choixPose(z) {
+  const c = z % 5, r = Math.floor(z / 5);
+  if (r === 0) return c === 2 ? ['top', 0, 0] : c === 1 ? ['hautg', 0, 100] : c === 0 ? ['hautg', 0, -42] : c === 3 ? ['hautg', 1, -100] : ['hautg', 1, 42];
+  if (r === 2) return c === 2 ? ['pieds', 0, 0] : c === 4 ? ['basd', 0, -37] : c === 3 ? ['basd', 0, -179] : c === 0 ? ['basd', 1, 37] : ['basd', 1, 179];
+  return null;
+}
+function placePose(ch) {
+  const p = PO[ch[0]], cx = p.x + p.w / 2, cy = p.y + p.h / 2, m = ch[1] ? -1 : 1;
+  const fx = (ch[1] ? 950 - cx : cx) + ch[2];
+  const bx = (ch[1] ? 950 - p.bx : p.bx) + ch[2];
+  return { p, cx, cy, m, tx: fx - cx, bx, by: p.by };
+}
+let poseEnCours = null;
+function plonger(z, attrape) {
+  const gk = R('p2Gk'), dv = R('p2Dv'), ps = R('p2Pose'), c = z % 5, r = Math.floor(z / 5);
+  const ch = choixPose(z);
+  poseEnCours = null;
+  if (ch) {
+    const q = placePose(ch), p = q.p;
+    ps.src = IM[ch[0] + '_v']; ps.style.visibility = 'visible'; Object.assign(ps.style, { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px', height: p.h + 'px' });
+    poseEnCours = { nom: ch[0], q, attrape };
+    // il se baisse un instant (prise d'appui) puis s'envole vers sa pose
+    gk.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(8px) scaleY(.93)', opacity: 1, offset: .5 }, { transform: 'translateY(8px) scaleY(.93)', opacity: 0 }], { duration: 150 }); setTimeout(() => { gk.style.visibility = 'hidden'; }, 145);
+    const dep = `translate(${482 - q.cx}px,${693 - q.cy}px) scale(.78) scaleX(${q.m})`;
+    const mil = `translate(${(482 - q.cx + q.tx) / 2}px,${(693 - q.cy) / 2 - 18}px) scale(.92) scaleX(${q.m})`;
+    const fin = `translate(${q.tx}px,0px) scaleX(${q.m})`;
+    return anim(ps, [{ transform: dep, opacity: 0 }, { transform: dep, opacity: .9, offset: .18 }, { transform: mil, opacity: 1, offset: .55 }, { transform: fin, opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.2,.7,.35,1)' });
+  }
+  if (c === 2) {   // milieu : il reste et bloque contre lui
+    return anim(gk, [{ transform: 'none' }, { transform: 'translateY(8px) scaleY(.94)', offset: .3 }, { transform: 'none' }], { duration: 380, easing: 'ease-out', fill: 'none' });
   }
   const gauche = c < 2;
   const dep = gauche ? 'translate(-162px,79px) rotate(50deg) scaleX(-.72) scaleY(.8)' : 'translate(-162px,79px) rotate(-50deg) scaleX(.72) scaleY(.8)';
-  anim(gk, [{ opacity: 1 }, { opacity: 0 }], { duration: 90 });
-  dv.style.opacity = 1;
-  return anim(dv, [{ transform: dep, opacity: .6 }, { transform: pose(z), opacity: 1 }], { duration: 400, easing: 'cubic-bezier(.15,.75,.35,1)' });
+  gk.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120 }); setTimeout(() => { gk.style.visibility = 'hidden'; }, 115);
+  dv.style.opacity = 1; dv.style.visibility = 'visible';
+  return anim(dv, [{ transform: dep, opacity: .5 }, { transform: pose(z), opacity: 1 }], { duration: 400, easing: 'cubic-bezier(.15,.75,.35,1)' });
 }
 /* confettis + impact + secousse (comme l'ancien penalty) */
 const CC = ['#D4AF37', '#F0D98C', '#FFFFFF', '#E24B4B', '#3C7FD0', '#4FB05A', '#E8A93A'];
@@ -9533,7 +9567,11 @@ function semer(x, y, n) {
 function impact(x, y) { const d = document.createElement('div'); d.className = 'p2-imp'; d.style.left = x + 'px'; d.style.top = y + 'px'; R('p2S').appendChild(d); setTimeout(() => d.remove(), 700); }
 function secouer() { const s = R('p2S'); s.classList.remove('sec'); void s.offsetWidth; s.classList.add('sec'); }
 function tirer(z, but, zg) {
-  const b = R('p2Ball'), tx = ZX[z % 5], ty = ZY[Math.floor(z / 5)];
+  const b = R('p2Ball');
+  let tx = ZX[z % 5], ty = ZY[Math.floor(z / 5)];
+  const capte = !but && choixPose(z);
+  if (capte) { const q = placePose(capte); tx = q.bx; ty = q.by; }
+  else if (!but && z === 7) { tx = 474; ty = 680; }
   const dx = tx - BALL0.x, dy = ty - BALL0.y;
   R('p2Ombre').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' });
   const vol = anim(b, [
@@ -9543,6 +9581,12 @@ function tirer(z, but, zg) {
   return vol.then(() => {
     if (but) { sFilet(); impact(tx, ty); semer(tx, ty, 70); secouer(); return anim(b, [{ transform: `translate(${dx}px,${dy}px) scale(.4) rotate(560deg)` }, { transform: `translate(${dx * 1.04}px,${dy - 14}px) scale(.33) rotate(600deg)`, offset: .35 }, { transform: `translate(${dx * 1.04}px,${dy + 50}px) scale(.33) rotate(640deg)` }], { duration: 520, easing: 'ease-in' }); }
     const sens = z % 5 < 2 ? -1 : z % 5 > 2 ? 1 : (Math.random() < .5 ? -1 : 1);
+    if (capte) {   // il l'attrape : le ballon reste dans ses gants
+      secouer(); b.style.opacity = 0; b.getAnimations().forEach(a => a.cancel());
+      if (poseEnCours) R('p2Pose').src = IM[poseEnCours.nom];
+      return anim(R('p2Pose'), [{ translate: '0 0' }, { translate: '0 5px', offset: .4 }, { translate: '0 0' }], { duration: 260, fill: 'none' });
+    }
+    if (z === 7) { secouer(); return anim(b, [{ transform: `translate(${dx}px,${dy}px) scale(.4) rotate(560deg)` }, { transform: `translate(${dx}px,${dy + 105}px) scale(.42) rotate(600deg)`, offset: .6 }, { transform: `translate(${dx + 30}px,${dy + 95}px) scale(.42) rotate(640deg)` }], { duration: 520, easing: 'ease-in' }); }
     secouer(); return anim(b, [{ transform: `translate(${dx}px,${dy}px) scale(.4) rotate(560deg)` }, { transform: `translate(${dx + sens * 170}px,${dy + 150}px) scale(.48) rotate(420deg)`, opacity: 1, offset: .7 }, { transform: `translate(${dx + sens * 210}px,${dy + 190}px) scale(.48) rotate(380deg)`, opacity: 0 }], { duration: 600, easing: 'ease-out' });
   });
 }
@@ -9557,7 +9601,7 @@ async function tir(z) {
   if (!r || !r.ok) { occupe = false; maj(); toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); return; }
   if (!serie) { serie = { mise: r.mise, palier: 0 }; soldeAff = Math.round((soldeAff - r.mise) * 100) / 100; maj(); }
   sTir();
-  setTimeout(() => plonger(r.zoneGardien), 70);
+  setTimeout(() => plonger(r.zoneGardien, !r.but), 70);
   await tirer(z, r.but, r.zoneGardien);
   if (r.but) {
     sBut(); serie.palier = r.palier;
