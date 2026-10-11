@@ -4011,6 +4011,7 @@ function fermerJeu() {
   if (window.BAC && BAC.ouvert) BAC.fermer();
   if (window.FLOOR13 && FLOOR13.ouvert) FLOOR13.fermer();
   if (window.PEN2 && PEN2.ouvert) PEN2.fermer();
+  if (window.BALLOON && BALLOON.ouvert) BALLOON.fermer();
   if (window.PONT && PONT.ouvert) PONT.fermer(true);
   if (window.RAZZIA && RAZZIA.ouvert) RAZZIA.fermer();
 }
@@ -9323,6 +9324,266 @@ MINES.fermer = function () { MINES.ouvert = false; racine.hidden = true; documen
 construire(); majPanneau();
 })();
 </script>
+
+<!-- ===== BALLOON ===== -->
+<style>
+#blR{position:fixed;inset:0;z-index:9000;background:#0b1a4a;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;font-family:Rubik,Inter,Arial,sans-serif;color:#fff;touch-action:none}
+#blR[hidden],#blR [hidden]{display:none!important}
+#blR *{box-sizing:border-box}
+#blR button{font-family:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#blFlou{position:absolute;inset:-40px;background:url(/images/b5f9bf1b531c.webp) center/cover;filter:blur(24px) brightness(.55)}
+#blS{position:absolute;left:0;top:0;width:853px;height:1844px;transform-origin:0 0;background:url(/images/b5f9bf1b531c.webp) 0 0/853px 1844px no-repeat}
+.bl-solde{position:absolute;left:236px;top:40px;width:136px;text-align:right;overflow:hidden;height:48px;line-height:48px;border-radius:10px;background:#0c1a46;font-weight:800;font-size:29px;color:#ffd21f;font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
+.bl-solde span{font-size:15px;margin-left:2px}
+.bl-solde b{font-size:var(--fs,29px)}
+#blBal{position:absolute;left:139px;top:526px;width:567px;height:580px;transform-origin:46px 486px;will-change:transform;pointer-events:none}
+#blBal img{width:100%;height:100%;display:block}
+#blTxt{position:absolute;left:283px;top:290px;transform:translate(-50%,-50%);text-align:center;pointer-events:none;white-space:nowrap}
+#blTxt b{display:block;font-size:92px;font-weight:900;line-height:1;color:#fff;-webkit-text-stroke:6px #e07800;paint-order:stroke fill;text-shadow:0 6px 10px rgba(150,60,0,.45);font-variant-numeric:tabular-nums}
+#blTxt i{display:block;font-style:normal;font-size:40px;font-weight:900;margin-top:4px;-webkit-text-stroke:4px #e07800;paint-order:stroke fill}
+#blTxt em{display:inline-block;margin-top:14px;padding:6px 26px;border-radius:30px;background:rgba(150,70,0,.55);font-style:normal;font-size:40px;font-weight:800;color:#ffe2b0;font-variant-numeric:tabular-nums}
+#blEcl{position:absolute;left:25px;top:436px;width:828px;height:779px;pointer-events:none;opacity:0;transform-origin:397px 379px}
+#blFlash{position:absolute;inset:0;background:radial-gradient(circle at 50% 45%,rgba(255,255,255,.9),rgba(255,230,150,.3) 40%,transparent 70%);opacity:0;pointer-events:none}
+#blBtn{position:absolute;left:262px;top:1262px;width:330px;height:236px;border-radius:50%}
+#blBtn.on{filter:brightness(.82)}
+#blBtnBas{position:absolute;left:276px;top:1268px;width:302px;height:212px;border-radius:50%;pointer-events:none;box-shadow:0 0 0 0 rgba(255,60,140,0);transition:box-shadow .15s}
+#blBtn.on+#blBtnBas{box-shadow:inset 0 14px 30px rgba(0,0,0,.45),0 0 60px 10px rgba(255,50,150,.55)}
+.bl-mise{position:absolute;left:190px;top:1552px;width:472px;text-align:center;pointer-events:none;background:#0e1736;height:86px;padding-top:6px;border-radius:10px}
+.bl-mise b{display:block;font-size:44px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+.bl-mise span{font-size:21px;font-weight:700;color:#d4dcf5}
+.bl-hit{position:absolute;border-radius:18px}
+.bl-chip{position:absolute;top:1672px;width:118px;height:96px;border-radius:16px;background:#121c3f;border:2px solid #263464;font-weight:700;font-size:29px;line-height:1.05;padding-top:14px;color:#fff!important}
+.bl-chip small{display:block;font-size:19px;color:#aab5d6}
+.bl-chip.on{border:3px solid #7fd0ff;box-shadow:0 0 18px rgba(80,180,255,.8),inset 0 0 12px rgba(80,180,255,.35)}
+#blR.joue .bl-chip,#blR.joue .bl-hit.mise{opacity:.45;pointer-events:none}
+.bl-res{position:absolute;left:0;width:853px;top:420px;text-align:center;font-weight:900;font-size:84px;opacity:0;pointer-events:none;-webkit-text-stroke:6px rgba(0,0,0,.45);paint-order:stroke fill;text-shadow:0 8px 0 rgba(0,0,0,.25)}
+.bl-res small{display:block;font-size:46px;margin-top:6px}
+.bl-res.on{animation:blRes 1.6s ease-out forwards}
+@keyframes blRes{0%{opacity:0;transform:scale(.5)}15%{opacity:1;transform:scale(1.1)}25%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-40px)}}
+.bl-aide{position:absolute;left:0;width:853px;top:1222px;text-align:center;white-space:nowrap;font-weight:800;font-size:21px;letter-spacing:.06em;color:#fff;text-shadow:0 2px 8px #000;pointer-events:none;transition:opacity .3s}
+#blR.joue .bl-aide{opacity:0}
+.bl-toast{position:absolute;left:50%;top:1120px;transform:translateX(-50%);background:rgba(8,14,40,.92);border:1px solid rgba(255,255,255,.25);padding:14px 26px;border-radius:14px;font-size:28px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none}
+.bl-toast.on{opacity:1}
+.bl-mute{position:absolute;left:668px;top:30px;width:44px;height:64px;pointer-events:none}
+.bl-mute:after{content:'';position:absolute;left:0;top:30px;width:46px;height:6px;background:#ff4d5a;border-radius:3px;transform:rotate(-45deg)}
+#blX{position:absolute;z-index:3;left:12px;top:calc(10px + env(safe-area-inset-top,0px));width:40px;height:40px;border-radius:50%;background:rgba(8,14,40,.9);border:2px solid rgba(255,255,255,.6);display:grid;place-items:center}
+#blHl{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px;z-index:5}
+.bl-hl{width:min(440px,100%);max-height:86vh;overflow:auto;background:linear-gradient(#2d5fcf,#4a8de6);border:2px solid rgba(255,255,255,.35);border-radius:18px;padding:18px;font-size:14px;line-height:1.5;color:#eef3ff}
+.bl-hl h3{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;font:900 22px Rubik,Inter,sans-serif}
+.bl-hl h3 button{font-size:22px;width:34px;height:34px}
+.bl-hl p{margin:6px 0}.bl-hl p.j{color:#fff3a0}
+.bl-hist{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.bl-hist span{padding:6px 0;border-radius:8px;background:rgba(0,0,0,.2);text-align:center;font-weight:800;font-size:14px}
+.bl-quit{display:block;width:100%;margin-top:12px;height:46px;border-radius:12px;background:#e0323c!important;font-weight:800;font-size:16px}
+</style>
+<div id="blR" hidden>
+  <div id="blFlou"></div>
+  <button id="blX" aria-label="Quitter"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div id="blS">
+    <div class="bl-solde"><b id="blSolde">0.00</b><span>EUR</span></div>
+    <button class="bl-hit" id="blStats" style="left:550px;top:24px;width:82px;height:80px" aria-label="Historique"></button>
+    <button class="bl-hit" id="blSon" style="left:646px;top:24px;width:82px;height:80px" aria-label="Son"></button>
+    <div class="bl-mute" id="blMute" hidden></div>
+    <button class="bl-hit" id="blMenu" style="left:742px;top:24px;width:82px;height:80px" aria-label="Règles"></button>
+    <div id="blBal"><img src="/images/5c08cbd71816.webp" alt=""><div id="blTxt"><b id="blV">0.10</b><i>EUR</i><em id="blM">1.00x</em></div></div>
+    <img id="blEcl" src="/images/a94f2caa0e45.webp" alt="">
+    <div id="blFlash"></div>
+    <div class="bl-res" id="blRes"></div>
+    <div class="bl-aide" id="blAide">MAINTIENS LE BOUTON POUR GONFLER · LÂCHE POUR ENCAISSER</div>
+    <button id="blBtn" aria-label="Gonfler"></button><div id="blBtnBas"></div>
+    <div class="bl-mise"><b id="blMise">0.10</b><span>EUR</span></div>
+    <button class="bl-hit mise" id="blMoins" style="left:48px;top:1540px;width:134px;height:106px" aria-label="Moins"></button>
+    <button class="bl-hit mise" id="blPlus" style="left:670px;top:1540px;width:134px;height:106px" aria-label="Plus"></button>
+    <div id="blChips"></div>
+    <div class="bl-toast" id="blToast"></div>
+  </div>
+  <div id="blHl" hidden><div class="bl-hl">
+    <h3><span id="blHlT">Balloon</span> <button id="blHlX" aria-label="Fermer">✕</button></h3>
+    <div id="blHlC"></div>
+    <button class="bl-quit" id="blQuit">QUITTER LE JEU</button>
+  </div></div>
+</div>
+<script>
+/* ===== BALLOON ===== le point d'eclatement est decide par serveur.js (/api/bal-*) */
+window.BALLOON = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const R = id => document.getElementById(id);
+const PAS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+const CHIPS = [0.1, 0.2, 0.5, 1, 5, 10], CX = [95, 228, 360, 491, 623, 755];
+const K = Math.LN2 / 4;
+let mise = 0.1, son = true, etat = 'repos', t0 = 0, raf = 0, tick = 0, multAff = 1, soldeAff = 0, enAttente = false, lache = false;
+try { son = localStorage.getItem('blSon') !== '0'; const m = Number(localStorage.getItem('blMise')); if (PAS.includes(m)) mise = m; } catch (e) {}
+const eu = v => (Math.round(v * 100) / 100).toFixed(2);
+const solde = () => { try { return SLOT_SOLDE.get() || 0; } catch (e) { return 0; } };
+const multDe = ms => Math.floor(Math.exp(K * Math.max(0, ms) / 1000) * 100) / 100;
+const echelle = m => .56 + .62 * (1 - Math.pow(m, -.75));
+
+/* ---------- sons ---------- */
+let AC = null, MG = null;
+function ac() { if (!son) return null; try { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); MG = AC.createGain(); MG.gain.value = .8; MG.connect(AC.destination); } if (AC.state === 'suspended') AC.resume(); } catch (e) {} return AC; }
+function bruitBuf(d) { const a = AC, n = a.createBuffer(1, Math.ceil(a.sampleRate * d), a.sampleRate), x = n.getChannelData(0); for (let i = 0; i < x.length; i++) x[i] = Math.random() * 2 - 1; return n; }
+function ton(f, d, v, t0, type, f2) { const a = ac(); if (!a) return; const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + (t0 || 0); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(MG); o.start(t); o.stop(t + d + .02); }
+const sClic = () => ton(1300, .05, .08, 0, 'triangle');
+// gonflage : souffle d'air filtre + crissement du caoutchouc qui monte
+let gon = null;
+function gonflage(on) {
+  if (gon) { const a = AC, t = a.currentTime; try { gon.g.gain.cancelScheduledValues(t); gon.g.gain.setTargetAtTime(.0001, t, .03); gon.g2.gain.setTargetAtTime(.0001, t, .03); gon.s.stop(t + .2); gon.o.stop(t + .2); } catch (e) {} gon = null; }
+  const a = on && ac(); if (!a) return;
+  const s = a.createBufferSource(); s.buffer = bruitBuf(2); s.loop = true;
+  const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 1.4;
+  const g = a.createGain(); g.gain.setValueAtTime(.0001, a.currentTime); g.gain.exponentialRampToValueAtTime(.32, a.currentTime + .12);
+  const lfo = a.createOscillator(), lg = a.createGain(); lfo.frequency.value = 2.6; lg.gain.value = .1; lfo.connect(lg); lg.connect(g.gain); lfo.start();
+  s.connect(f); f.connect(g); g.connect(MG); s.start();
+  const o = a.createOscillator(), of = a.createBiquadFilter(), g2 = a.createGain(); o.type = 'sawtooth'; o.frequency.value = 180; of.type = 'lowpass'; of.frequency.value = 900; g2.gain.value = .0001;
+  o.connect(of); of.connect(g2); g2.connect(MG); o.start();
+  gon = { s, f, g, o, g2, of, lfo };
+}
+function majGonflage(m) {
+  if (!gon) return; const t = AC.currentTime, k = Math.min(1, Math.log(m) / Math.log(20));
+  gon.f.frequency.setTargetAtTime(700 + 2600 * k, t, .05);
+  gon.o.frequency.setTargetAtTime(180 + 520 * k + Math.random() * 25, t, .05);
+  gon.g2.gain.setTargetAtTime(Math.random() < .08 ? .05 + .05 * k : .012 + .03 * k, t, .03);
+}
+function sPop() {
+  const a = ac(); if (!a) return; const t = a.currentTime;
+  const s = a.createBufferSource(); s.buffer = bruitBuf(.5); const f = a.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 600;
+  const g = a.createGain(); g.gain.setValueAtTime(1.6, t); g.gain.exponentialRampToValueAtTime(.0001, t + .25);
+  s.connect(f); f.connect(g); g.connect(MG); s.start(t);
+  ton(120, .3, .9, 0, 'sine', 40); ton(2400, .06, .25, 0, 'square', 600);
+  const s2 = a.createBufferSource(); s2.buffer = bruitBuf(1.2); const f2 = a.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 3000; const g2 = a.createGain();
+  g2.gain.setValueAtTime(.0001, t + .05); g2.gain.exponentialRampToValueAtTime(.12, t + .1); g2.gain.exponentialRampToValueAtTime(.0001, t + 1); s2.connect(f2); f2.connect(g2); g2.connect(MG); s2.start(t + .05);
+  setTimeout(() => ton(330, .5, .12, 0, 'triangle', 160), 380);
+}
+function sCash(big) { [784, 988, 1175, 1568].concat(big ? [1976, 2349] : []).forEach((f, i) => { ton(f, .35, .14, i * .07, 'triangle'); ton(f * 2, .2, .04, i * .07 + .02, 'sine'); }); }
+
+/* ---------- affichage ---------- */
+function toast(t) { const el = R('blToast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2000); }
+function maj() {
+  R('blSolde').textContent = eu(soldeAff); R('blSolde').style.setProperty('--fs', eu(soldeAff).length > 8 ? '20px' : eu(soldeAff).length > 6 ? '24px' : '29px');
+  R('blMise').textContent = eu(mise);
+  R('blMute').hidden = son;
+  R('blChips').innerHTML = CHIPS.map((v, i) => `<button class="bl-chip${v === mise ? ' on' : ''}" data-v="${v}" style="left:${CX[i] - 59}px">${eu(v)}<small>EUR</small></button>`).join('');
+  R('blR').classList.toggle('joue', etat !== 'repos');
+}
+function ballon(m, wob) {
+  const s = echelle(m), w = wob || 0;
+  R('blBal').style.transform = `scale(${s * (1 + w)},${s * (1 - w * .7)})`;
+  R('blV').textContent = eu(Math.min(10000, mise * m)); R('blM').textContent = m.toFixed(2) + 'x';
+}
+function remettre() {
+  R('blBal').style.transition = 'none'; R('blBal').style.opacity = 1; R('blEcl').style.opacity = 0;
+  R('blBal').animate([{ opacity: 0, transform: `scale(${echelle(1) * .6})` }, { opacity: 1, transform: `scale(${echelle(1)})` }], { duration: 350, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+  multAff = 1; ballon(1);
+}
+function ajuster() {
+  if (!BALLOON.ouvert) return;
+  const W = innerWidth, H = innerHeight, k = Math.min(W / 853, (H - 50) / 1844);
+  R('blS').style.transform = `translate(${(W - 853 * k) / 2}px,${Math.max(50, (H - 1844 * k) / 2)}px) scale(${k})`;
+}
+addEventListener('resize', ajuster);
+
+/* ---------- partie ---------- */
+function boucle() {
+  if (etat !== 'gonfle') return;
+  const ms = performance.now() - t0, m = multDe(ms);
+  multAff = m; const wob = Math.sin(ms / 70) * .012 + Math.sin(ms / 23) * .004;
+  ballon(m, wob); majGonflage(m);
+  raf = requestAnimationFrame(boucle);
+}
+async function appuyer() {
+  if (etat !== 'repos' || enAttente) return;
+  if (mise > solde() + 1e-9) { toast('Solde insuffisant'); return; }
+  enAttente = true; lache = false; ac(); R('blBtn').classList.add('on');
+  const r = await envoyer('bal-gonfler', { mise });
+  enAttente = false;
+  if (!r || !r.ok) { R('blBtn').classList.remove('on'); toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); return; }
+  soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {}
+  etat = 'gonfle'; t0 = performance.now(); maj(); gonflage(true);
+  raf = requestAnimationFrame(boucle);
+  clearInterval(tick);
+  tick = setInterval(async () => {
+    if (etat !== 'gonfle') return clearInterval(tick);
+    const q = await envoyer('bal-tick', {});
+    if (etat === 'gonfle' && q && q.eclate) eclater(q);
+  }, 180);
+  if (lache) relacher();
+}
+async function relacher() {
+  lache = true; R('blBtn').classList.remove('on');
+  if (etat !== 'gonfle') return;
+  etat = 'encaisse'; cancelAnimationFrame(raf); clearInterval(tick); gonflage(false);
+  const r = await envoyer('bal-encaisser', {});
+  if (r && r.eclate) return eclater(r);
+  if (!r || !r.ok) { toast('Connexion perdue'); etat = 'repos'; remettre(); maj(); return; }
+  if (r.fini) { etat = 'repos'; remettre(); maj(); return; }
+  ballon(r.mult);
+  // le ballon s'envole avec le gain
+  sCash(r.mult >= 3);
+  const s = echelle(r.mult);
+  R('blBal').animate([{ transform: `scale(${s})`, opacity: 1 }, { transform: `translate(30px,-60px) scale(${s * 1.06})`, opacity: 1, offset: .3 }, { transform: `translate(160px,-1100px) scale(${s * .6})`, opacity: 0 }], { duration: 1300, easing: 'cubic-bezier(.5,0,.8,.6)', fill: 'forwards' });
+  resultat(`<span style="color:#5dff8a">+${eu(r.gain)}<small>EUR · ${r.mult.toFixed(2)}x</small></span>`);
+  noter(r.mult, true);
+  soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {}
+  maj(); await new Promise(o => setTimeout(o, 1450));
+  R('blBal').getAnimations().forEach(a => a.cancel());
+  etat = 'repos'; remettre(); maj();
+}
+async function eclater(r) {
+  etat = 'eclate'; cancelAnimationFrame(raf); clearInterval(tick); gonflage(false); R('blBtn').classList.remove('on');
+  const m = r.mult || multAff, s = echelle(m);
+  ballon(m); sPop();
+  R('blBal').style.opacity = 0;
+  if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
+  R('blEcl').animate([{ opacity: 1, transform: `scale(${s * .7})` }, { opacity: 1, transform: `scale(${s * 1.08})`, offset: .35 }, { opacity: 0, transform: `scale(${s * 1.25}) translateY(60px)` }], { duration: 900, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+  R('blFlash').animate([{ opacity: .9 }, { opacity: 0 }], { duration: 400 });
+  R('blS').animate([{ translate: '0 0' }, { translate: '-12px 6px' }, { translate: '10px -6px' }, { translate: '-6px 3px' }, { translate: '0 0' }], { duration: 320 });
+  resultat(`<span style="color:#ff5a6a">BOUM !<small>-${eu(r.mise || mise)} EUR</small></span>`);
+  noter(m, false);
+  soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {}
+  maj(); await new Promise(o => setTimeout(o, 1300));
+  if (!BALLOON.ouvert) return;
+  etat = 'repos'; remettre(); maj();
+}
+function resultat(h) { const e = R('blRes'); e.innerHTML = h; e.classList.remove('on'); void e.offsetWidth; e.classList.add('on'); }
+function noter(m, ok) { let h = []; try { h = JSON.parse(localStorage.getItem('blHist') || '[]'); } catch (e) {} h.unshift([m, ok ? 1 : 0]); try { localStorage.setItem('blHist', JSON.stringify(h.slice(0, 20))); } catch (e) {} }
+
+/* ---------- commandes ---------- */
+const btn = R('blBtn');
+btn.addEventListener('pointerdown', e => { e.preventDefault(); try { btn.setPointerCapture(e.pointerId); } catch (x) {} appuyer(); });
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => btn.addEventListener(n, () => relacher()));
+btn.addEventListener('contextmenu', e => e.preventDefault());
+addEventListener('blur', () => { if (BALLOON.ouvert) relacher(); });
+R('blChips').onclick = e => { const b = e.target.closest('[data-v]'); if (!b || etat !== 'repos') return; mise = Number(b.dataset.v); garder(); };
+function garder() { try { localStorage.setItem('blMise', mise); } catch (e) {} sClic(); maj(); ballon(1); }
+R('blMoins').onclick = () => { if (etat !== 'repos') return; mise = PAS[Math.max(0, PAS.indexOf(mise) - 1)]; garder(); };
+R('blPlus').onclick = () => { if (etat !== 'repos') return; mise = PAS[Math.min(PAS.length - 1, PAS.indexOf(mise) + 1)]; garder(); };
+R('blSon').onclick = () => { son = !son; try { localStorage.setItem('blSon', son ? '1' : '0'); } catch (e) {} if (!son) gonflage(false); maj(); sClic(); };
+function panneau(t, h) { R('blHlT').textContent = t; R('blHlC').innerHTML = h; R('blHl').hidden = false; sClic(); }
+R('blMenu').onclick = () => panneau('Balloon', `
+  <p>Choisis ta mise, puis <b>maintiens le gros bouton rouge</b> : le ballon se gonfle et ton gain monte (1.00x, 1.50x, 2x…).</p>
+  <p><b>Lâche le bouton</b> quand tu veux pour encaisser : ta mise × le multiplicateur.</p>
+  <p>Mais attention : le ballon peut <b>éclater à tout moment</b>. S'il éclate avant que tu lâches, tu perds ta mise.</p>
+  <p class="j">Si tu perds la connexion pendant que tu gonfles, ta mise est encaissée au dernier multiplicateur connu, si le ballon n'avait pas éclaté.</p>
+  <p>Mise de 0,10 € à 1 000 €. Gain maximum 10 000 €.</p>`);
+R('blStats').onclick = () => { let h = []; try { h = JSON.parse(localStorage.getItem('blHist') || '[]'); } catch (e) {}
+  panneau('Mes 20 derniers ballons', h.length ? `<div class="bl-hist">${h.map(x => `<span style="color:${x[1] ? '#9dffb8' : '#ffb0b8'}">${x[1] ? '' : '💥 '}${x[0].toFixed(2)}x</span>`).join('')}</div>` : '<p>Aucune partie pour le moment.</p>'); };
+R('blHlX').onclick = () => R('blHl').hidden = true;
+R('blHl').onclick = e => { if (e.target === R('blHl')) R('blHl').hidden = true; };
+R('blQuit').onclick = () => BALLOON.fermer();
+R('blX').onclick = () => BALLOON.fermer();
+BALLOON.ouvrir = function () {
+  BALLOON.ouvert = true; R('blR').hidden = false; R('blHl').hidden = true; document.body.style.overflow = 'hidden';
+  etat = 'repos'; soldeAff = solde(); maj(); ajuster(); remettre();
+};
+BALLOON.fermer = function () {
+  if (etat === 'gonfle') relacher();
+  BALLOON.ouvert = false; R('blR').hidden = true; document.body.style.overflow = ''; gonflage(false); cancelAnimationFrame(raf); clearInterval(tick);
+  try { if (typeof majSolde === 'function') majSolde(); } catch (e) {}
+};
+})();
+</script>
+<!-- ===== FIN BALLOON ===== -->
 
 <!-- ===== PENALTY V2 ===== -->
 <style>
@@ -16220,6 +16481,7 @@ window.AVION_SRC = "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8
 window.COVERS_MS = {"rlive": "/images/d73f2a53fac8.jpg", "croco": "/images/d3f73ae20074.jpg", "moles": "/images/7e351e7b0ee3.jpg", "mines": "/images/1ced269defdd.jpg", "lbj": "/images/f590fca61523.jpg", "avion": "/images/85b574a1c95d.jpg", "thimbles": "/images/e0b6120ef8e6.jpg", "kroad": "/images/f081bf8f0611.jpg", "heroKroad": "/images/511df0795666.jpg", "poulet": "/images/d8b810361b4d.jpg", "plinko": "/images/27dd51523550.jpg", "tower": "/images/5b0a00f48110.jpg", "pont": "/images/a86e2a9bf891.jpg", "penalty": "/images/9343afc8cbc2.jpg", "periph": "/images/da5f2e5c4f97.jpg"};
 window.COVERS_MS.panda = "/images/5eacabf7164e.jpg";
 window.COVERS_MS.floor13 = "/images/400ae4e04048.jpg";
+window.COVERS_MS.balloon = "/images/2a149357c40f.jpg";
 window.COVERS_MS.gjump = "/images/9e7742d2e56c.jpg";
 window.COVERS_MS.rlt = "/images/e5ddeb721cd7.jpg";
 window.COVERS_MS.heroLbj = "/images/48c5478551ee.jpg";
@@ -24706,6 +24968,7 @@ const MINI = [
   { id:'mines',   nom:'MINES',          badge:'NOUVEAU' },
   { id:'tower',   nom:'TOWER RUSH' },
   { id:'thimbles', nom:'THIMBLES' },
+  { id:'balloon', nom:'BALLOON',        badge:'NOUVEAU' },
   { id:'avion',   nom:'CRASH GAME',     badge:'', img:true },
   { id:'kroad',   nom:'KOALA ROAD' },
   { id:'moles',   nom:'MOLES',          badge:'NOUVEAU' },
@@ -24724,9 +24987,10 @@ window.COVERS_OLD = {"rlive": "/images/d73f2a53fac8.jpg", "croco": "/images/d3f7
 window.COVERS_OLD.rlt = "/images/e5ddeb721cd7.jpg";
 window.COVERS_OLD.panda = "/images/279807985767.jpg";
 window.COVERS_OLD.floor13 = "/images/f47130e33898.jpg";
+window.COVERS_OLD.balloon = "/images/c8dfb6fb691e.jpg";
 window.COVERS_OLD.tower = "/images/b7f147b305c2.jpg";
 window.COVERS_OLD.gjump = "/images/7f7ed3f4fb46.jpg";
-function gcard(g,home){ const ph = home ? (window.COVERS_OLD && COVERS_OLD[g.id]) : (window.COVERS_MS && COVERS_MS[g.id]); const land = (home?[]:['avion','thimbles','kroad','rlive','rlt','gjump','panda','floor13','mines','moles','croco','poulet','plinko','tower','pont','penalty','periph']).includes(g.id)?' land':''; if (ph) return `<button class="gcard photo${land}" data-game="${g.id}" aria-label="${esc(g.nom)}"><img class="cov" src="${ph}" alt="">${g.id==='floor13'?'<span class="badge new" style="z-index:3">NOUVEAU</span>':''}<span class="shine"></span></button>`; return `<button class="gcard" data-game="${g.id}" aria-label="${esc(g.nom)}">${svg(g.id)}${g.badge?`<span class="badge${g.badge==='NOUVEAU'?' new':''}">${g.badge}</span>`:''}<span class="gt">${g.nom}</span><span class="shine"></span></button>`; }
+function gcard(g,home){ const ph = home ? (window.COVERS_OLD && COVERS_OLD[g.id]) : (window.COVERS_MS && COVERS_MS[g.id]); const land = (home?[]:['avion','thimbles','kroad','rlive','rlt','gjump','panda','floor13','balloon','mines','moles','croco','poulet','plinko','tower','pont','penalty','periph']).includes(g.id)?' land':''; if (ph) return `<button class="gcard photo${land}" data-game="${g.id}" aria-label="${esc(g.nom)}"><img class="cov" src="${ph}" alt="">${g.id==='floor13'?'<span class="badge new" style="z-index:3">NOUVEAU</span>':''}<span class="shine"></span></button>`; return `<button class="gcard" data-game="${g.id}" aria-label="${esc(g.nom)}">${svg(g.id)}${g.badge?`<span class="badge${g.badge==='NOUVEAU'?' new':''}">${g.badge}</span>`:''}<span class="gt">${g.nom}</span><span class="shine"></span></button>`; }
 
 /* =========================================================
    PAGES
@@ -24746,7 +25010,7 @@ function pageHome(){
       <div class="dots" id="dots">${SLIDES.map((_,i)=>`<b class="${i?'':'on'}"></b>`).join('')}</div></div>
     <div class="ticker"><span class="live"><i></i>GROS GAINS</span><div class="feed" id="feed"></div></div>
     <div><div class="sec-head"><span class="ico">${icoPad()}</span><h2>Mini Games</h2><button data-go="mini">Tout voir ${chev()}</button></div>
-      <div class="row" style="margin-top:12px">${MINI.filter(g=>g.id!=='avion').map(g=>gcard(g,1)).join('')}</div></div>
+      <div class="row" style="margin-top:12px">${['thimbles','avion','kroad'].map(id=>MINI.find(g=>g.id===id)).concat(MINI.filter(g=>!['thimbles','avion','kroad'].includes(g.id))).map(g=>gcard(g,1)).join('')}</div></div>
     ${slotsHtml()}
     <div><div class="sec-head"><span class="ico">${icoCards()}</span><h2>Casino Live</h2></div>
       <div class="row" style="margin-top:12px">${LIVE_ART.map(t=>gcard({id:t.id,nom:t.nom})).join('')}</div></div>
@@ -24898,6 +25162,7 @@ function ouvrirJeuMS(id){
   if (id === 'blackjack' || id === 'poker' || id === 'roulette') return go('tables');
   if (id === 'peche') return go('peche');
   if (id === 'penalty' && window.PEN2) return PEN2.ouvrir();
+  if (id === 'balloon' && window.BALLOON) return BALLOON.ouvrir();
   ouvrirJeu(id);
 }
 function startHome(){

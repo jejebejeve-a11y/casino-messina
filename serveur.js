@@ -3479,7 +3479,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['bal', 'Balloon', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -6108,6 +6108,36 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- BALLOON : le point d'eclatement est tire ICI et n'est jamais envoye a la page ---------- */
+    if (route.startsWith('/api/bal-') && req.method === 'POST') {
+      const K = Math.LN2 / 4;                       // le multiplicateur double toutes les 4 secondes
+      const multA = ms => Math.floor(Math.exp(K * Math.max(0, ms) / 1000) * 100) / 100;
+      const maintenant = Date.now();
+      const solder = (b, ms) => { const m = multA(ms), g = Math.min(10000, sous(b.mise * m)); compte.solde = sous(compte.solde + g); compte.bal = null; soldeAuSiege(compte); Carnet.enregistrer(compte); return { m, g }; };
+      let b = compte.bal;
+      // une partie restee ouverte (deconnexion) : encaissee au dernier instant connu, si le ballon n'avait pas eclate
+      if (b && route === '/api/bal-gonfler') {
+        if (b.dernier - b.t0 < b.eclat) solder(b, b.dernier - b.t0); else { compte.bal = null; Carnet.enregistrer(compte); }
+        b = null;
+      }
+      if (route === '/api/bal-gonfler') {
+        const mise = sous(Number(body.mise) || 0);
+        if (!(mise >= 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
+        if (mise > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+        if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+        const u = crypto.randomInt(1000000) / 1000000;
+        let B = 0.96 / (1 - u); if (B < 1.01) B = 1; B = Math.min(B, 100000 / mise);
+        const eclat = B <= 1 ? 120 : Math.log(B) / K * 1000;
+        compte.solde = sous(compte.solde - mise); compte.bal = { mise, t0: maintenant, eclat, dernier: maintenant };
+        soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, mise, solde: compte.solde });
+      }
+      if (!b) return repondre(res, 200, { ok: true, fini: true, solde: compte.solde });
+      const ms = maintenant - b.t0;
+      if (ms >= b.eclat) { const m = multA(b.eclat); compte.bal = null; Carnet.enregistrer(compte); return repondre(res, 200, { ok: true, eclate: true, mult: m, mise: b.mise, solde: compte.solde }); }
+      if (route === '/api/bal-tick') { b.dernier = maintenant; return repondre(res, 200, { ok: true, mult: multA(ms) }); }
+      if (route === '/api/bal-encaisser') { const r = solder(b, ms); return repondre(res, 200, { ok: true, gain: r.g, mult: r.m, mise: b.mise, solde: compte.solde }); }
+    }
     /* ---------- PENALTY (nouvelle version) : chaque tir est tire ICI ---------- */
     if (route.startsWith('/api/pen2-') && req.method === 'POST') {
       const ECH = [2, 4, 8, 16, 32, 64], k = compte.pen2;
