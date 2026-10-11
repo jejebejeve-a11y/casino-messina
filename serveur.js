@@ -6121,9 +6121,9 @@ const serveur = http.createServer(async (req, res) => {
           if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
           compte.solde = sous(compte.solde - mise); serie = compte.pen2 = { mise, palier: 0 };
         }
-        const zone = Math.max(0, Math.min(5, Number(body.zone) | 0));
+        const zone = Math.max(0, Math.min(14, Number(body.zone) | 0));
         const but = crypto.randomInt(10000) < 4700;
-        let zg; if (but) { do { zg = crypto.randomInt(6); } while (zg === zone); } else zg = zone;
+        let zg; if (but) { do { zg = crypto.randomInt(15); } while (zg % 5 === zone % 5 || Math.abs(zg % 5 - zone % 5) < 2 && crypto.randomInt(2)); } else zg = zone;   // sur un but, le gardien part d'un autre cote
         compte.penaltys = (compte.penaltys | 0) + 1;
         if (!but) { compte.pen2 = null; soldeAuSiege(compte); Carnet.enregistrer(compte);
           return repondre(res, 200, { ok: true, but: false, zone, zoneGardien: zg, palier: 0, mise: serie.mise, fini: true, gain: 0, solde: compte.solde }); }
