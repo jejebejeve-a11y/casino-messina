@@ -3479,7 +3479,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -6108,6 +6108,41 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- PENALTY (nouvelle version) : chaque tir est tire ICI ---------- */
+    if (route.startsWith('/api/pen2-') && req.method === 'POST') {
+      const ECH = [2, 4, 8, 16, 32, 64], k = compte.pen2;
+      if (route === '/api/pen2-etat') return repondre(res, 200, { ok: true, serie: k ? { mise: k.mise, palier: k.palier } : null, solde: compte.solde });
+      if (route === '/api/pen2-tirer') {
+        let serie = k;
+        if (!serie) {
+          const mise = sous(Number(body.mise) || 0);
+          if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+          if (mise > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+          if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+          compte.solde = sous(compte.solde - mise); serie = compte.pen2 = { mise, palier: 0 };
+        }
+        const zone = Math.max(0, Math.min(5, Number(body.zone) | 0));
+        const but = crypto.randomInt(10000) < 4700;
+        let zg; if (but) { do { zg = crypto.randomInt(6); } while (zg === zone); } else zg = zone;
+        compte.penaltys = (compte.penaltys | 0) + 1;
+        if (!but) { compte.pen2 = null; soldeAuSiege(compte); Carnet.enregistrer(compte);
+          return repondre(res, 200, { ok: true, but: false, zone, zoneGardien: zg, palier: 0, mise: serie.mise, fini: true, gain: 0, solde: compte.solde }); }
+        compte.buts = (compte.buts | 0) + 1; serie.palier++;
+        const mult = ECH[serie.palier - 1], pot = Math.min(10000, sous(serie.mise * mult));
+        if (serie.palier >= ECH.length || pot >= 10000) {
+          compte.solde = sous(compte.solde + pot); compte.pen2 = null; soldeAuSiege(compte); Carnet.enregistrer(compte);
+          return repondre(res, 200, { ok: true, but: true, zone, zoneGardien: zg, palier: serie.palier, mult, mise: serie.mise, gain: pot, fini: true, encaisse: true, solde: compte.solde });
+        }
+        soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, but: true, zone, zoneGardien: zg, palier: serie.palier, mult, mise: serie.mise, gain: pot, fini: false, solde: compte.solde });
+      }
+      if (route === '/api/pen2-encaisser') {
+        if (!k || k.palier < 1) return repondre(res, 409, { erreur: 'Rien à encaisser.' });
+        const mult = ECH[k.palier - 1], gain = Math.min(10000, sous(k.mise * mult));
+        compte.solde = sous(compte.solde + gain); compte.pen2 = null; soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, gain, mult, mise: k.mise, solde: compte.solde });
+      }
+    }
     /* ---------- FLOOR 13 : le multiplicateur de l'etage est tire ICI (retour joueur ~94 %) ---------- */
     if (route === '/api/floor13-jouer' && req.method === 'POST') {
       const mise = sous(Number(body.mise) || 0), etage = Number(body.etage);
@@ -6117,7 +6152,10 @@ const serveur = http.createServer(async (req, res) => {
       if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       const T = [[0.3, 3000], [0.5, 2200], [0.7, 1600], [1.5, 1900], [2, 900], [4, 400]];
       const tirer = () => { let x = crypto.randomInt(10000); for (const [m, p] of T) { if (x < p) return m; x -= p; } return 0.3; };
-      const etages = [tirer(), tirer(), tirer(), tirer(), tirer(), tirer()], mult = etages[etage - 1];
+      // chaque partie : les 6 multiplicateurs sont melanges sur les 6 etages (un de chaque)
+      const etages = [0.3, 0.5, 0.7, 1.5, 2, 4];
+      for (let i = 5; i > 0; i--) { const j = crypto.randomInt(i + 1); [etages[i], etages[j]] = [etages[j], etages[i]]; }
+      const mult = etages[etage - 1];
       const gain = sous(mise * mult);
       compte.solde = sous(compte.solde - mise + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
       return repondre(res, 200, { ok: true, etage, mult, etages, gain, mise, solde: compte.solde });

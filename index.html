@@ -4010,6 +4010,7 @@ function fermerJeu() {
   if (window.LBE && LBE.ouvert) LBE.fermer();
   if (window.BAC && BAC.ouvert) BAC.fermer();
   if (window.FLOOR13 && FLOOR13.ouvert) FLOOR13.fermer();
+  if (window.PEN2 && PEN2.ouvert) PEN2.fermer();
   if (window.PONT && PONT.ouvert) PONT.fermer(true);
   if (window.RAZZIA && RAZZIA.ouvert) RAZZIA.fermer();
 }
@@ -9322,6 +9323,267 @@ MINES.fermer = function () { MINES.ouvert = false; racine.hidden = true; documen
 construire(); majPanneau();
 })();
 </script>
+
+<!-- ===== PENALTY V2 ===== -->
+<style>
+#p2R{position:fixed;inset:0;z-index:9000;background:#0d1420;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;font-family:Inter,Rubik,Arial,sans-serif;color:#fff;touch-action:manipulation}
+#p2R[hidden],#p2R [hidden]{display:none!important}
+#p2R *{box-sizing:border-box}
+#p2R button{font-family:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#p2S{position:absolute;left:0;top:0;width:942px;height:1900px;transform-origin:0 0;background:#0d1420 url(/images/6b7c82cd3182.webp) 0 0/942px 1670px no-repeat}
+.p2-ab{position:absolute}
+.p2-solde{position:absolute;left:14px;top:16px;height:70px;min-width:176px;padding:0 22px;border-radius:35px;background:#1d2539;border:2px solid #2a3350;display:flex;align-items:center;gap:12px;font-weight:800;font-size:33px;font-variant-numeric:tabular-nums;color:#33d26b;white-space:nowrap}
+.p2-solde span{color:#c9cfdd;font-size:28px;font-weight:700}
+.p2-temps{position:absolute;left:600px;top:30px;width:160px;text-align:right;font-weight:700;font-size:28px;color:#c9cfdd;font-variant-numeric:tabular-nums}
+.p2-mise{position:absolute;left:204px;top:1276px;height:50px;line-height:50px;font-weight:800;font-size:33px;color:#33d26b;font-variant-numeric:tabular-nums;white-space:nowrap}
+.p2-mise span{color:#c9cfdd;margin-left:14px}
+.p2-zone{position:absolute;border-radius:16px;transition:background .15s}
+.p2-zone i{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;border:4px solid rgba(255,255,255,.55);box-shadow:0 0 12px rgba(255,255,255,.35);transition:transform .15s,border-color .15s}
+.p2-zone:hover i,.p2-zone:active i{transform:scale(1.2);border-color:#fff}
+.p2-zone.off{pointer-events:none}.p2-zone.off i{opacity:0}
+#p2Gk,#p2Dv,#p2Ball{position:absolute;pointer-events:none;will-change:transform}
+#p2Ball{width:167px;height:167px}
+#p2Ombre{position:absolute;left:350px;top:1040px;width:190px;height:44px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.45),transparent);pointer-events:none}
+.p2-fl{position:absolute;top:214px;width:76px;height:96px;border-radius:12px;pointer-events:none;transition:all .25s}
+.p2-fl.ok{box-shadow:0 0 0 3px #3ee26e,0 0 18px rgba(62,226,110,.8)}
+.p2-fl.next{animation:p2Next 1s ease-in-out infinite}
+@keyframes p2Next{50%{box-shadow:0 0 0 3px #ffd34a,0 0 22px rgba(255,211,74,.9)}}
+.p2-barre{position:absolute;left:62px;top:303px;height:6px;border-radius:3px;background:linear-gradient(90deg,#3ee26e,#b6ff5c);box-shadow:0 0 10px #3ee26e;transition:width .4s;pointer-events:none}
+.p2-txt{position:absolute;left:0;width:942px;top:330px;text-align:center;font-weight:900;font-size:110px;letter-spacing:.02em;pointer-events:none;opacity:0;text-shadow:0 6px 0 rgba(0,0,0,.35),0 0 30px rgba(0,0,0,.4)}
+.p2-txt.on{animation:p2Txt 1.4s ease-out forwards}
+@keyframes p2Txt{0%{opacity:0;transform:scale(.5)}15%{opacity:1;transform:scale(1.08)}25%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+.p2-sous{position:absolute;left:0;width:942px;top:460px;text-align:center;font-weight:800;font-size:46px;color:#fff;pointer-events:none;opacity:0;text-shadow:0 3px 8px rgba(0,0,0,.7)}
+.p2-sous.on{animation:p2Txt 1.6s ease-out forwards}
+.p2-btns{position:absolute;left:14px;top:1128px;width:914px;height:100px;display:flex;gap:14px}
+.p2-btns button{flex:1;border-radius:50px;font-weight:800;font-size:40px;color:#0d1420!important}
+#p2Rand{background:transparent}
+#p2R.serie #p2Rand{background:linear-gradient(90deg,#5b8cf0,#56d6f7)}
+#p2Cash{display:none;background:linear-gradient(#53e58a,#22b45c);color:#06210f!important;font-size:34px!important;line-height:1.05}
+#p2R.serie #p2Cash{display:block}
+#p2R.serie .p2-btns{background:#0d1420;box-shadow:0 0 0 6px #0d1420}
+#p2Cash small{display:block;font-size:26px;font-weight:700}
+.p2-bt{position:absolute;top:1262px;width:76px;height:76px;border-radius:50%}
+#p2R.serie .p2-bt,#p2R.serie .p2-mise{opacity:.4;pointer-events:none}
+.p2-tab{position:absolute;top:1390px;height:66px;border-radius:16px}
+.p2-tab.on{background:rgba(255,255,255,.04)}
+.p2-hist{position:absolute;left:32px;top:1660px;width:878px}
+.p2-hist div{display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr 1.2fr;height:56px;align-items:center;border-bottom:1px solid rgba(255,255,255,.06);font-size:24px;font-weight:600;color:#c9cfdd;text-align:center;font-variant-numeric:tabular-nums}
+.p2-hist div b{color:#33d26b}
+.p2-hist p{margin:18px 0 0;text-align:center;color:#7d869c;font-size:24px}
+.p2-fond{position:absolute;left:14px;top:1668px;width:914px;height:222px;background:#1d2536;border-radius:0 0 22px 22px}
+.p2-toast{position:absolute;left:50%;top:1040px;transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(255,255,255,.2);padding:14px 26px;border-radius:14px;font-size:28px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none}
+.p2-toast.on{opacity:1}
+.p2-mute{position:absolute;left:782px;top:22px;width:50px;height:60px;pointer-events:none}
+.p2-mute:after{content:'';position:absolute;left:0;top:28px;width:52px;height:6px;background:#ff4d5a;border-radius:3px;transform:rotate(-45deg)}
+#p2X{position:absolute;z-index:3;left:12px;top:calc(10px + env(safe-area-inset-top,0px));width:40px;height:40px;border-radius:50%;background:rgba(14,16,26,.9);border:2px solid rgba(255,255,255,.6);display:grid;place-items:center}
+#p2Hl{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px;z-index:5}
+.p2-hl{width:min(440px,100%);max-height:86vh;overflow:auto;background:#151b2b;border:1px solid rgba(120,170,255,.35);border-radius:18px;padding:18px;font-size:14px;line-height:1.5;color:#dfe5f2}
+.p2-hl h3{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;font:800 20px Inter,sans-serif;color:#7fb2ff}
+.p2-hl h3 button{font-size:22px;width:34px;height:34px}
+.p2-hl p{margin:6px 0}
+.p2-quit{display:block;width:100%;margin-top:12px;height:46px;border-radius:12px;background:#e0323c!important;font-weight:800;font-size:16px}
+</style>
+<div id="p2R" hidden>
+  <button id="p2X" aria-label="Quitter"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div id="p2S">
+    <div class="p2-fond"></div>
+    <div class="p2-solde"><b id="p2Solde">0.00</b><span>EUR</span></div>
+    <div class="p2-temps" id="p2Temps">00:00:00</div>
+    <button class="p2-ab" id="p2Son" style="left:766px;top:14px;width:80px;height:76px;border-radius:18px" aria-label="Son"></button>
+    <div class="p2-mute" id="p2Mute" hidden></div>
+    <button class="p2-ab" id="p2Menu" style="left:852px;top:14px;width:78px;height:76px;border-radius:18px" aria-label="Règles"></button>
+    <div id="p2Fl"></div>
+    <div class="p2-barre" id="p2Barre" style="width:0"></div>
+    <img id="p2Gk" src="/images/913494a621bd.webp" alt="" style="left:382px;top:586px;width:200px;height:214px">
+    <img id="p2Dv" src="/images/b1ea15bbe70b.webp" alt="" style="left:498px;top:523px;width:292px;height:182px;opacity:0">
+    <div id="p2Zones"></div>
+    <div id="p2Ombre"></div>
+    <img id="p2Ball" src="/images/c70876b3005c.webp" alt="" style="left:389px;top:915px">
+    <div class="p2-txt" id="p2Txt"></div>
+    <div class="p2-sous" id="p2Sous"></div>
+    <div class="p2-btns"><button id="p2Rand">Random</button><button id="p2Cash">Encaisser<small id="p2CashV"></small></button></div>
+    <div class="p2-mise" id="p2Mise"></div>
+    <button class="p2-bt" id="p2Moins" style="left:735px" aria-label="Moins"></button>
+    <button class="p2-bt" id="p2Plus" style="left:826px" aria-label="Plus"></button>
+    <button class="p2-tab on" data-t="moi" style="left:36px;width:430px" aria-label="Mes paris"></button>
+    <button class="p2-tab" data-t="top" style="left:476px;width:430px" aria-label="Highrollers"></button>
+    <div class="p2-hist" id="p2Hist"></div>
+    <div class="p2-toast" id="p2Toast"></div>
+  </div>
+  <div id="p2Hl" hidden><div class="p2-hl">
+    <h3>Penalty <button id="p2HlX" aria-label="Fermer">✕</button></h3>
+    <p>Choisis ta mise avec – et +, puis <b>touche un endroit du but</b> : le tir part tout de suite. <b>Random</b> tire au hasard.</p>
+    <p>Si tu marques, tu montes d'un drapeau : <b>×2, ×4, ×8, ×16, ×32, ×64</b>. Tu peux <b>encaisser</b> quand tu veux ou retirer pour aller plus haut.</p>
+    <p>Si le gardien arrête le ballon, tu perds ta mise. Au drapeau ×64, le gain est encaissé tout seul.</p>
+    <p>Mise de 0,20 € à 1 000 €. Gain maximum 10 000 €.</p>
+    <button class="p2-quit" id="p2Quit">QUITTER LE JEU</button>
+  </div></div>
+</div>
+<script>
+/* ===== PENALTY V2 ===== chaque tir est decide par serveur.js (/api/pen2-*) */
+window.PEN2 = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const R = id => document.getElementById(id);
+const PAS = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+const ECH = [2, 4, 8, 16, 32, 64], FX = [118, 258, 398, 546, 688, 826];
+const ZX = [240, 475, 710], ZY = [590, 722];
+const BALL0 = { x: 472, y: 998 };
+let mise = 5, serie = null, occupe = false, son = true, t0 = 0, horloge = 0, onglet = 'moi';
+try { son = localStorage.getItem('p2Son') !== '0'; const m = Number(localStorage.getItem('p2Mise')); if (PAS.includes(m)) mise = m; } catch (e) {}
+const eu = v => (Math.round(v * 100) / 100).toFixed(2);
+const solde = () => { try { return SLOT_SOLDE.get() || 0; } catch (e) { return 0; } };
+const attendre = ms => new Promise(r => setTimeout(r, ms));
+let soldeAff = 0;
+
+/* ---------- sons ---------- */
+let AC = null;
+function ac() { if (!son) return null; try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); } catch (e) {} return AC; }
+function ton(f, d, v, t0, type, f2) { const a = ac(); if (!a) return; const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + (t0 || 0); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d + .02); }
+function bruit(d, v, fq, t0, type, att) { const a = ac(); if (!a) return; const n = a.createBuffer(1, Math.ceil(a.sampleRate * d), a.sampleRate), x = n.getChannelData(0); for (let i = 0; i < x.length; i++) { const p = i / x.length; x[i] = (Math.random() * 2 - 1) * (att ? Math.min(1, p * 6) * (1 - p) : (1 - p)); } const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(), t = a.currentTime + (t0 || 0); s.buffer = n; f.type = type || 'lowpass'; f.frequency.value = fq; g.gain.value = v; s.connect(f); f.connect(g); g.connect(a.destination); s.start(t); }
+const sClic = () => ton(1500, .03, .05);
+const sTir = () => { ton(140, .14, .5, 0, 'sine', 50); bruit(.08, .5, 1800); };
+const sFilet = () => bruit(.35, .25, 900, 0, 'bandpass');
+const sBut = () => { bruit(1.8, .35, 1200, .05, 'bandpass', true); [784, 988, 1175].forEach((f, i) => ton(f, .35, .08, .1 + i * .08, 'triangle')); };
+const sArret = () => { ton(180, .12, .45, 0, 'sine', 70); bruit(1.1, .22, 500, .1, 'lowpass', true); };
+const sCash = () => [523, 659, 784, 1046, 1318].forEach((f, i) => ton(f, .3, .09, i * .07, 'triangle'));
+
+/* ---------- affichage ---------- */
+function toast(t) { const el = R('p2Toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('on'), 2000); }
+function maj() {
+  R('p2Solde').textContent = eu(soldeAff);
+  R('p2Mise').innerHTML = eu(mise) + '<span>EUR</span>';
+  R('p2Mute').hidden = son;
+  const p = serie ? serie.palier : 0;
+  R('p2R').classList.toggle('serie', !!(serie && p > 0));
+  R('p2Fl').innerHTML = FX.map((x, i) => `<div class="p2-fl${i < p ? ' ok' : (i === p && serie) ? ' next' : ''}" style="left:${x - 38}px"></div>`).join('');
+  R('p2Barre').style.width = p ? (FX[p - 1] - 62) + 'px' : '0';
+  if (serie && p > 0) R('p2CashV').textContent = eu(Math.min(10000, serie.mise * ECH[p - 1])) + ' EUR';
+  R('p2Zones').querySelectorAll('.p2-zone').forEach(z => z.classList.toggle('off', occupe));
+}
+function hist() {
+  let h = []; try { h = JSON.parse(localStorage.getItem('p2Hist') || '[]'); } catch (e) {}
+  if (onglet === 'top') h = h.slice().sort((a, b) => b.g - a.g);
+  h = h.slice(0, 4);
+  R('p2Hist').innerHTML = h.length ? h.map(r => `<div><span>${r.t}</span><span>${eu(r.m)}</span><span>×${r.c}</span>${r.g > 0 ? `<b>${eu(r.g)}</b>` : `<span style="color:#ff6b6b">0.00</span>`}<span>EUR</span></div>`).join('') : '<p>Aucun pari pour le moment</p>';
+}
+function noter(m, c, g) {
+  let h = []; try { h = JSON.parse(localStorage.getItem('p2Hist') || '[]'); } catch (e) {}
+  const d = new Date(); h.unshift({ t: String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), m, c, g });
+  try { localStorage.setItem('p2Hist', JSON.stringify(h.slice(0, 30))); } catch (e) {} hist();
+}
+R('p2Zones').innerHTML = [0, 1, 2, 3, 4, 5].map(z => `<button class="p2-zone" data-z="${z}" style="left:${ZX[z % 3] - 115}px;top:${ZY[Math.floor(z / 3)] - 64}px;width:230px;height:128px" aria-label="Viser"><i></i></button>`).join('');
+function ajuster() {
+  if (!PEN2.ouvert) return;
+  const W = innerWidth, H = innerHeight, k = Math.min(W / 942, (H - 52) / 1900);
+  R('p2S').style.transform = `translate(${(W - 942 * k) / 2}px,${Math.max(52, (H - 1900 * k) / 2)}px) scale(${k})`;
+}
+addEventListener('resize', ajuster);
+function tic() { if (!PEN2.ouvert) return; const s = Math.floor((Date.now() - t0) / 1000); R('p2Temps').textContent = [s / 3600, s / 60 % 60, s % 60].map(v => String(Math.floor(v)).padStart(2, '0')).join(':'); }
+
+/* ---------- animations ---------- */
+const anim = (el, kf, o) => el.animate(kf, Object.assign({ fill: 'forwards' }, o)).finished.catch(() => {});
+function remettre() {
+  R('p2Gk').getAnimations().forEach(a => a.cancel()); R('p2Dv').getAnimations().forEach(a => a.cancel()); R('p2Ball').getAnimations().forEach(a => a.cancel());
+  R('p2Gk').style.opacity = 1; R('p2Dv').style.opacity = 0; R('p2Ombre').style.opacity = 1;
+  R('p2Ball').style.opacity = 1;
+}
+// pose finale du gardien pour chaque zone (le sprite de plongeon est cale sur le haut droit)
+const POSE = {
+  2: 'translate(0px,0px) rotate(0deg) scaleX(1)',
+  0: 'translate(-340px,0px) rotate(0deg) scaleX(-1)',
+  5: 'translate(-6px,104px) rotate(30deg) scaleX(1)',
+  3: 'translate(-334px,104px) rotate(-30deg) scaleX(-1)'
+};
+function plonger(z) {
+  const gk = R('p2Gk'), dv = R('p2Dv');
+  if (z === 1 || z === 4) {   // au centre : il saute ou il se baisse
+    const fin = z === 1 ? 'translateY(-96px) scale(1.04)' : 'translateY(14px) scaleY(.94)';
+    return anim(gk, [{ transform: 'none' }, { transform: z === 1 ? 'translateY(10px) scaleY(.92)' : 'translateY(6px)', offset: .25 }, { transform: fin }], { duration: 420, easing: 'cubic-bezier(.2,.8,.3,1)' });
+  }
+  const gauche = z === 0 || z === 3;
+  // depart : a la place du gardien debout, petit, presque droit
+  const dep = gauche ? 'translate(-162px,79px) rotate(50deg) scaleX(-.72) scaleY(.8)' : 'translate(-162px,79px) rotate(-50deg) scaleX(.72) scaleY(.8)';
+  anim(gk, [{ opacity: 1 }, { opacity: 0 }], { duration: 90 });
+  dv.style.opacity = 1;
+  return anim(dv, [{ transform: dep, opacity: .6 }, { transform: POSE[z], opacity: 1 }], { duration: 400, easing: 'cubic-bezier(.15,.75,.35,1)' });
+}
+function tirer(z, but, zg) {
+  const b = R('p2Ball'), tx = ZX[z % 3], ty = ZY[Math.floor(z / 3)];
+  const dx = tx - BALL0.x, dy = ty - BALL0.y;
+  R('p2Ombre').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' });
+  const vol = anim(b, [
+    { transform: 'translate(0,0) scale(1) rotate(0deg)' },
+    { transform: `translate(${dx * .55}px,${dy * .55 - 60}px) scale(.62) rotate(300deg)`, offset: .5 },
+    { transform: `translate(${dx}px,${dy}px) scale(.4) rotate(560deg)` }], { duration: 430, easing: 'cubic-bezier(.3,.6,.4,1)' });
+  return vol.then(() => {
+    if (but) { sFilet(); return anim(b, [{ transform: `translate(${dx}px,${dy}px) scale(.4) rotate(560deg)` }, { transform: `translate(${dx * 1.04}px,${dy - 14}px) scale(.33) rotate(600deg)`, offset: .35 }, { transform: `translate(${dx * 1.04}px,${dy + 50}px) scale(.33) rotate(640deg)` }], { duration: 520, easing: 'ease-in' }); }
+    const sens = z % 3 === 0 ? -1 : z % 3 === 2 ? 1 : (Math.random() < .5 ? -1 : 1);
+    return anim(b, [{ transform: `translate(${dx}px,${dy}px) scale(.4) rotate(560deg)` }, { transform: `translate(${dx + sens * 170}px,${dy + 150}px) scale(.48) rotate(420deg)`, opacity: 1, offset: .7 }, { transform: `translate(${dx + sens * 210}px,${dy + 190}px) scale(.48) rotate(380deg)`, opacity: 0 }], { duration: 600, easing: 'ease-out' });
+  });
+}
+function texte(t, c, s) { const e = R('p2Txt'), f = R('p2Sous'); e.textContent = t; e.style.color = c; e.classList.remove('on'); f.classList.remove('on'); void e.offsetWidth; e.classList.add('on'); if (s) { f.textContent = s; f.classList.add('on'); } }
+
+/* ---------- jeu ---------- */
+async function tir(z) {
+  if (occupe) return;
+  if (!serie && mise > solde() + 1e-9) { toast('Solde insuffisant'); return; }
+  occupe = true; maj(); ac();
+  const r = await envoyer('pen2-tirer', { zone: z, mise });
+  if (!r || !r.ok) { occupe = false; maj(); toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); return; }
+  if (!serie) { serie = { mise: r.mise, palier: 0 }; soldeAff = Math.round((soldeAff - r.mise) * 100) / 100; maj(); }
+  sTir();
+  setTimeout(() => plonger(r.zoneGardien), 70);
+  await tirer(z, r.but, r.zoneGardien);
+  if (r.but) {
+    sBut(); serie.palier = r.palier;
+    if (r.fini) { texte('GOAL!', '#ffd34a', '+' + eu(r.gain) + ' EUR'); sCash(); noter(r.mise, r.mult, r.gain); serie = null; }
+    else texte('GOAL!', '#3ee26e', '×' + r.mult + ' · ' + eu(r.gain) + ' EUR');
+  } else {
+    sArret(); texte('ARRÊTÉ !', '#ff5a5a', '-' + eu(r.mise) + ' EUR'); noter(r.mise, 0, 0); serie = null;
+  }
+  soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {}
+  maj();
+  await attendre(1100);
+  if (!PEN2.ouvert) { occupe = false; return; }
+  remettre(); R('p2Ball').animate([{ opacity: 0, transform: 'scale(.85)' }, { opacity: 1, transform: 'none' }], { duration: 250 });
+  occupe = false; maj();
+}
+R('p2Zones').onclick = e => { const b = e.target.closest('[data-z]'); if (b) tir(Number(b.dataset.z)); };
+R('p2Rand').onclick = () => tir(Math.floor(Math.random() * 6));
+R('p2Cash').onclick = async () => {
+  if (occupe || !serie || serie.palier < 1) return;
+  occupe = true; maj();
+  const r = await envoyer('pen2-encaisser', {});
+  occupe = false;
+  if (!r || !r.ok) { maj(); toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); return; }
+  sCash(); texte('+' + eu(r.gain), '#3ee26e', 'EUR encaissés'); noter(r.mise, r.mult, r.gain);
+  serie = null; soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {} maj();
+};
+function changerMise(d) { if (serie && serie.palier > 0) return; const i = Math.max(0, Math.min(PAS.length - 1, PAS.indexOf(mise) + d)); mise = PAS[i]; try { localStorage.setItem('p2Mise', mise); } catch (e) {} sClic(); maj(); }
+R('p2Moins').onclick = () => changerMise(-1);
+R('p2Plus').onclick = () => changerMise(1);
+document.querySelectorAll('#p2S .p2-tab').forEach(b => b.onclick = () => { onglet = b.dataset.t; document.querySelectorAll('#p2S .p2-tab').forEach(x => x.classList.toggle('on', x === b)); sClic(); hist(); });
+R('p2Son').onclick = () => { son = !son; try { localStorage.setItem('p2Son', son ? '1' : '0'); } catch (e) {} maj(); sClic(); };
+R('p2Menu').onclick = () => { sClic(); R('p2Hl').hidden = false; };
+R('p2HlX').onclick = () => R('p2Hl').hidden = true;
+R('p2Hl').onclick = e => { if (e.target === R('p2Hl')) R('p2Hl').hidden = true; };
+R('p2Quit').onclick = () => PEN2.fermer();
+R('p2X').onclick = () => PEN2.fermer();
+PEN2.ouvrir = async function () {
+  PEN2.ouvert = true; R('p2R').hidden = false; R('p2Hl').hidden = true; document.body.style.overflow = 'hidden';
+  occupe = false; serie = null; soldeAff = solde(); remettre(); t0 = Date.now(); clearInterval(horloge); horloge = setInterval(tic, 1000); tic();
+  maj(); hist(); ajuster();
+  const r = await envoyer('pen2-etat', {});
+  if (r && r.ok) { if (typeof r.solde === 'number') soldeAff = r.solde; if (r.serie && r.serie.palier > 0) serie = r.serie; maj(); }
+};
+PEN2.fermer = function () {
+  PEN2.ouvert = false; R('p2R').hidden = true; document.body.style.overflow = ''; clearInterval(horloge);
+  try { if (typeof majSolde === 'function') majSolde(); } catch (e) {}
+};
+})();
+</script>
+<!-- ===== FIN PENALTY V2 ===== -->
 
 <!-- ===== FLOOR 13 ===== -->
 <style>
@@ -24374,27 +24636,28 @@ const I = {
 
 /* ---------- catalogue ---------- */
 const MINI = [
-  { id:'floor13', nom:'FLOOR 13',       badge:'NOUVEAU' },
-  { id:'panda',   nom:'PANDASTIC',      badge:'NOUVEAU' },
-  { id:'gjump',   nom:'GOLD JUMP',      badge:'NOUVEAU' },
-  { id:'avion',   nom:'CRASH GAME',     badge:'', img:true },
-  { id:'thimbles', nom:'THIMBLES' },
-  { id:'kroad',   nom:'KOALA ROAD' },
   { id:'mines',   nom:'MINES',          badge:'NOUVEAU' },
+  { id:'tower',   nom:'TOWER RUSH' },
+  { id:'thimbles', nom:'THIMBLES' },
+  { id:'avion',   nom:'CRASH GAME',     badge:'', img:true },
+  { id:'kroad',   nom:'KOALA ROAD' },
   { id:'moles',   nom:'MOLES',          badge:'NOUVEAU' },
   { id:'croco',   nom:'CROCODINO',      badge:'NOUVEAU' },
   { id:'poulet',  nom:'LE POULET' },
   { id:'plinko',  nom:'PLINKO',         badge:'x1000' },
-  { id:'tower',   nom:'TOWER RUSH' },
   { id:'pont',    nom:'PONT DE CRISTAL' },
-  { id:'penalty', nom:'PENALTY',        badge:'x100' },
-  { id:'periph',  nom:'LE PÉRIPH' } ];
+  { id:'penalty', nom:'PENALTY',        badge:'x64' },
+  { id:'periph',  nom:'LE PÉRIPH' },
+  { id:'panda',   nom:'PANDASTIC',      badge:'NOUVEAU' },
+  { id:'floor13', nom:'FLOOR 13',       badge:'NOUVEAU' },
+  { id:'gjump',   nom:'GOLD JUMP',      badge:'NOUVEAU' } ];
 const LIVE_ART = [ { id:'rlt', nom:'LIGHTING ROULETTE' }, { id:'rlive', nom:'ROULETTE LIVE' }, { id:'lbe', nom:'BLACKJACK LIVE' }, { id:'lbj', nom:'LIVE BLACKJACK' } ];
 const TABLES_ART = [ { id:'bac', nom:'BACCARAT' }, { id:'blackjack', nom:'BLACKJACK' }, { id:'roulette', nom:'ROULETTE' }, { id:'poker', nom:'POKER' } ];
 window.COVERS_OLD = {"rlive": "/images/d73f2a53fac8.jpg", "croco": "/images/d3f73ae20074.jpg", "moles": "/images/7e351e7b0ee3.jpg", "mines": "/images/1ced269defdd.jpg", "avion": "/images/3eef2bcb1d3f.jpg", "thimbles": "/images/c082ae0c880f.jpg", "kroad": "/images/ae6279cd09b7.jpg"};
 window.COVERS_OLD.rlt = "/images/e5ddeb721cd7.jpg";
 window.COVERS_OLD.panda = "/images/279807985767.jpg";
 window.COVERS_OLD.floor13 = "/images/f47130e33898.jpg";
+window.COVERS_OLD.tower = "/images/b7f147b305c2.jpg";
 window.COVERS_OLD.gjump = "/images/7f7ed3f4fb46.jpg";
 function gcard(g,home){ const ph = home ? (window.COVERS_OLD && COVERS_OLD[g.id]) : (window.COVERS_MS && COVERS_MS[g.id]); const land = (home?[]:['avion','thimbles','kroad','rlive','rlt','gjump','panda','floor13','mines','moles','croco','poulet','plinko','tower','pont','penalty','periph']).includes(g.id)?' land':''; if (ph) return `<button class="gcard photo${land}" data-game="${g.id}" aria-label="${esc(g.nom)}"><img class="cov" src="${ph}" alt="">${g.id==='floor13'?'<span class="badge new" style="z-index:3">NOUVEAU</span>':''}<span class="shine"></span></button>`; return `<button class="gcard" data-game="${g.id}" aria-label="${esc(g.nom)}">${svg(g.id)}${g.badge?`<span class="badge${g.badge==='NOUVEAU'?' new':''}">${g.badge}</span>`:''}<span class="gt">${g.nom}</span><span class="shine"></span></button>`; }
 
@@ -24567,7 +24830,7 @@ function ouvrirJeuMS(id){
   if (id === 'roulette' && window.ROUL) return ROUL.ouvrir();
   if (id === 'blackjack' || id === 'poker' || id === 'roulette') return go('tables');
   if (id === 'peche') return go('peche');
-  if (id === 'penalty') { go('penalty'); ouvrirJeu('penalty'); return; }
+  if (id === 'penalty' && window.PEN2) return PEN2.ouvrir();
   ouvrirJeu(id);
 }
 function startHome(){
