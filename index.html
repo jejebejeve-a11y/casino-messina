@@ -25665,7 +25665,6 @@ function pageHome(){
         <span class="txt"><span class="kick">${s.kick}</span><h3>${s.t}</h3><p>${s.p}</p></span></button>`).join('')}</div>
       <div class="dots" id="dots">${SLIDES.map((_,i)=>`<b class="${i?'':'on'}"></b>`).join('')}</div></div>
     <div class="ticker"><span class="live"><i></i>GROS GAINS</span><div class="feed" id="feed"></div></div>
-    <button data-roue style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:0;border-radius:18px;background:linear-gradient(100deg,#5b2bd6,#b0279a 60%,#f0a818);color:#fff;cursor:pointer;text-align:left;box-shadow:0 8px 22px rgba(120,40,200,.35)"><span style="font-size:34px;line-height:1">🎡</span><span style="flex:1"><b style="display:block;font:900 18px Rubik,Inter,sans-serif;letter-spacing:.04em">ROUE DU JOUR</b><span style="font-size:13px;opacity:.9">Un tour gratuit par jour · jusqu'à 50 000 €</span></span><span style="font:800 14px Inter,sans-serif;background:rgba(255,255,255,.2);padding:8px 12px;border-radius:12px">TOURNER</span></button>
     <div><div class="sec-head"><span class="ico">${icoPad()}</span><h2>Mini Games</h2><button data-go="mini">Tout voir ${chev()}</button></div>
       <div class="row" style="margin-top:12px">${['thimbles','avion','kroad'].map(id=>MINI.find(g=>g.id===id)).concat(MINI.filter(g=>!['thimbles','avion','kroad'].includes(g.id))).map(g=>gcard(g,1)).join('')}</div></div>
     ${slotsHtml()}
@@ -25673,6 +25672,7 @@ function pageHome(){
       <div class="row" style="margin-top:12px">${LIVE_ART.map(t=>gcard({id:t.id,nom:t.nom})).join('')}</div></div>
     <div><div class="sec-head"><span class="ico">${icoCards()}</span><h2>Casino</h2><button data-go="casino">Tout voir ${chev()}</button></div>
       <div class="row" style="margin-top:12px">${TABLES_ART.map(t=>gcard({id:t.id,nom:t.nom})).join('')}</div></div>
+    <button data-roue aria-label="Roue du jour" style="display:block;width:100%;border:0;padding:0;border-radius:18px;overflow:hidden;cursor:pointer;aspect-ratio:1200/430;background:#12081f url(/images/roue_ban_1f5a7e71.jpg) center/cover no-repeat;box-shadow:0 8px 24px rgba(120,40,200,.35)"></button>
     <button class="fish-hero" data-go="peche" aria-label="Joue à Block" style="border:0;padding:0;aspect-ratio:788/535;background:#0a0f33 url(${BLOCK_BAN}) center/cover no-repeat"></button>
   </section>`;
 }
