@@ -9331,7 +9331,7 @@ construire(); majPanneau();
 <style>
 #roR{position:fixed;inset:0;z-index:9500;background:#12081f;overflow:hidden;-webkit-user-select:none;user-select:none;font-family:Rubik,Inter,Arial,sans-serif;color:#fff;touch-action:manipulation}
 #roR[hidden]{display:none}
-#roFl{position:absolute;inset:-40px;background:url(/images/roue_372186d609.webp) center/cover;filter:blur(26px) brightness(.45)}
+#roFl{position:absolute;inset:0;background:linear-gradient(#120e21 0,#120e21 50%,#0a0b17 50%,#0a0b17 100%)}
 #roS{position:absolute;left:0;top:0;width:927px;height:1697px;transform-origin:0 0;background:url(/images/roue_372186d609.webp) 0 0/927px 1697px no-repeat}
 #roD{position:absolute;left:86px;top:388px;width:748px;height:748px;will-change:transform}
 #roH{position:absolute;left:380px;top:320px;width:165px;height:530px;pointer-events:none}
@@ -25672,8 +25672,10 @@ function pageHome(){
       <div class="row" style="margin-top:12px">${LIVE_ART.map(t=>gcard({id:t.id,nom:t.nom})).join('')}</div></div>
     <div><div class="sec-head"><span class="ico">${icoCards()}</span><h2>Casino</h2><button data-go="casino">Tout voir ${chev()}</button></div>
       <div class="row" style="margin-top:12px">${TABLES_ART.map(t=>gcard({id:t.id,nom:t.nom})).join('')}</div></div>
-    <button data-roue aria-label="Roue du jour" style="display:block;width:100%;border:0;padding:0;border-radius:18px;overflow:hidden;cursor:pointer;aspect-ratio:1200/430;background:#12081f url(/images/roue_ban_1f5a7e71.jpg) center/cover no-repeat;box-shadow:0 8px 24px rgba(120,40,200,.35)"></button>
-    <button class="fish-hero" data-go="peche" aria-label="Joue à Block" style="border:0;padding:0;aspect-ratio:788/535;background:#0a0f33 url(${BLOCK_BAN}) center/cover no-repeat"></button>
+    <div style="position:relative"><style>#bnRow::-webkit-scrollbar{display:none}</style><div id="bnRow" style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;border-radius:18px;gap:0">
+      <button data-go="peche" aria-label="Joue à Block" style="flex:0 0 100%;scroll-snap-align:center;border:0;padding:0;aspect-ratio:4/3;background:#0a0f33 url(${BLOCK_BAN}) center/cover no-repeat;cursor:pointer"></button>
+      <button data-roue aria-label="Roue du jour" style="flex:0 0 100%;scroll-snap-align:center;border:0;padding:0;aspect-ratio:4/3;background:#12081f url(/images/roue_ban2_3a2831a8.jpg) center/cover no-repeat;cursor:pointer"></button>
+    </div><div id="bnDots" style="position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:6px;pointer-events:none"><b style="width:18px;height:6px;border-radius:3px;background:#fff"></b><b style="width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.5)"></b></div></div>
   </section>`;
 }
 function slotsHtml(){
@@ -25824,6 +25826,10 @@ function ouvrirJeuMS(id){
   ouvrirJeu(id);
 }
 function startHome(){
+  if (!window.bnT) { let n = 0, pos = -1; window.bnT = setInterval(() => { const row = $('#bnRow'); if (!row) return;
+    const k = Math.round(row.scrollLeft / Math.max(1, row.clientWidth));
+    if (k !== pos) { pos = k; n = 0; [...$$('#bnDots b')].forEach((d, i) => { d.style.width = i === k ? '18px' : '6px'; d.style.background = i === k ? '#fff' : 'rgba(255,255,255,.5)'; }); }
+    if (++n >= 15) { n = 0; row.scrollTo({ left: ((k + 1) % 2) * row.clientWidth, behavior: 'smooth' }); } }, 300); }
   const sl = $('#slides'), dots = [...$$('#dots b')];
   const upd = () => { const i = Math.round(sl.scrollLeft / sl.clientWidth); dots.forEach((d,k)=>d.classList.toggle('on',k===i)); };
   sl.addEventListener('scroll', () => { clearTimeout(upd.t); upd.t = setTimeout(upd, 60); }, {passive:true});
