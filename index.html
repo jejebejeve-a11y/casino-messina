@@ -9327,6 +9327,116 @@ construire(); majPanneau();
 })();
 </script>
 
+<!-- ===== ROUE DU JOUR ===== -->
+<style>
+#roR{position:fixed;inset:0;z-index:9500;background:#12081f;overflow:hidden;-webkit-user-select:none;user-select:none;font-family:Rubik,Inter,Arial,sans-serif;color:#fff;touch-action:manipulation}
+#roR[hidden]{display:none}
+#roFl{position:absolute;inset:-40px;background:url(/images/roue_372186d609.webp) center/cover;filter:blur(26px) brightness(.45)}
+#roS{position:absolute;left:0;top:0;width:927px;height:1697px;transform-origin:0 0;background:url(/images/roue_372186d609.webp) 0 0/927px 1697px no-repeat}
+#roD{position:absolute;left:86px;top:388px;width:748px;height:748px;will-change:transform}
+#roH{position:absolute;left:380px;top:320px;width:165px;height:530px;pointer-events:none}
+.ro-card{position:absolute;left:240px;top:1290px;width:465px;height:142px;display:flex;align-items:center;gap:22px;padding:0 10px}
+.ro-card .ic{font-size:76px;line-height:1;flex:none}
+.ro-card b{display:block;font:900 44px Rubik,'Arial Black',sans-serif;color:#ffd75a;letter-spacing:.01em;line-height:1.05}
+.ro-card span{display:block;font-size:27px;color:#f2ead6;margin-top:4px}
+.ro-card.pop{animation:roPop .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes roPop{from{transform:scale(.6);opacity:0}}
+.ro-jouer{margin-top:8px;padding:6px 18px;border:0;border-radius:20px;background:#2fd47e;color:#04230f;font:900 22px Rubik,sans-serif;cursor:pointer}
+#roGo{position:absolute;left:170px;top:1478px;width:590px;height:146px;border:0;border-radius:73px;background:transparent;cursor:pointer}
+#roAtt{position:absolute;left:205px;top:1500px;width:520px;height:102px;border-radius:51px;background:linear-gradient(#5a4a2a,#3a2e18);display:grid;place-items:center;font:900 34px Rubik,sans-serif;color:#ffe9a8;pointer-events:none;text-align:center;line-height:1.1}
+#roAtt small{display:block;font-size:22px;color:#d8c08a;font-weight:700}
+#roBonus{position:absolute;right:30px;top:1440px;padding:6px 16px;border-radius:18px;background:#7b3fe0;font:900 24px Rubik,sans-serif;box-shadow:0 0 18px rgba(160,90,255,.8)}
+#roX{position:absolute;z-index:3;left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.7);background:rgba(10,4,20,.85);color:#fff;font-size:18px;cursor:pointer}
+#roCf{position:fixed;inset:0;pointer-events:none;z-index:9501}
+#msToastG{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);z-index:99998;background:linear-gradient(#7b3fe0,#4b23a8);border:2px solid #ffcf4a;color:#fff;font:800 15px Rubik,Inter,sans-serif;padding:12px 20px;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.5);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#msToastG.on{opacity:1}
+</style>
+<div id="roR" hidden>
+  <div id="roFl"></div>
+  <button id="roX" aria-label="Fermer">✕</button>
+  <div id="roS">
+    <img id="roD" src="/images/roue_f421e548a1.webp" alt="">
+    <img id="roH" src="/images/roue_7c6bb11970.webp" alt="">
+    <div class="ro-card" id="roCard"></div>
+    <div id="roBonus" hidden></div>
+    <button id="roGo" aria-label="Tourner"></button>
+    <div id="roAtt" hidden></div>
+  </div>
+  <canvas id="roCf"></canvas>
+</div>
+<div id="msToastG"></div>
+<script>
+window.ROUE = { ouvrir: null };
+(function(){
+'use strict';
+const R = id => document.getElementById(id);
+/* message des tours gratuits, affiche dans n'importe quel jeu */
+function toastG(t) { const e = R('msToastG'); e.textContent = t; e.classList.add('on'); clearTimeout(toastG.h); toastG.h = setTimeout(() => e.classList.remove('on'), 2600); }
+const e0 = window.envoyer;
+window.envoyer = async function (route, d) { const x = await e0(route, d); try { if (x && x.gratuitMsg) toastG(x.gratuitMsg); } catch (e) {} return x; };
+
+const LOTS = [
+  ['💰', '2 500 €', 'direct sur le solde'], ['🏎️', 'VOITURE PÉRIPH', 'la GT du Périph est à toi', 'voiture'], ['🪙', '500 €', 'direct sur le solde'],
+  ['⚽', 'PENALTY ×10', '1 tir gratuit : but = 1 000 €', 'pen'], ['🤑', '5 000 €', 'direct sur le solde'], ['🐉', '10 TOURS DRAGON', 'gratuits (mise jusqu\'à 5 €)', 'dragon'],
+  ['💵', '250 €', 'direct sur le solde'], ['🎈', 'BALLOON GRATUIT', 'un ballon de 10 € offert', 'bal'], ['💎', '10 000 €', 'direct sur le solde'],
+  ['👑', 'JACKPOT 50 000 €', 'direct sur le solde !'], ['💶', '1 000 €', 'direct sur le solde'], ['🌋', '10 TOURS VOLCANO', 'gratuits (mise jusqu\'à 5 €)', 'volcan']];
+let ang = 0, reste = 0, bonus = 0, tourne = false, minut = 0;
+let AC = null;
+function ton(f, d, v, type) { try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime; o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + .02); } catch (e) {} }
+function confettis(or) {
+  const c = R('roCf'), x = c.getContext('2d'); c.width = innerWidth; c.height = innerHeight; const P = [];
+  const cols = or ? ['#ffd23a', '#fff3b0', '#ffb42a', '#ffffff'] : ['#ffd23a', '#58f08e', '#e0568f', '#2f6bff', '#ffffff'];
+  for (let i = 0; i < (or ? 260 : 150); i++) P.push({ x: innerWidth / 2, y: innerHeight * .42, vx: (Math.random() - .5) * 18, vy: -Math.random() * 17 - 4, c: cols[i % cols.length], s: 6 + Math.random() * 7, r: Math.random() * 6 });
+  let n = 0; (function f() { x.clearRect(0, 0, c.width, c.height); for (const p of P) { p.vy += .45; p.x += p.vx; p.y += p.vy; p.r += .2; x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.c; x.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); x.restore(); } if (++n < 170) requestAnimationFrame(f); else x.clearRect(0, 0, c.width, c.height); })();
+}
+function carte(ic, t, s, jeu) { const c = R('roCard'); c.innerHTML = `<span class="ic">${ic}</span><div><b>${t}</b><span>${s}</span>${jeu ? `<button class="ro-jouer" data-j="${jeu}">JOUER MAINTENANT</button>` : ''}</div>`; c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop'); }
+function fmt(ms) { const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return `${h}h ${String(m).padStart(2, '0')}m ${String(x).padStart(2, '0')}s`; }
+function majBouton() {
+  clearInterval(minut); const a = R('roAtt');
+  R('roBonus').hidden = !(bonus > 0); R('roBonus').textContent = '+' + bonus + ' TOURS BONUS';
+  if (reste > 0 && bonus < 1) { const fin = Date.now() + reste; a.hidden = false; const f = () => { const r = fin - Date.now(); if (r <= 0) { reste = 0; majBouton(); return; } a.innerHTML = `REVIENS DANS<small>${fmt(r)}</small>`; }; f(); minut = setInterval(f, 1000); }
+  else a.hidden = true;
+}
+function ajuster() { if (R('roR').hidden) return; const W = innerWidth, H = innerHeight, k = Math.min(W / 927, H / 1697); R('roS').style.transform = `translate(${(W - 927 * k) / 2}px,${(H - 1697 * k) / 2}px) scale(${k})`; }
+addEventListener('resize', ajuster);
+R('roGo').onclick = async () => {
+  if (tourne || (reste > 0 && bonus < 1)) return; tourne = true; ton(600, .1, .1);
+  const r = await envoyer('roue-tourner', {});
+  if (!r || !r.ok) { tourne = false; if (r && r.reste != null) { reste = r.reste; bonus = r.bonus | 0; } majBouton(); carte('⚠️', 'Oups', r && r.erreur && r.erreur !== 'reseau' ? r.erreur : 'Connexion perdue, réessaie'); return; }
+  R('roCard').innerHTML = '';
+  const base = ang - 360 * 6, t = -r.case * 30 + (Math.random() - .5) * 18, cible = t + 360 * Math.floor((base - t) / 360), de = ang, dur = 5600, t0 = performance.now();
+  let dernier = Math.floor((ang + 15) / 30);
+  (function anim(tt) {
+    const p = Math.min(1, (tt - t0) / dur), e = 1 - Math.pow(1 - p, 4);
+    ang = de + (cible - de) * e; R('roD').style.transform = `rotate(${ang}deg)`;
+    const k = Math.floor((ang + 15) / 30); if (k !== dernier) { dernier = k; ton(1500, .035, .07, 'square'); }
+    if (p < 1) return requestAnimationFrame(anim);
+    tourne = false; reste = r.reste; bonus = r.bonus | 0;
+    const L = LOTS[r.case];
+    if (L[3] === 'voiture' && !r.voiture) carte('💶', '1 200 €', 'tu avais déjà la voiture : voilà sa valeur');
+    else carte(L[0], L[1], L[2], L[3]);
+    if (r.voiture) { try { E.joueur.voiturePremium = true; } catch (e) {} }
+    const or = r.case === 9;
+    [523, 659, 784, 1046, 1318].concat(or ? [1568, 2093] : []).forEach((f, j) => setTimeout(() => ton(f, .3, .12), j * 90));
+    confettis(or); try { SLOT_SOLDE.set(r.solde); } catch (e) {} majBouton();
+  })(t0);
+};
+function fermer() { R('roR').hidden = true; document.body.style.overflow = ''; clearInterval(minut); try { if (typeof majSolde === 'function') majSolde(); } catch (e) {} }
+R('roX').onclick = fermer;
+R('roCard').onclick = e => { const b = e.target.closest('[data-j]'); if (!b) return; const j = b.dataset.j; fermer();
+  setTimeout(() => { try {
+    if (j === 'volcan' || j === 'dragon') SLOTG.ouvrir(j);
+    else if (j === 'pen') PEN2.ouvrir(); else if (j === 'bal') BALLOON.ouvrir(); else if (j === 'voiture') ouvrirJeu('periph');
+  } catch (x) {} }, 50); };
+ROUE.ouvrir = async function () {
+  R('roR').hidden = false; document.body.style.overflow = 'hidden'; ajuster();
+  carte('🎡', 'Touche TOURNER !', 'Tu gagnes à tous les coups'); reste = 0; bonus = 0; majBouton();
+  const r = await envoyer('roue-etat', {}); if (r && r.ok) { reste = r.reste; bonus = r.bonus | 0; } majBouton();
+};
+})();
+</script>
+<!-- ===== FIN ROUE DU JOUR ===== -->
+
 <!-- ===== ICE ===== -->
 <style>
 #icR{position:fixed;inset:0;z-index:9000;background:#121620;color:#fff;font-family:'Proxima Nova',Inter,Rubik,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
@@ -9759,6 +9869,7 @@ async function appuyer() {
   enAttente = false;
   if (!r || !r.ok) { R('blBtn').classList.remove('on'); toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); return; }
   soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {}
+  if (r.mise && r.mise !== mise) mise = r.mise;
   etat = 'gonfle'; t0 = performance.now(); maj(); gonflage(true);
   raf = requestAnimationFrame(boucle);
   clearInterval(tick);
@@ -25554,6 +25665,7 @@ function pageHome(){
         <span class="txt"><span class="kick">${s.kick}</span><h3>${s.t}</h3><p>${s.p}</p></span></button>`).join('')}</div>
       <div class="dots" id="dots">${SLIDES.map((_,i)=>`<b class="${i?'':'on'}"></b>`).join('')}</div></div>
     <div class="ticker"><span class="live"><i></i>GROS GAINS</span><div class="feed" id="feed"></div></div>
+    <button data-roue style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:0;border-radius:18px;background:linear-gradient(100deg,#5b2bd6,#b0279a 60%,#f0a818);color:#fff;cursor:pointer;text-align:left;box-shadow:0 8px 22px rgba(120,40,200,.35)"><span style="font-size:34px;line-height:1">🎡</span><span style="flex:1"><b style="display:block;font:900 18px Rubik,Inter,sans-serif;letter-spacing:.04em">ROUE DU JOUR</b><span style="font-size:13px;opacity:.9">Un tour gratuit par jour · jusqu'à 50 000 €</span></span><span style="font:800 14px Inter,sans-serif;background:rgba(255,255,255,.2);padding:8px 12px;border-radius:12px">TOURNER</span></button>
     <div><div class="sec-head"><span class="ico">${icoPad()}</span><h2>Mini Games</h2><button data-go="mini">Tout voir ${chev()}</button></div>
       <div class="row" style="margin-top:12px">${['thimbles','avion','kroad'].map(id=>MINI.find(g=>g.id===id)).concat(MINI.filter(g=>!['thimbles','avion','kroad'].includes(g.id))).map(g=>gcard(g,1)).join('')}</div></div>
     ${slotsHtml()}
@@ -25915,6 +26027,7 @@ function sheetPromo(){
           <h4>+${eurx(g)}</h4><p>Le code a été ajouté à ton solde.</p><button class="cta ghost full" id="pDone" style="padding:14px;margin-top:6px">Super</button></div>`);
         $('#pDone').onclick = closeSheet; confetti(); return;
       }
+      if (r.genre === 'roue') { closeSheet(); window.ROUE && ROUE.ouvrir(); return; }
       if (r.genre === 'pktriche') { closeSheet(); window.PKT_ON = true; window.PKT_MAJ && PKT_MAJ(); return; }
       if (r.genre === 'mdp') { closeSheet(); alert('Nouveau mot de passe de ' + r.pseudo + ' : ' + r.mdp + '\n\nDonne-le-lui : il se connecte avec, puis il peut garder celui-la.'); return; }
       if (r.genre === 'emails') { closeSheet(); sheetEmails(r.joueurs || []); return; }
@@ -26049,6 +26162,7 @@ R.addEventListener('click', e => {
   const m = e.target.closest('[data-act]'); if (m) {
     if (m.dataset.act === 'son') { G('btnSon').click(); const t = m.closest('#menu') ? openMenu : () => { if (current === 'profil') $('#main').innerHTML = pageProfil(); }; t(); return; }
     ({ depot:sheetDepot, retrait:sheetRetrait, historique:sheetHistorique, promo:sheetPromo, admin:sheetAdmin, logout:sheetLogout })[m.dataset.act](); return; }
+  if (e.target.closest('[data-roue]')) { window.ROUE && ROUE.ouvrir(); return; }
   const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); return; }
   const s = e.target.closest('[data-slide]'); if (s) { const id = s.dataset.slide; (id === 'kroad' || id === 'lbj' || id === 'rlt') ? ouvrirJeuMS(id) : go(id); return; }
   const tb = e.target.closest('[data-table]'); if (tb) { rejoindreTable(tb.dataset.table); return; }

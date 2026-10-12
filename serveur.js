@@ -405,6 +405,9 @@ const Carnet = {
       kroadVoies: compte.kroadVoies | 0,
       tx:        Array.isArray(compte.tx) ? compte.tx.slice(0, 60) : (ancienne.tx || []),
       pecheJour: compte.pecheJour || null,
+      roueT:     compte.roueT || ancienne.roueT || 0,
+      roueBonus: compte.roueBonus | 0,
+      tg:        compte.tg || null,
       pecheAuj:  compte.pecheAuj | 0,
       blockJour: compte.blockJour || null,
       blockAuj:  compte.blockAuj | 0,
@@ -6108,17 +6111,18 @@ const serveur = http.createServer(async (req, res) => {
       if (!SLOTS_OUVERTS.includes(id)) return repondre(res, 400, { erreur: 'Jeu inconnu.' });
       const mise = sous(Number(body.mise) || 0);
       if (!(mise >= 0.2 && mise <= 500)) return repondre(res, 400, { erreur: 'Mise entre 0,20 € et 500 €.' });
-      if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+      const libre = id === 'volcan' && compte.tg && compte.tg.volcan > 0 && mise <= 5;
+      if (!libre && mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       const alea = () => crypto.randomInt(0, 1000000000) / 1000000000;
       let tirage;
       if (id === 'volcan') { tirage = jouerVolcan(VOLCAN, alea); tirage.total = Math.min(SLOTS.GAIN_MAX, tirage.total); }
       else tirage = SLOTS.jouer(id, alea);
       const gain = sous(tirage.total * mise);
-      compte.solde = sous(compte.solde - mise + gain);
+      compte.solde = sous(compte.solde - (libre ? 0 : mise) + gain); if (libre) compte.tg.volcan--;
       if (res.__suivi) res.__suivi.nomJeu = NOMS_SLOTS[id];
       soldeAuSiege(compte);
       Carnet.enregistrer(compte);
-      return repondre(res, 200, { ok: true, res: tirage, gain, solde: compte.solde });
+      return repondre(res, 200, { ok: true, res: tirage, gain, solde: compte.solde, gratuitMsg: libre ? 'Tour gratuit de la roue ! Il en reste ' + compte.tg.volcan : undefined });
     }
 
     if (route === '/api/thimbles-demarrer' && req.method === 'POST') {
@@ -6226,6 +6230,28 @@ const serveur = http.createServer(async (req, res) => {
       }
     }
     /* ---------- DRAGON SLOT : tout est tire ICI ---------- */
+    /* ---------- ROUE DU JOUR : un tour gratuit toutes les 24 h (+ tours bonus du code X10), le lot est tire ICI ---------- */
+    if (route === '/api/roue-etat' || route === '/api/roue-tourner') {
+      const ATTENTE = 24 * 3600 * 1000;
+      let reste = Math.max(0, (compte.roueT || 0) + ATTENTE - Date.now()); const bonus = compte.roueBonus | 0;
+      if (route === '/api/roue-etat') return repondre(res, 200, { ok: true, reste, bonus });
+      if (reste > 0 && bonus < 1) return repondre(res, 409, { erreur: 'Reviens plus tard !', reste, bonus });
+      // ordre des cases dans le sens des aiguilles d'une montre, en partant du haut
+      const LOTS = [['e', 2500, 70], ['voiture', 0, 50], ['e', 500, 150], ['pen', 0, 90], ['e', 5000, 35], ['dragon', 0, 100],
+                    ['e', 250, 170], ['bal', 0, 110], ['e', 10000, 12], ['e', 50000, 3], ['e', 1000, 110], ['volcan', 0, 100]];
+      let x = crypto.randomInt(1000), i = 0; for (; i < LOTS.length; i++) { if (x < LOTS[i][2]) break; x -= LOTS[i][2]; }
+      if (i >= LOTS.length) i = 6;
+      if (reste > 0) compte.roueBonus = bonus - 1; else { compte.roueT = Date.now(); reste = ATTENTE; }
+      const [type, v] = LOTS[i]; let gain = 0, voiture = false;
+      compte.tg = compte.tg || {};
+      if (type === 'e') gain = v;
+      else if (type === 'voiture') { if (compte.voiturePremium) gain = 1200; else { compte.voiturePremium = true; voiture = true; } }
+      else if (type === 'volcan' || type === 'dragon') compte.tg[type] = (compte.tg[type] | 0) + 10;
+      else compte.tg[type] = (compte.tg[type] | 0) + 1;
+      compte.solde = sous(compte.solde + gain);
+      soldeAuSiege(compte); Carnet.enregistrer(compte);
+      return repondre(res, 200, { ok: true, case: i, type, gain, voiture, solde: compte.solde, reste, bonus: compte.roueBonus | 0 });
+    }
     if (route === '/api/pk-triche' && req.method === 'POST') {
       if (body.fin) { delete compte.pkTriche; return repondre(res, 200, { ok: true }); }
       if (!compte.pkTriche) return repondre(res, 404, { erreur: 'Introuvable' });
@@ -6235,14 +6261,16 @@ const serveur = http.createServer(async (req, res) => {
     if (route === '/api/dragon-jouer' && req.method === 'POST') {
       const mise = sous(Number(body.mise) || 0), achat = body.achat === true;
       if (!(mise >= 0.1 && mise <= 100)) return repondre(res, 400, { erreur: 'Mise entre 0,10 € et 100 €.' });
-      const cout = achat ? sous(mise * DRAGON.PRIX_BONUS) : mise;
+      const libre = !achat && compte.tg && compte.tg.dragon > 0 && mise <= 5;
+      const cout = achat ? sous(mise * DRAGON.PRIX_BONUS) : (libre ? 0 : mise);
       if (cout > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
       const alea = () => crypto.randomInt(0, 1000000000) / 1000000000;
       const t = dragonJouer(alea, achat);
       const gain = Math.min(10000, sous(t.total * mise));
       compte.solde = sous(compte.solde - cout + gain);
       soldeAuSiege(compte); Carnet.enregistrer(compte);
-      return repondre(res, 200, { ok: true, grille: t.grille, gains: t.gains, souffle: t.souffle, hold: t.hold, total: t.total, gain, cout, solde: compte.solde });
+      if (libre) compte.tg.dragon--;
+      return repondre(res, 200, { gratuitMsg: libre ? 'Tour gratuit de la roue ! Il en reste ' + compte.tg.dragon : undefined, ok: true, grille: t.grille, gains: t.gains, souffle: t.souffle, hold: t.hold, total: t.total, gain, cout, solde: compte.solde });
     }
     /* ---------- BALLOON : le point d'eclatement est tire ICI et n'est jamais envoye a la page ---------- */
     if (route.startsWith('/api/bal-') && req.method === 'POST') {
@@ -6257,16 +6285,16 @@ const serveur = http.createServer(async (req, res) => {
         b = null;
       }
       if (route === '/api/bal-gonfler') {
-        const mise = sous(Number(body.mise) || 0);
+        const libre = !!(compte.tg && compte.tg.bal > 0), mise = libre ? 10 : sous(Number(body.mise) || 0);
         if (!(mise >= 0.10)) return repondre(res, 400, { erreur: 'Mise minimum : 0,10 €.' });
         if (mise > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
-        if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+        if (!libre && mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
         const u = crypto.randomInt(1000000) / 1000000;
         let B = 0.96 / (1 - u); if (B < 1.01) B = 1; B = Math.min(B, 100000 / mise);
         const eclat = B <= 1 ? 120 : Math.log(B) / K * 1000;
-        compte.solde = sous(compte.solde - mise); compte.bal = { mise, t0: maintenant, eclat, dernier: maintenant };
+        if (libre) compte.tg.bal--; compte.solde = sous(compte.solde - (libre ? 0 : mise)); compte.bal = { mise, t0: maintenant, eclat, dernier: maintenant };
         soldeAuSiege(compte); Carnet.enregistrer(compte);
-        return repondre(res, 200, { ok: true, mise, solde: compte.solde });
+        return repondre(res, 200, { ok: true, mise, solde: compte.solde, gratuitMsg: libre ? 'Ballon gratuit de la roue (10 €) !' : undefined });
       }
       if (!b) return repondre(res, 200, { ok: true, fini: true, solde: compte.solde });
       const ms = maintenant - b.t0;
@@ -6280,6 +6308,14 @@ const serveur = http.createServer(async (req, res) => {
       if (route === '/api/pen2-etat') return repondre(res, 200, { ok: true, serie: k ? { mise: k.mise, palier: k.palier } : null, solde: compte.solde });
       if (route === '/api/pen2-tirer') {
         let serie = k;
+        if (!serie && compte.tg && compte.tg.pen > 0) {   // tir gratuit de la roue : un seul tir, but = x10 sur 100 EUR
+          compte.tg.pen--;
+          const zone = Math.max(0, Math.min(14, Number(body.zone) | 0)), but = crypto.randomInt(10000) < 4700;
+          let zg; if (but) { do { zg = crypto.randomInt(15); } while (zg % 5 === zone % 5); } else zg = zone;
+          const gain = but ? 1000 : 0; compte.solde = sous(compte.solde + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
+          return repondre(res, 200, { ok: true, but, zone, zoneGardien: zg, palier: but ? 1 : 0, mult: 10, mise: 0, gain, fini: true, encaisse: but, solde: compte.solde,
+            gratuitMsg: but ? 'Tir gratuit : BUT ! ×10 = 1 000 €' : 'Tir gratuit raté…' });
+        }
         if (!serie) {
           const mise = sous(Number(body.mise) || 0);
           if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
@@ -6771,6 +6807,12 @@ const serveur = http.createServer(async (req, res) => {
       // partage avec quelqu\'un d\'autre, ni etre dits a voix haute.
       if (normalise === 'kq8') {                     // les gros gains de l'accueil, pour pouvoir en effacer
         return repondre(res, 200, { ok: true, genre: 'gains', gains: GROS_GAINS.slice(0, 10) });
+      }
+      if (normalise === 'x10') {
+        compte.codesUtilises = Array.isArray(compte.codesUtilises) ? compte.codesUtilises : [];
+        if (compte.codesUtilises.includes('x10')) return repondre(res, 409, { erreur: 'Ce code a deja ete utilise.' });
+        compte.codesUtilises.push('x10'); compte.roueBonus = (compte.roueBonus | 0) + 10; Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, genre: 'roue', bonus: compte.roueBonus });
       }
       if (normalise === 'kqp') { compte.pkTriche = { cat: -1 }; return repondre(res, 200, { ok: true, genre: 'pktriche' }); }
       if (normalise === 'kq10') {                    // temps passe + plus gros gains, lecture seule
@@ -7337,6 +7379,9 @@ function ouvrirSession(fiche) {
     kroadVoies: fiche.kroadVoies | 0,
     tx:        Array.isArray(fiche.tx) ? fiche.tx.slice(0, 60) : [],
     pecheJour: fiche.pecheJour || null,
+    roueT: fiche.roueT || 0,
+    roueBonus: fiche.roueBonus | 0,
+    tg: fiche.tg || null,
     pecheAuj:  fiche.pecheAuj | 0,
     blockJour: fiche.blockJour || null,
     blockAuj:  fiche.blockAuj | 0,
