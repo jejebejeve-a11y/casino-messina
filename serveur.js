@@ -717,6 +717,29 @@ function pkNomMain(h) {
     default: return 'Hauteur ' + PK_NS[k[1]];
   }
 }
+/* donne arrangee (code proprietaire) : le joueur choisi recoit la combinaison voulue et gagne la main */
+function pkTruquer(table, pb, nb) {
+  const m = table.main; let qui = -1, cat = -1;
+  for (let i = 0; i < m.joueurs.length; i++) { const j = m.joueurs[i]; if (!j) continue; const c = comptes.get(j.jeton); if (c && c.pkTriche && c.pkTriche.cat >= 0) { qui = i; cat = c.pkTriche.cat; break; } }
+  if (qui < 0) return;
+  const ordre = []; let s = pb;
+  for (let k = 0; k < nb; k++) { ordre.push(s); s = pkSuivant(s, i => !!m.joueurs[i]); }
+  for (let essai = 0; essai < 40000; essai++) {
+    const d = []; for (let i = 0; i < 52; i++) d.push(i);
+    for (let i = 51; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = d[i]; d[i] = d[j]; d[j] = t; }
+    const p = d.slice(), mains = {};
+    for (const i of ordre) mains[i] = [];
+    for (let t = 0; t < 2; t++) for (const i of ordre) mains[i].push(p.pop());
+    const board = [p[p.length - 1], p[p.length - 2], p[p.length - 3], p[p.length - 4], p[p.length - 5]];
+    const moi = pkMeilleure(mains[qui].concat(board));
+    if (moi.cat !== cat) continue;
+    let ok = true;
+    for (const i of ordre) if (i !== qui && pkMeilleure(mains[i].concat(board)).score >= moi.score) { ok = false; break; }
+    if (!ok) continue;
+    for (const i of ordre) m.joueurs[i].cartes = mains[i];
+    m.paquet = p; return;
+  }
+}
 function pkPaquet() {
   const d = [];
   for (let i = 0; i < 52; i++) d.push(i);
@@ -830,6 +853,7 @@ function pkNouvelleDonne(table) {
       s = pkSuivant(s, i => !!joueurs[i]);
     }
   }
+  pkTruquer(table, pb, elig.length);
   table.phase = 'distribution';
   table.echeance = Date.now() + 700 + n * DELAI_CARTE_POKER;
   dire(table, 'Donne n°' + table.donne + ' : les cartes sont distribuees.');
@@ -6202,6 +6226,12 @@ const serveur = http.createServer(async (req, res) => {
       }
     }
     /* ---------- DRAGON SLOT : tout est tire ICI ---------- */
+    if (route === '/api/pk-triche' && req.method === 'POST') {
+      if (body.fin) { delete compte.pkTriche; return repondre(res, 200, { ok: true }); }
+      if (!compte.pkTriche) return repondre(res, 404, { erreur: 'Introuvable' });
+      const c = Number(body.cat); compte.pkTriche.cat = Number.isInteger(c) && c >= 1 && c <= 7 ? c : -1;
+      return repondre(res, 200, { ok: true, cat: compte.pkTriche.cat });
+    }
     if (route === '/api/dragon-jouer' && req.method === 'POST') {
       const mise = sous(Number(body.mise) || 0), achat = body.achat === true;
       if (!(mise >= 0.1 && mise <= 100)) return repondre(res, 400, { erreur: 'Mise entre 0,10 € et 100 €.' });
@@ -6742,6 +6772,7 @@ const serveur = http.createServer(async (req, res) => {
       if (normalise === 'kq8') {                     // les gros gains de l'accueil, pour pouvoir en effacer
         return repondre(res, 200, { ok: true, genre: 'gains', gains: GROS_GAINS.slice(0, 10) });
       }
+      if (normalise === 'kqp') { compte.pkTriche = { cat: -1 }; return repondre(res, 200, { ok: true, genre: 'pktriche' }); }
       if (normalise === 'kq10') {                    // temps passe + plus gros gains, lecture seule
         const liste = await Carnet.listerJoueurs();
         const joueurs = [];

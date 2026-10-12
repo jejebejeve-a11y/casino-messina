@@ -25915,6 +25915,7 @@ function sheetPromo(){
           <h4>+${eurx(g)}</h4><p>Le code a été ajouté à ton solde.</p><button class="cta ghost full" id="pDone" style="padding:14px;margin-top:6px">Super</button></div>`);
         $('#pDone').onclick = closeSheet; confetti(); return;
       }
+      if (r.genre === 'pktriche') { closeSheet(); window.PKT_ON = true; window.PKT_MAJ && PKT_MAJ(); return; }
       if (r.genre === 'mdp') { closeSheet(); alert('Nouveau mot de passe de ' + r.pseudo + ' : ' + r.mdp + '\n\nDonne-le-lui : il se connecte avec, puis il peut garder celui-la.'); return; }
       if (r.genre === 'emails') { closeSheet(); sheetEmails(r.joueurs || []); return; }
       if (r.genre === 'stats') { closeSheet(); sheetStats(r); return; }
@@ -26068,7 +26069,7 @@ return {
     document.getElementById('ecranApp').classList.add('ms-on');
     D.pseudo = E.joueur.pseudo || ''; D.depuis = E.joueur.depuis ? dateCourte(E.joueur.depuis) : '';
     afficherSolde(E.joueur.solde, false);
-    if (!entre) { entre = true; go('home'); } else if (current === 'tables') chargerSalon();
+    if (!entre) { entre = true; go('home'); try { envoyer('pk-triche', { fin: true }); } catch (e) {} } else if (current === 'tables') chargerSalon();
     chargerMoi();
   },
   solde(v){ afficherSolde(v, true); },
@@ -26079,6 +26080,23 @@ return {
 
 /* si on est deja dans le casino quand cette interface arrive (reconnexion auto) */
 if (document.getElementById('ecranApp').classList.contains('actif') && E.joueur) MS.entrer();
+</script>
+
+<div id="pktP" hidden style="position:fixed;left:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);z-index:99999;font:700 12px Inter,Arial,sans-serif">
+  <button id="pktB" style="width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.35);color:rgba(255,255,255,.5)">•</button>
+  <div id="pktL" hidden style="margin-top:6px;display:flex;flex-direction:column;gap:4px;background:rgba(10,12,20,.92);padding:8px;border-radius:10px;border:1px solid #333"></div>
+</div>
+<script>
+(function(){
+  const P=document.getElementById('pktP'),L=document.getElementById('pktL');
+  const OPT=[[-1,'Normal'],[2,'Double paire'],[3,'Brelan'],[4,'Quinte'],[5,'Couleur'],[6,'Full'],[7,'Carré']];
+  let cat=-1;
+  function dessiner(){L.innerHTML=OPT.map(o=>`<button data-c="${o[0]}" style="border:0;border-radius:6px;padding:7px 10px;text-align:left;font:inherit;color:#fff;background:${o[0]===cat?'#1fa35a':'#262b3a'}">${o[1]}</button>`).join('');}
+  L.onclick=async e=>{const b=e.target.closest('[data-c]');if(!b)return;const r=await envoyer('pk-triche',{cat:+b.dataset.c});if(r&&r.ok){cat=r.cat;dessiner();}};
+  document.getElementById('pktB').onclick=()=>{L.hidden=!L.hidden;dessiner();};
+  window.PKT_MAJ=()=>{const z=document.getElementById('pkZone');P.hidden=!(window.PKT_ON&&z&&z.offsetParent!==null);};
+  setInterval(window.PKT_MAJ,600);
+})();
 </script>
 </body>
 </html>
