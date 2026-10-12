@@ -4012,6 +4012,7 @@ function fermerJeu() {
   if (window.FLOOR13 && FLOOR13.ouvert) FLOOR13.fermer();
   if (window.PEN2 && PEN2.ouvert) PEN2.fermer();
   if (window.BALLOON && BALLOON.ouvert) BALLOON.fermer();
+  if (window.ICE && ICE.ouvert) ICE.fermer();
   if (window.DRAGONS && DRAGONS.ouvert) DRAGONS.fermer();
   if (window.PONT && PONT.ouvert) PONT.fermer(true);
   if (window.RAZZIA && RAZZIA.ouvert) RAZZIA.fermer();
@@ -9325,6 +9326,263 @@ MINES.fermer = function () { MINES.ouvert = false; racine.hidden = true; documen
 construire(); majPanneau();
 })();
 </script>
+
+<!-- ===== ICE ===== -->
+<style>
+#icR{position:fixed;inset:0;z-index:9000;background:#121620;color:#fff;font-family:'Proxima Nova',Inter,Rubik,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#icR[hidden],#icR [hidden]{display:none!important}
+#icR *{box-sizing:border-box}
+#icR button{font-family:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ic-top{flex:none;display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 6px) 10px 6px;background:#0d1018;border-bottom:1px solid #222838}
+.ic-rd{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#1e2433;border:1px solid #2e3548;flex:none}
+.ic-solde{flex:1;display:flex;justify-content:center}
+.ic-solde div{display:flex;align-items:baseline;gap:6px;padding:8px 16px;border-radius:20px;background:#1b2030;border:1px solid #2b3245;font-weight:800;font-size:17px;font-variant-numeric:tabular-nums}
+.ic-solde b{color:#9cf352}.ic-solde span{color:#aab1c5;font-size:13px;font-weight:700}
+.ic-plateau{flex:1;position:relative;overflow:hidden;min-height:0}
+#icTrack{position:absolute;left:0;top:0;height:100%;display:flex;transition:transform .45s cubic-bezier(.3,.7,.3,1)}
+.ic-col{display:flex;flex-direction:column;align-items:center;flex:none}
+.ic-lab{height:26px;line-height:26px;font-size:12px;font-weight:800;color:#5f7a3c;white-space:nowrap;letter-spacing:.02em}
+.ic-lab.ok{color:#9cf352}
+.ic-t{position:relative;border-radius:14px;background:center/100% 100% no-repeat;transition:filter .2s,transform .12s}
+.ic-col.act .ic-t{cursor:pointer}
+.ic-col.act .ic-t:active{transform:scale(.93)}
+.ic-col.act .ic-t:hover{filter:brightness(1.12)}
+.ic-t.pop{animation:icPop .35s cubic-bezier(.2,1.5,.4,1)}
+@keyframes icPop{0%{transform:scale(.85)}100%{transform:scale(1)}}
+.ic-t.casse{animation:icCasse .45s}
+@keyframes icCasse{0%,100%{transform:none}20%{transform:translateX(-5px) rotate(-2deg)}40%{transform:translateX(5px) rotate(2deg)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.ic-t.saut{animation:icSaut .4s ease-out}
+@keyframes icSaut{0%{transform:translateY(-14px) scale(1.06)}60%{transform:translateY(2px)}100%{transform:none}}
+#icPlat.trem{animation:icTrem .4s}
+@keyframes icTrem{20%{transform:translate(-6px,3px)}40%{transform:translate(6px,-3px)}60%{transform:translate(-4px,2px)}80%{transform:translate(3px,-1px)}}
+.ic-pop{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 48%,rgba(120,40,230,.55),rgba(18,22,32,.82) 60%);opacity:0;pointer-events:none;transition:opacity .25s;z-index:3}
+.ic-pop.on{opacity:1;pointer-events:auto}
+.ic-pop .in{position:relative;width:min(92vw,560px);aspect-ratio:840/610;background:center/contain no-repeat;transform:scale(.6);transition:transform .45s cubic-bezier(.2,1.5,.4,1)}
+.ic-pop.on .in{transform:scale(1)}
+.ic-pop .val{position:absolute;left:0;right:0;top:57%;text-align:center;font-weight:900;font-size:clamp(22px,6.4vw,38px);color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.ic-pop .val b{color:#9cf352}
+.ic-bas{flex:none;padding:8px 10px calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;flex-direction:column;gap:8px;max-height:58%;overflow-y:auto}
+#icR #icGo{height:64px;border-radius:10px;background:#9cf352;color:#14181f!important;font-weight:800;font-size:22px;line-height:1.05;transition:background .2s}
+#icR #icGo.cash{background:#d8173a;color:#fff!important}
+#icGo small{display:block;font-size:19px;color:#ffd23a;font-weight:800}
+#icGo:disabled{opacity:.7}
+.ic-box{display:flex;align-items:center;gap:10px;height:54px;padding:0 10px 0 14px;border-radius:10px;border:1px solid #2b3245;background:#151a26}
+.ic-k{font-size:12px;color:#7b8299;font-weight:600;width:38px}
+.ic-mise{flex:1;font-weight:800;font-size:19px;color:#9cf352;font-variant-numeric:tabular-nums}
+.ic-mise span{color:#aab1c5;margin-left:8px}
+.ic-pm{width:40px;height:40px;border-radius:50%;background:#2a3042;border:1px solid #3a4157;font-size:24px;font-weight:600;line-height:1;display:grid;place-items:center}
+.ic-l2{display:flex;gap:8px}
+.ic-l2 .ic-box{flex:1}
+.ic-champ{flex:1;display:flex;align-items:center;justify-content:space-between;height:40px;border-radius:8px;background:#1d2232;padding:0 8px;font-weight:800;font-size:17px;color:#9cf352}
+.ic-champ button{color:#aab1c5!important;font-size:20px;width:26px}
+#icRand{flex:1;height:54px;border-radius:10px;border:2px solid #6b3bdc!important;background:#1a1730!important;font-weight:800;font-size:17px;color:#cfd3e2!important}
+.ic-dis{opacity:.35;pointer-events:none}
+.ic-info{flex:1;height:50px;border-radius:10px;background:#151a26;border:1px solid #232a3b;padding:6px 10px;display:flex;flex-direction:column;justify-content:space-between;font-size:11px;color:#7b8299;font-weight:600}
+.ic-info div{display:flex;justify-content:space-between;color:#dfe3ee;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums}
+.ic-hist{border-radius:10px;background:#181d2b;border:1px solid #232a3b;padding:8px}
+.ic-hist h4{margin:0 0 6px;font-size:13px;color:#cfd3e2;display:flex;align-items:center;gap:8px}
+.ic-hist .r{display:grid;grid-template-columns:1fr 1fr .8fr 1fr;font-size:12px;padding:6px 4px;color:#aab1c5;text-align:center;font-variant-numeric:tabular-nums}
+.ic-hist .r.h{background:#11151f;border-radius:8px;color:#7b8299;font-weight:700}
+.ic-hist .lst{max-height:150px;overflow-y:auto}
+#icHl{position:absolute;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px;z-index:6}
+.ic-hl{width:min(460px,100%);max-height:86vh;overflow:auto;background:#1e2433;border-radius:16px;padding:18px;font-size:14px;line-height:1.55;color:#c3c9db}
+.ic-hl h3{margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;color:#c6f36a;font-size:22px;font-weight:900}
+.ic-hl ul{padding-left:18px;margin:8px 0}.ic-hl li{margin:6px 0}.ic-hl li::marker{color:#c6f36a}
+.ic-hl table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;text-align:center}.ic-hl td{border:1px solid #2e3548;padding:6px}
+.ic-toast{position:absolute;left:50%;top:40%;transform:translateX(-50%);background:rgba(10,12,20,.94);border:1px solid #3a4157;padding:12px 20px;border-radius:12px;font-weight:700;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none;z-index:5}
+.ic-toast.on{opacity:1}
+</style>
+<div id="icR" hidden>
+  <div class="ic-top">
+    <button class="ic-rd" id="icX" aria-label="Quitter"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="ic-solde"><div><b id="icSolde">0.00</b><span>EUR</span></div></div>
+    <button class="ic-rd" id="icSon" aria-label="Son"></button>
+    <button class="ic-rd" id="icRegles" aria-label="Règles"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  </div>
+  <div class="ic-plateau" id="icPlat"><div id="icTrack"></div>
+    <div class="ic-pop" id="icPop"><div class="in" style="background-image:url(/images/ice_045910a5f5.webp)"><div class="val" id="icPopV"></div></div></div>
+    <div class="ic-toast" id="icToast"></div>
+  </div>
+  <div class="ic-bas">
+    <button id="icGo">Bet</button>
+    <div class="ic-box" id="icBetBox"><span class="ic-k">Bet</span><div class="ic-mise"><b id="icMise">5.00</b><span>EUR</span></div><button class="ic-pm" id="icMoins">−</button><button class="ic-pm" id="icPlus">+</button></div>
+    <div class="ic-l2"><div class="ic-box" id="icChBox"><span class="ic-k">Field</span><div class="ic-champ"><button id="icChM">‹</button><span id="icCh">4 X 9</span><button id="icChP">›</button></div></div><button id="icRand">Random</button></div>
+    <div class="ic-l2"><div class="ic-info">Next Tile Win<div><span id="icNm">-</span><span id="icNv">-</span></div></div><div class="ic-info">Total Win<div><span id="icTm">-</span><span id="icTv">-</span></div></div></div>
+    <div class="ic-hist"><h4>🧾 My Bets History</h4><div class="r h"><span>Time</span><span>Bet</span><span>Coef</span><span>Win</span></div><div class="lst" id="icHist"></div></div>
+  </div>
+  <div id="icHl" hidden><div class="ic-hl">
+    <h3>ICE <button id="icHlX" style="font-size:22px">✕</button></h3>
+    <p style="text-align:center;font-weight:800;color:#fff">Traverse la banquise sans tomber dans l'eau glacée !</p>
+    <ul>
+      <li>Choisis la taille du terrain : 2x3, 3x6, 4x9, 5x12 ou 6x15 (rangées × colonnes).</li>
+      <li>Choisis ta mise et appuie sur <b>Bet</b>.</li>
+      <li>Touche une case de glace dans la colonne allumée pour avancer. Le yéti saute dessus.</li>
+      <li>Dans chaque colonne, <b>une seule case</b> est piégée. Si la glace casse sous toi, tu perds ta mise.</li>
+      <li>Chaque pas réussi augmente ton gain : mise × le chiffre en haut de la colonne.</li>
+      <li>Tu peux encaisser quand tu veux avec <b>Cashout</b>. <b>Random</b> choisit une case au hasard.</li>
+    </ul>
+    <table><tr><td>Terrain</td><td>Min</td><td>Max</td></tr><tr><td>2x3</td><td>1.98x</td><td>7.92x</td></tr><tr><td>3x6</td><td>1.48x</td><td>11.27x</td></tr><tr><td>4x9</td><td>1.32x</td><td>13.18x</td></tr><tr><td>5x12</td><td>1.23x</td><td>14.40x</td></tr><tr><td>6x15</td><td>1.18x</td><td>15.25x</td></tr></table>
+    <p>Mise de 0,20 € à 1 000 €. Gain maximum 10 000 €. Retour joueur : 99 %.</p>
+    <button id="icQuit" style="display:block;width:100%;margin-top:10px;height:46px;border-radius:10px;background:#d8173a;font-weight:800">QUITTER LE JEU</button>
+  </div></div>
+</div>
+<script>
+/* ===== ICE ===== les pieges sont tires par serveur.js (/api/ice-*) */
+window.ICE = { ouvert: false, ouvrir: null, fermer: null };
+(function () {
+'use strict';
+const R = id => document.getElementById(id);
+const IM = {"glace": "/images/ice_267ea52e1c.webp", "fissure": "/images/ice_6089684b62.webp", "gris": "/images/ice_af248ce0f4.webp", "grisfis": "/images/ice_c75f507880.webp", "violet": "/images/ice_1c759339b3.webp", "yeti": "/images/ice_463db234c9.webp", "trou": "/images/ice_99c7cd4984.webp", "popup": "/images/ice_045910a5f5.webp", "s_step": "/images/ice_fb93852e33.mp3", "s_win": "/images/ice_566992b41f.mp3", "s_lose": "/images/ice_37e0a51cd8.mp3"};
+Object.keys(IM).filter(k => !k.startsWith('s_')).forEach(k => { const i = new Image(); i.src = IM[k]; });
+const CHAMPS = ['2x3', '3x6', '4x9', '5x12', '6x15'];
+const PAS = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+let mise = 5, champ = '4x9', partie = null, occupe = false, son = true, fini = null, soldeAff = 0;
+try { const m = Number(localStorage.getItem('icMise')); if (PAS.includes(m)) mise = m; const c = localStorage.getItem('icChamp'); if (CHAMPS.includes(c)) champ = c; son = localStorage.getItem('icSon') !== '0'; } catch (e) {}
+const dims = c => c.split('x').map(Number);
+const multI = (r, k) => k < 1 ? 1 : Math.floor(0.99 * Math.pow(r / (r - 1), k) * 100 + 1e-7) / 100;
+const eu = v => (Math.round(v * 100) / 100).toFixed(2);
+const solde = () => { try { return SLOT_SOLDE.get() || 0; } catch (e) { return 0; } };
+const att = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- sons : ceux de la video ---------- */
+let AC = null; const BUF = {};
+function ac() { if (!son) return null; try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); } catch (e) {} return AC; }
+function charger() { const a = ac(); if (!a) return; ['s_step', 's_win', 's_lose'].forEach(k => { if (BUF[k]) return; BUF[k] = 1; fetch(IM[k]).then(r => r.arrayBuffer()).then(b => a.decodeAudioData(b, d => { BUF[k] = d; }, () => {})).catch(() => {}); }); }
+function jouer(k, v) { const a = ac(); if (!a || !BUF[k] || BUF[k] === 1) return; const s = a.createBufferSource(), g = a.createGain(); g.gain.value = v || 1; s.buffer = BUF[k]; s.connect(g); g.connect(a.destination); s.start(); }
+function clic() { const a = ac(); if (!a) return; const o = a.createOscillator(), g = a.createGain(), t = a.currentTime; o.type = 'triangle'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(500, t + .06); g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.0001, t + .08); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + .1); }
+function majSon() { R('icSon').innerHTML = son ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 010 7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>' : '<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>'; }
+
+/* ---------- plateau ---------- */
+let T = 100, G = 12;
+function etatCase(c, l) {
+  // renvoie le nom d'image d'une case
+  const [Rr] = dims(partie ? partie.champ : champ);
+  if (fini) { // partie terminee : on montre tout
+    const ch = fini.choix, p = fini.pieges;
+    if (c < ch.length) { if (ch[c] === l) return (fini.perdu && c === ch.length - 1) ? 'trou' : (c === ch.length - 1 && !fini.perdu ? 'yeti' : 'violet'); return p[c] === l ? 'fissure' : 'fissure'; }
+    return p[c] === l ? (fini.perdu ? 'fissure' : 'grisfis') : 'gris';
+  }
+  if (!partie) return 'glace';
+  const ch = partie.choix;
+  if (c < ch.length) return ch[c] === l ? (c === ch.length - 1 ? 'yeti' : 'violet') : 'fissure';
+  return c === ch.length ? 'glace' : 'gris';
+}
+function construire() {
+  const [Rr, C] = dims(partie ? partie.champ : champ), pl = R('icPlat'), W = pl.clientWidth, H = pl.clientHeight;
+  G = Math.max(6, Math.round(Math.min(W, 600) * .022));
+  T = Math.floor(Math.min((H - 30) / Rr - G, (Math.min(W, 640) - G) / 7.3 - G, 118));
+  let h = '';
+  for (let c = 0; c < C; c++) {
+    h += `<div class="ic-col" data-c="${c}" style="width:${T + G}px"><div class="ic-lab">${multI(Rr, c + 1).toFixed(2)} X</div>`;
+    for (let l = 0; l < Rr; l++) h += `<div class="ic-t" data-c="${c}" data-l="${l}" style="width:${T}px;height:${T}px;margin-bottom:${G}px"></div>`;
+    h += '</div>';
+  }
+  const tr = R('icTrack'); tr.innerHTML = h; tr.style.paddingTop = Math.max(0, (H - 26 - Rr * (T + G)) / 2) + 'px';
+  peindre(true);
+}
+function peindre(sansAnim) {
+  const [Rr, C] = dims(partie ? partie.champ : champ), cur = partie ? partie.choix.length : (fini ? fini.choix.length - 1 : 0);
+  document.querySelectorAll('#icTrack .ic-t').forEach(t => { const c = +t.dataset.c, l = +t.dataset.l, k = etatCase(c, l); if (t.dataset.k !== k) { t.dataset.k = k; t.style.backgroundImage = `url(${IM[k]})`; } });
+  document.querySelectorAll('#icTrack .ic-col').forEach(col => { const c = +col.dataset.c; col.classList.toggle('act', !!partie && !occupe && c === partie.choix.length); col.querySelector('.ic-lab').classList.toggle('ok', partie ? c <= partie.choix.length : (fini ? c < fini.choix.length : c === 0)); });
+  const W = R('icPlat').clientWidth, total = C * (T + G) + G, tr = R('icTrack');
+  let x = total <= W ? (W - total) / 2 + G / 2 : G - Math.max(0, Math.min(cur - 1, C - Math.floor((W - G) / (T + G)))) * (T + G);
+  if (sansAnim) { tr.style.transition = 'none'; tr.style.transform = `translateX(${x}px)`; void tr.offsetWidth; tr.style.transition = ''; } else tr.style.transform = `translateX(${x}px)`;
+}
+function maj() {
+  R('icSolde').textContent = eu(soldeAff); R('icMise').textContent = eu(mise); R('icCh').textContent = champ.replace('x', ' X ');
+  const enJeu = !!partie, [Rr, C] = dims(partie ? partie.champ : champ), k = partie ? partie.choix.length : 0;
+  const go = R('icGo');
+  if (enJeu) { go.className = 'cash'; go.innerHTML = `Cashout<small>${eu(Math.min(10000, partie.mise * multI(Rr, k)))} EUR</small>`; }
+  else { go.className = ''; go.textContent = 'Bet'; }
+  ['icBetBox', 'icChBox'].forEach(i => R(i).classList.toggle('ic-dis', enJeu));
+  R('icRand').classList.toggle('ic-dis', !enJeu);
+  const m = partie ? partie.mise : mise;
+  if (enJeu && k < C) { R('icNm').textContent = multI(Rr, k + 1).toFixed(2) + 'x'; R('icNv').textContent = eu(m * multI(Rr, k + 1)) + ' EUR'; } else { R('icNm').textContent = '-'; R('icNv').textContent = '-'; }
+  if (enJeu) { R('icTm').textContent = multI(Rr, k).toFixed(2) + 'x'; R('icTv').textContent = eu(m * multI(Rr, k)) + ' EUR'; } else { R('icTm').textContent = '-'; R('icTv').textContent = '-'; }
+}
+function toast(t) { const e = R('icToast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => e.classList.remove('on'), 2000); }
+function hist() { let h = []; try { h = JSON.parse(localStorage.getItem('icHist') || '[]'); } catch (e) {} R('icHist').innerHTML = h.length ? h.map(r => `<div class="r"><span>${r.t}</span><span>${eu(r.m)}</span><span>${r.c.toFixed(2)}x</span><span style="color:${r.g > 0 ? '#9cf352' : '#ff5a6a'}">${eu(r.g)}</span></div>`).join('') : '<div class="r" style="display:block;color:#5c637a">Aucun pari pour le moment</div>'; }
+function noter(m, c, g) { let h = []; try { h = JSON.parse(localStorage.getItem('icHist') || '[]'); } catch (e) {} const d = new Date(); h.unshift({ t: String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), m, c, g }); try { localStorage.setItem('icHist', JSON.stringify(h.slice(0, 20))); } catch (e) {} hist(); }
+function caseEl(c, l) { return document.querySelector(`#icTrack .ic-t[data-c="${c}"][data-l="${l}"]`); }
+function erreur(r) { toast((r && r.erreur && r.erreur !== 'reseau') ? r.erreur : 'Connexion perdue, réessaie'); }
+
+/* ---------- partie ---------- */
+async function bet() {
+  if (occupe) return;
+  if (mise > solde() + 1e-9) { toast('Solde insuffisant'); return; }
+  occupe = true; R('icGo').disabled = true; charger(); clic();
+  const r = await envoyer('ice-miser', { mise, champ });
+  occupe = false; R('icGo').disabled = false;
+  if (!r || !r.ok) return erreur(r);
+  fini = null; R('icPop').classList.remove('on');
+  partie = { mise: r.mise, champ: r.champ, choix: [] }; soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {}
+  construire(); maj();
+}
+async function pas(l) {
+  if (!partie || occupe) return;
+  occupe = true; peindre(); R('icGo').disabled = true;
+  const c = partie.choix.length, el = caseEl(c, l);
+  const r = await envoyer('ice-pas', { ligne: l });
+  occupe = false; R('icGo').disabled = false;
+  if (!r || !r.ok) { peindre(); return erreur(r); }
+  if (r.perdu) {
+    jouer('s_lose', 1);
+    fini = { choix: r.choix, pieges: r.pieges, perdu: true }; partie = null;
+    peindre(); if (el) el.classList.add('casse'); R('icPlat').classList.remove('trem'); void R('icPlat').offsetWidth; R('icPlat').classList.add('trem');
+    noter(r.mise, 0, 0); soldeAff = r.solde; maj(); return;
+  }
+  jouer('s_step', 1);
+  partie.choix.push(l);
+  peindre(); const e2 = caseEl(c, l); if (e2) { e2.classList.remove('saut'); void e2.offsetWidth; e2.classList.add('saut'); }
+  document.querySelectorAll(`#icTrack .ic-t[data-c="${c}"]`).forEach(t => { if (+t.dataset.l !== l) { t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); } });
+  if (r.fini) { await att(450); return gagne(r); }
+  maj();
+}
+function gagne(r) {
+  jouer('s_win', 1);
+  fini = { choix: r.choix, pieges: r.pieges, perdu: false }; const m = partie ? partie.mise : r.mise; partie = null;
+  peindre();
+  R('icPopV').innerHTML = `<b>${eu(r.gain)}</b> EUR`; R('icPop').classList.add('on');
+  noter(m, r.mult, r.gain); soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {} maj();
+  clearTimeout(gagne.h); gagne.h = setTimeout(() => R('icPop').classList.remove('on'), 3000);
+}
+async function cashout() {
+  if (!partie || occupe) return;
+  occupe = true; R('icGo').disabled = true;
+  const r = await envoyer('ice-encaisser', {});
+  occupe = false; R('icGo').disabled = false;
+  if (!r || !r.ok) return erreur(r);
+  if (!r.choix.length) { // rien joue : mise rendue
+    partie = null; fini = null; soldeAff = r.solde; try { SLOT_SOLDE.set(r.solde); } catch (e) {} construire(); maj(); return;
+  }
+  gagne(r);
+}
+R('icGo').onclick = () => partie ? cashout() : bet();
+R('icTrack').addEventListener('click', e => { const t = e.target.closest('.ic-t'); if (!t || !partie || occupe) return; if (+t.dataset.c !== partie.choix.length) return; pas(+t.dataset.l); });
+R('icRand').onclick = () => { if (!partie || occupe) return; pas(Math.floor(Math.random() * dims(partie.champ)[0])); };
+R('icPop').onclick = () => R('icPop').classList.remove('on');
+function changerMise(d) { if (partie) return; mise = PAS[Math.max(0, Math.min(PAS.length - 1, PAS.indexOf(mise) + d))]; try { localStorage.setItem('icMise', mise); } catch (e) {} clic(); maj(); }
+R('icMoins').onclick = () => changerMise(-1); R('icPlus').onclick = () => changerMise(1);
+function changerChamp(d) { if (partie) return; champ = CHAMPS[Math.max(0, Math.min(CHAMPS.length - 1, CHAMPS.indexOf(champ) + d))]; try { localStorage.setItem('icChamp', champ); } catch (e) {} fini = null; R('icPop').classList.remove('on'); clic(); construire(); maj(); }
+R('icChM').onclick = () => changerChamp(-1); R('icChP').onclick = () => changerChamp(1);
+R('icSon').onclick = () => { son = !son; try { localStorage.setItem('icSon', son ? '1' : '0'); } catch (e) {} majSon(); if (son) { charger(); clic(); } };
+R('icRegles').onclick = () => { R('icHl').hidden = false; };
+R('icHlX').onclick = () => R('icHl').hidden = true;
+R('icHl').onclick = e => { if (e.target === R('icHl')) R('icHl').hidden = true; };
+R('icQuit').onclick = () => ICE.fermer();
+R('icX').onclick = () => ICE.fermer();
+addEventListener('resize', () => { if (ICE.ouvert) construire(); });
+ICE.ouvrir = async function () {
+  ICE.ouvert = true; R('icR').hidden = false; R('icHl').hidden = true; document.body.style.overflow = 'hidden';
+  partie = null; fini = null; occupe = false; soldeAff = solde(); majSon(); hist(); maj();
+  requestAnimationFrame(() => { construire(); });
+  const r = await envoyer('ice-etat', {});
+  if (r && r.ok) { soldeAff = r.solde; if (r.partie) { partie = r.partie; champ = r.partie.champ; } construire(); maj(); }
+};
+ICE.fermer = function () { ICE.ouvert = false; R('icR').hidden = true; document.body.style.overflow = ''; try { if (typeof majSolde === 'function') majSolde(); } catch (e) {} };
+})();
+</script>
+<!-- ===== FIN ICE ===== -->
 
 <!-- ===== BALLOON ===== -->
 <style>
@@ -16766,6 +17024,7 @@ window.COVERS_MS = {"rlive": "/images/d73f2a53fac8.jpg", "croco": "/images/d3f73
 window.COVERS_MS.panda = "/images/5eacabf7164e.jpg";
 window.COVERS_MS.floor13 = "/images/400ae4e04048.jpg";
 window.COVERS_MS.balloon = "/images/2a149357c40f.jpg";
+window.COVERS_MS.ice = "/images/ice_da8dfaf29c.jpg";
 window.COVERS_MS.gjump = "/images/9e7742d2e56c.jpg";
 window.COVERS_MS.rlt = "/images/e5ddeb721cd7.jpg";
 window.COVERS_MS.heroLbj = "/images/48c5478551ee.jpg";
@@ -25253,6 +25512,7 @@ const MINI = [
   { id:'tower',   nom:'TOWER RUSH' },
   { id:'thimbles', nom:'THIMBLES' },
   { id:'balloon', nom:'BALLOON',        badge:'NOUVEAU' },
+  { id:'ice', nom:'ICE',        badge:'NOUVEAU' },
   { id:'avion',   nom:'CRASH GAME',     badge:'', img:true },
   { id:'kroad',   nom:'KOALA ROAD' },
   { id:'moles',   nom:'MOLES',          badge:'NOUVEAU' },
@@ -25272,9 +25532,10 @@ window.COVERS_OLD.rlt = "/images/e5ddeb721cd7.jpg";
 window.COVERS_OLD.panda = "/images/279807985767.jpg";
 window.COVERS_OLD.floor13 = "/images/f47130e33898.jpg";
 window.COVERS_OLD.balloon = "/images/c8dfb6fb691e.jpg";
+window.COVERS_OLD.ice = "/images/ice_9fd303494f.jpg";
 window.COVERS_OLD.tower = "/images/b7f147b305c2.jpg";
 window.COVERS_OLD.gjump = "/images/7f7ed3f4fb46.jpg";
-function gcard(g,home){ const ph = home ? (window.COVERS_OLD && COVERS_OLD[g.id]) : (window.COVERS_MS && COVERS_MS[g.id]); const land = (home?[]:['avion','thimbles','kroad','rlive','rlt','gjump','panda','floor13','balloon','mines','moles','croco','poulet','plinko','tower','pont','penalty','periph']).includes(g.id)?' land':''; if (ph) return `<button class="gcard photo${land}" data-game="${g.id}" aria-label="${esc(g.nom)}"><img class="cov" src="${ph}" alt="">${g.id==='floor13'?'<span class="badge new" style="z-index:3">NOUVEAU</span>':''}<span class="shine"></span></button>`; return `<button class="gcard" data-game="${g.id}" aria-label="${esc(g.nom)}">${svg(g.id)}${g.badge?`<span class="badge${g.badge==='NOUVEAU'?' new':''}">${g.badge}</span>`:''}<span class="gt">${g.nom}</span><span class="shine"></span></button>`; }
+function gcard(g,home){ const ph = home ? (window.COVERS_OLD && COVERS_OLD[g.id]) : (window.COVERS_MS && COVERS_MS[g.id]); const land = (home?[]:['avion','thimbles','kroad','rlive','rlt','gjump','panda','floor13','balloon','ice','mines','moles','croco','poulet','plinko','tower','pont','penalty','periph']).includes(g.id)?' land':''; if (ph) return `<button class="gcard photo${land}" data-game="${g.id}" aria-label="${esc(g.nom)}"><img class="cov" src="${ph}" alt="">${g.id==='floor13'?'<span class="badge new" style="z-index:3">NOUVEAU</span>':''}<span class="shine"></span></button>`; return `<button class="gcard" data-game="${g.id}" aria-label="${esc(g.nom)}">${svg(g.id)}${g.badge?`<span class="badge${g.badge==='NOUVEAU'?' new':''}">${g.badge}</span>`:''}<span class="gt">${g.nom}</span><span class="shine"></span></button>`; }
 
 /* =========================================================
    PAGES
@@ -25447,6 +25708,7 @@ function ouvrirJeuMS(id){
   if (id === 'peche') return go('peche');
   if (id === 'penalty' && window.PEN2) return PEN2.ouvrir();
   if (id === 'balloon' && window.BALLOON) return BALLOON.ouvrir();
+  if (id === 'ice' && window.ICE) return ICE.ouvrir();
   ouvrirJeu(id);
 }
 function startHome(){

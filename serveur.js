@@ -3535,7 +3535,7 @@ const NOMS_ROUTES = [
   ['kroad', 'Koala Road', 'jeu'], ['thimbles', 'Thimbles', 'jeu'], ['tower', 'Tower Rush', 'jeu'], ['pont', 'Pont de Cristal', 'jeu'],
   ['penalty', 'Le penalty', 'jeu'], ['periph', 'Le périph', 'jeu'], ['bois', 'Le périph', 'jeu'],
   ['miser', 'Blackjack', 'jeu'], ['action', 'Blackjack', 'jeu'], ['roulette', 'Roulette', 'jeu'],
-  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['bal', 'Balloon', 'jeu'], ['dragon', 'Dragon Slot', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
+  ['slot', 'Slot Games', 'jeu'], ['avion', 'Crash Game', 'jeu'], ['panda', 'Pandastic', 'jeu'], ['pclimb', 'Pandastic', 'jeu'], ['bac', 'Baccarat', 'jeu'], ['floor13', 'Floor 13', 'jeu'], ['pen2', 'Penalty', 'jeu'], ['bal', 'Balloon', 'jeu'], ['dragon', 'Dragon Slot', 'jeu'], ['ice', 'Ice', 'jeu'], ['lbt', 'Live Blackjack', 'jeu'], ['lbe', 'Live Blackjack Ethan', 'jeu'], ['lbj', 'Live Blackjack', 'jeu'], ['code', 'Code promo', 'promo'], ['razzia', 'Razzia', 'razzia'], ['table-offrir', 'Cadeau à un joueur', 'cadeau']];
 function nomDeRoute(route) {
   const r = route.slice(5);
   for (const [p, nom, type] of NOMS_ROUTES) if (r === p || r.startsWith(p + '-') || r.startsWith(p)) return { nom, type };
@@ -6164,6 +6164,43 @@ const serveur = http.createServer(async (req, res) => {
        au moment ou le joueur avance (jamais a l'avance) : les voitures
        peuvent vraiment debarquer n'importe quand, rien n'est ecrit
        d'avance sur le trajet. =============================================================== */
+    /* ---------- ICE : les cases piegees sont tirees ICI et ne sont montrees qu'a la fin ---------- */
+    if (route.startsWith('/api/ice-') && req.method === 'POST') {
+      const CHAMPS = { '2x3': [2, 3], '3x6': [3, 6], '4x9': [4, 9], '5x12': [5, 12], '6x15': [6, 15] };
+      const multI = (r, k) => k < 1 ? 1 : Math.floor(0.99 * Math.pow(r / (r - 1), k) * 100 + 1e-7) / 100;
+      let g = compte.ice;
+      const fin = () => { const p = g.pieges; compte.ice = null; return p; };
+      if (route === '/api/ice-etat') return repondre(res, 200, { ok: true, partie: g ? { mise: g.mise, champ: g.champ, choix: g.choix } : null, solde: compte.solde });
+      if (route === '/api/ice-miser') {
+        if (g) return repondre(res, 409, { erreur: 'Une partie est deja en cours.' });
+        const mise = sous(Number(body.mise) || 0), ch = CHAMPS[body.champ] ? body.champ : '4x9';
+        if (!(mise >= 0.20)) return repondre(res, 400, { erreur: 'Mise minimum : 0,20 €.' });
+        if (mise > 1000) return repondre(res, 400, { erreur: 'Mise maximum : 1 000 €.' });
+        if (mise > compte.solde) return repondre(res, 400, { erreur: 'Solde insuffisant.' });
+        const [R, C] = CHAMPS[ch], pieges = []; for (let c = 0; c < C; c++) pieges.push(crypto.randomInt(R));
+        compte.solde = sous(compte.solde - mise); compte.ice = { mise, champ: ch, pieges, choix: [] };
+        soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, mise, champ: ch, solde: compte.solde });
+      }
+      if (!g) return repondre(res, 409, { erreur: 'Aucune partie en cours.' });
+      const [R, C] = CHAMPS[g.champ];
+      if (route === '/api/ice-pas') {
+        const l = Number(body.ligne), c = g.choix.length;
+        if (!(Number.isInteger(l) && l >= 0 && l < R)) return repondre(res, 400, { erreur: 'Case invalide.' });
+        if (g.pieges[c] === l) { g.choix.push(l); const ch = g.choix.slice(), p = fin(); Carnet.enregistrer(compte); return repondre(res, 200, { ok: true, perdu: true, choix: ch, pieges: p, mise: g.mise, solde: compte.solde }); }
+        g.choix.push(l);
+        const m = multI(R, g.choix.length), gain = Math.min(10000, sous(g.mise * m));
+        if (g.choix.length >= C || gain >= 10000) { const ch = g.choix.slice(), p = fin(); compte.solde = sous(compte.solde + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
+          return repondre(res, 200, { ok: true, perdu: false, fini: true, choix: ch, pieges: p, mult: m, gain, mise: g.mise, solde: compte.solde }); }
+        Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, perdu: false, mult: m, gain, solde: compte.solde });
+      }
+      if (route === '/api/ice-encaisser') {
+        const m = multI(R, g.choix.length), gain = Math.min(10000, sous(g.mise * m)), ch = g.choix.slice(), mise = g.mise, p = fin();
+        compte.solde = sous(compte.solde + gain); soldeAuSiege(compte); Carnet.enregistrer(compte);
+        return repondre(res, 200, { ok: true, gain, mult: m, mise, choix: ch, pieges: p, solde: compte.solde });
+      }
+    }
     /* ---------- DRAGON SLOT : tout est tire ICI ---------- */
     if (route === '/api/dragon-jouer' && req.method === 'POST') {
       const mise = sous(Number(body.mise) || 0), achat = body.achat === true;
